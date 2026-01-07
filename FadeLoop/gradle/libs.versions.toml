@@ -1,5 +1,5 @@
 [versions]
-agp = "9.0.0-rc01"
+agp = "8.13.2"
 coreKtx = "1.17.0"
 appcompat = "1.7.1"
 kotlin = "2.3.0"
@@ -46,5 +46,5 @@ leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-and
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
-

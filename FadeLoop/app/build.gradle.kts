@@ -1,13 +1,12 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
 android {
     namespace = "com.neilturner.fadeloop"
-    compileSdk {
-        version = release(36)
-    }
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.neilturner.fadeloop"
@@ -27,7 +26,7 @@ android {
             )
         }
         debug {
-            isMinifyEnabled = true
+            //isMinifyEnabled = true
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
         }

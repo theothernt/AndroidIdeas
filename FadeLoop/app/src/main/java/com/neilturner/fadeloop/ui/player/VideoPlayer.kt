@@ -45,7 +45,7 @@ fun VideoPlayer(
     useSurfaceView: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    if (videos.isEmpty()) returna
+    if (videos.isEmpty()) return
 
     val context = LocalContext.current
     
