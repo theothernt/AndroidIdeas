@@ -100,15 +100,19 @@ class SambaImageProvider : ImageProvider {
     }
 
     override suspend fun openInputStream(uri: Uri): java.io.InputStream? = withContext(Dispatchers.IO) {
+        val totalStartTime = System.currentTimeMillis()
         var connection: Connection? = null
         var session: Session? = null
         var share: DiskShare? = null
         try {
+            val connectStartTime = System.currentTimeMillis()
             val client = SMBClient()
             connection = client.connect(BuildConfig.SAMBA_IP)
             val ac = AuthenticationContext(BuildConfig.SAMBA_USERNAME, BuildConfig.SAMBA_PASSWORD.toCharArray(), "")
             session = connection.authenticate(ac)
+            Log.d("SambaImageProvider", "SMB Connect & Auth took ${System.currentTimeMillis() - connectStartTime}ms")
             
+            val openStartTime = System.currentTimeMillis()
             val pathSegments = uri.pathSegments
             if (pathSegments.isEmpty()) return@withContext null
             
@@ -124,6 +128,8 @@ class SambaImageProvider : ImageProvider {
                 SMB2CreateDisposition.FILE_OPEN,
                 null
             )
+            Log.d("SambaImageProvider", "Share connect & File open took ${System.currentTimeMillis() - openStartTime}ms")
+            
             val finalConnection = connection
             val finalSession = session
             val finalShare = share
@@ -136,11 +142,12 @@ class SambaImageProvider : ImageProvider {
                         finalShare.close()
                         finalSession.close()
                         finalConnection.close()
+                        Log.d("SambaImageProvider", "Stream closed. Total open time: ${System.currentTimeMillis() - totalStartTime}ms")
                     }
                 }
             }
         } catch (e: Exception) {
-            Log.e("SambaImageProvider", "Failed to open input stream for $uri", e)
+            Log.e("SambaImageProvider", "Failed to open input stream for $uri after ${System.currentTimeMillis() - totalStartTime}ms", e)
             share?.close()
             session?.close()
             connection?.close()

@@ -136,7 +136,9 @@ class MainViewModel(
                     // Load the next bitmap (this will also load EXIF data)
                     val result = bitmapHelper.loadResizedBitmap(nextImage.uri)
                     
+                    val resolveStartTime = System.currentTimeMillis()
                     val metadataLabel = result?.metadata?.let { resolveLocationOrModel(it) }
+                    Log.d("MainViewModel", "Metadata resolution took ${System.currentTimeMillis() - resolveStartTime}ms for index $nextIndex")
                     
                     // 3. Switch image (starts crossfade)
                     _uiState.update { 
@@ -156,11 +158,16 @@ class MainViewModel(
     private suspend fun resolveLocationOrModel(exif: ExifMetadata?): String? {
         if (exif == null) return null
         
+        val resolveStartTime = System.currentTimeMillis()
         var locationLabel = if (exif.latitude != null && exif.longitude != null) {
             val address = locationHelper.getAddressFromLocation(exif.latitude, exif.longitude)
             val coords = "(${String.format("%.4f", exif.latitude)}, ${String.format("%.4f", exif.longitude)})"
             if (address != null) "$address $coords" else coords
         } else null
+        
+        if (locationLabel != null) {
+            Log.d("MainViewModel", "Reverse geocoding took ${System.currentTimeMillis() - resolveStartTime}ms")
+        }
 
         if (!imageRepository.isExifEnabled()) {
             return locationLabel
