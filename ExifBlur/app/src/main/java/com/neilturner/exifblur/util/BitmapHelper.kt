@@ -37,7 +37,28 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
                 imageRepository.openInputStream(finalUri)?.use { inputStream ->
                     // Create a buffered copy of the stream for multiple reads
                     val bufferedBytes = inputStream.readBytes()
-                    
+
+                    // Extract EXIF metadata and orientation from the same data
+                    val (metadata, orientation) = bufferedBytes.inputStream().use { exifStream ->
+                        //Log.d("BitmapHelper", "Trying to get EXIF info...")
+                        val exifInterface = ExifInterface(exifStream)
+                        val metadata = ExifMetadata(
+                            date = exifInterface.getAttribute(ExifInterface.TAG_DATETIME),
+                            cameraModel = exifInterface.getAttribute(ExifInterface.TAG_MODEL),
+                            aperture = exifInterface.getAttribute(ExifInterface.TAG_F_NUMBER),
+                            shutterSpeed = exifInterface.getAttribute(ExifInterface.TAG_EXPOSURE_TIME),
+                            iso = exifInterface.getAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY),
+                            focalLength = exifInterface.getAttribute(ExifInterface.TAG_FOCAL_LENGTH),
+                            latitude = exifInterface.latLong?.get(0),
+                            longitude = exifInterface.latLong?.get(1)
+                        )
+                        val orientation = exifInterface.getAttributeInt(
+                            ExifInterface.TAG_ORIENTATION,
+                            ExifInterface.ORIENTATION_NORMAL
+                        )
+                        metadata to orientation
+                    }
+
                     // First, decode with inJustDecodeBounds=true to check dimensions
                     val options = BitmapFactory.Options().apply {
                         inJustDecodeBounds = true
@@ -56,8 +77,14 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
 
                     // Decode bitmap with inSampleSize set
                     options.inJustDecodeBounds = false
+                    val needsExifTransform = orientation != ExifInterface.ORIENTATION_NORMAL &&
+                        orientation != ExifInterface.ORIENTATION_UNDEFINED
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        options.inPreferredConfig = Bitmap.Config.HARDWARE
+                        options.inPreferredConfig = if (needsExifTransform) {
+                            Bitmap.Config.ARGB_8888
+                        } else {
+                            Bitmap.Config.HARDWARE
+                        }
                     }
                     val bitmap = bufferedBytes.inputStream().use { bitmapStream ->
                         BitmapFactory.decodeStream(bitmapStream, null, options)
@@ -67,24 +94,7 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
 
                     Log.d("BitmapHelper", "Decoded bitmap dimensions: ${bitmap.width}x${bitmap.height} (after sampling)")
 
-                    // Extract EXIF metadata and orientation from the same data
-                    val (metadata, orientation) = bufferedBytes.inputStream().use { exifStream ->
-                        Log.d("BitmapHelper", "Trying to get EXIF info...")
-                        val exifInterface = ExifInterface(exifStream)
-                        val metadata = ExifMetadata(
-                            date = exifInterface.getAttribute(ExifInterface.TAG_DATETIME),
-                            cameraModel = exifInterface.getAttribute(ExifInterface.TAG_MODEL),
-                            aperture = exifInterface.getAttribute(ExifInterface.TAG_F_NUMBER),
-                            shutterSpeed = exifInterface.getAttribute(ExifInterface.TAG_EXPOSURE_TIME),
-                            iso = exifInterface.getAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY),
-                            focalLength = exifInterface.getAttribute(ExifInterface.TAG_FOCAL_LENGTH),
-                            latitude = exifInterface.latLong?.get(0),
-                            longitude = exifInterface.latLong?.get(1)
-                        )
-                        val orientation = exifInterface.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
-                        metadata to orientation
-                    }
-                    Log.d("BitmapHelper", "Loaded bitmap with dimensions: ${bitmap.width}x${bitmap.height}")
+                    //Log.d("BitmapHelper", "Loaded bitmap with dimensions: ${bitmap.width}x${bitmap.height}")
 
                     val rotatedBitmap = rotateBitmap(bitmap, orientation)
                     
@@ -122,11 +132,21 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
     private fun rotateBitmap(bitmap: Bitmap, orientation: Int): Bitmap {
         val matrix = Matrix()
         when (orientation) {
+            ExifInterface.ORIENTATION_UNDEFINED,
+            ExifInterface.ORIENTATION_NORMAL -> return bitmap
             ExifInterface.ORIENTATION_ROTATE_90 -> matrix.postRotate(90f)
             ExifInterface.ORIENTATION_ROTATE_180 -> matrix.postRotate(180f)
             ExifInterface.ORIENTATION_ROTATE_270 -> matrix.postRotate(270f)
             ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1.0f, 1.0f)
             ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1.0f, -1.0f)
+            ExifInterface.ORIENTATION_TRANSPOSE -> {
+                matrix.postRotate(90f)
+                matrix.postScale(-1.0f, 1.0f)
+            }
+            ExifInterface.ORIENTATION_TRANSVERSE -> {
+                matrix.postRotate(-90f)
+                matrix.postScale(-1.0f, 1.0f)
+            }
             else -> return bitmap
         }
         return try {

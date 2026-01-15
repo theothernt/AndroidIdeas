@@ -12,6 +12,7 @@ import com.neilturner.exifblur.util.LocationHelper
 import com.neilturner.exifblur.util.RamMonitor
 import com.neilturner.exifblur.util.RamInfo
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,6 +29,10 @@ class MainViewModel(
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
+    private var slideshowJob: Job? = null
+    private var ramMonitoringJob: Job? = null
+    private var loadImagesJob: Job? = null
+
     companion object {
         const val TRANSITION_DURATION = 2000 // Image crossfade duration (ms)
         const val DISPLAY_DURATION = 6000L // How long to show image before transitioning
@@ -35,19 +40,29 @@ class MainViewModel(
     }
 
     fun updatePermissionStatus(granted: Boolean) {
+        val previousGranted = _uiState.value.hasPermission
         _uiState.value = _uiState.value.copy(
             hasPermission = granted,
             isPermissionCheckComplete = true,
             transitionDuration = TRANSITION_DURATION
         )
-        if (granted) {
+
+        if (!granted) {
+            loadImagesJob?.cancel()
+            slideshowJob?.cancel()
+            ramMonitoringJob?.cancel()
+            return
+        }
+
+        if (!previousGranted) {
             loadImages()
             startRamMonitoring()
         }
     }
 
     private fun loadImages() {
-        viewModelScope.launch {
+        loadImagesJob?.cancel()
+        loadImagesJob = viewModelScope.launch {
             Log.d("MainViewModel", "Starting image loading process...")
             val startTime = System.currentTimeMillis()
             _uiState.value = _uiState.value.copy(isLoading = true)
@@ -99,7 +114,8 @@ class MainViewModel(
     }
 
     private fun startSlideshow() {
-        viewModelScope.launch {
+        slideshowJob?.cancel()
+        slideshowJob = viewModelScope.launch {
             while (isActive) {
                 // 1. Wait while displaying the current image
                 delay(DISPLAY_DURATION)
@@ -187,7 +203,8 @@ class MainViewModel(
     }
 
     private fun startRamMonitoring() {
-        viewModelScope.launch {
+        ramMonitoringJob?.cancel()
+        ramMonitoringJob = viewModelScope.launch {
             while (isActive) {
                 val ramInfo = ramMonitor.getCurrentRamUsage()
                 _uiState.update { it.copy(ramInfo = ramInfo) }
