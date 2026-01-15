@@ -30,7 +30,6 @@ class MainViewModel(
 
     companion object {
         const val TRANSITION_DURATION = 1500 // Image crossfade duration (ms)
-        const val OVERLAY_FADE_DURATION = 500L // Text fade duration (ms)
         const val DISPLAY_DURATION = 4000L // How long to show image before transitioning
         const val RAM_UPDATE_INTERVAL = 1000L // Update RAM usage every second
     }
@@ -39,8 +38,7 @@ class MainViewModel(
         _uiState.value = _uiState.value.copy(
             hasPermission = granted,
             isPermissionCheckComplete = true,
-            transitionDuration = TRANSITION_DURATION,
-            overlayFadeDuration = OVERLAY_FADE_DURATION.toInt()
+            transitionDuration = TRANSITION_DURATION
         )
         if (granted) {
             loadImages()
@@ -108,11 +106,7 @@ class MainViewModel(
 
                 val currentState = _uiState.value
                 if (currentState.images.isNotEmpty()) {
-                    // 2. Fade out overlays
-                    _uiState.update { it.copy(areOverlaysVisible = false) }
-                    delay(OVERLAY_FADE_DURATION)
-
-                    // 3. Prepare next image
+                    // 2. Prepare next image
                     val nextIndex = (currentState.currentImageIndex + 1) % currentState.images.size
                     val nextImage = currentState.images[nextIndex]
                     
@@ -121,7 +115,7 @@ class MainViewModel(
                     
                     val metadataLabel = result?.metadata?.let { resolveLocationOrModel(it) }
                     
-                    // 4. Switch image (starts crossfade)
+                    // 3. Switch image (starts crossfade)
                     _uiState.update { 
                         it.copy(
                             currentImageIndex = nextIndex,
@@ -129,11 +123,8 @@ class MainViewModel(
                         ) 
                     }
                     
-                    // 5. Wait for image transition to mostly complete before showing new text
-                    delay(TRANSITION_DURATION - OVERLAY_FADE_DURATION)
-
-                    // 6. Fade in overlays
-                    _uiState.update { it.copy(areOverlaysVisible = true) }
+                    // 4. Wait for image transition to complete
+                    delay(TRANSITION_DURATION.toLong())
                 }
             }
         }
@@ -142,15 +133,17 @@ class MainViewModel(
     private suspend fun resolveLocationOrModel(exif: ExifMetadata?): String? {
         if (exif == null) return null
         
-        val address = if (exif.latitude != null && exif.longitude != null) {
-            locationHelper.getAddressFromLocation(exif.latitude, exif.longitude)
+        var locationLabel = if (exif.latitude != null && exif.longitude != null) {
+            val address = locationHelper.getAddressFromLocation(exif.latitude, exif.longitude)
+            val coords = "(${String.format("%.4f", exif.latitude)}, ${String.format("%.4f", exif.longitude)})"
+            if (address != null) "$address $coords" else coords
         } else null
 
         if (!imageRepository.isExifEnabled()) {
-            return address
+            return locationLabel
         }
 
-        if (address != null) return address
+        if (locationLabel != null) return locationLabel
 
         val parts = mutableListOf<String>()
         exif.date?.let { rawDate ->
@@ -225,6 +218,5 @@ data class MainUiState(
     val currentDisplayImage: DisplayImage? = null,
     val areOverlaysVisible: Boolean = true,
     val transitionDuration: Int = 1000,
-    val overlayFadeDuration: Int = 500,
     val ramInfo: RamInfo? = null
 )

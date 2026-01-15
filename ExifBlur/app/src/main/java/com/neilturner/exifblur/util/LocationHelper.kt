@@ -24,9 +24,14 @@ class LocationHelper(private val context: Context) {
                         geocoder.getFromLocation(latitude, longitude, 1) { addresses ->
                             if (addresses.isNotEmpty()) {
                                 val address = addresses[0]
-                                // Try to get city/locality, fallback to country
-                                val locationName = address.locality ?: address.subAdminArea ?: address.adminArea ?: address.countryName
-                                cont.resume(locationName)
+                                val city = address.locality ?: address.subAdminArea ?: address.adminArea
+                                val country = address.countryName
+                                val name = when {
+                                    city != null && country != null -> "$city, $country"
+                                    city != null -> city
+                                    else -> country
+                                }
+                                cont.resume(name)
                             } else {
                                 cont.resume(null)
                             }
@@ -37,7 +42,13 @@ class LocationHelper(private val context: Context) {
                     val addresses = geocoder.getFromLocation(latitude, longitude, 1)
                     if (!addresses.isNullOrEmpty()) {
                         val address = addresses[0]
-                        address.locality ?: address.subAdminArea ?: address.adminArea ?: address.countryName
+                        val city = address.locality ?: address.subAdminArea ?: address.adminArea
+                        val country = address.countryName
+                        when {
+                            city != null && country != null -> "$city, $country"
+                            city != null -> city
+                            else -> country
+                        }
                     } else {
                         null
                     }
