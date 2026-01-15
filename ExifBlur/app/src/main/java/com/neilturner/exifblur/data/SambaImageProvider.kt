@@ -140,7 +140,7 @@ class SambaImageProvider : ImageProvider {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("SambaImageProvider", "Failed to open input stream for $uri", e)
             share?.close()
             session?.close()
             connection?.close()

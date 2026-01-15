@@ -71,6 +71,9 @@ class MainViewModel(
             val uris = imageRepository.getImages()
             val fetchUrisDuration = System.currentTimeMillis() - fetchUrisStartTime
             Log.d("MainViewModel", "Fetched ${uris.size} image URIs in ${fetchUrisDuration}ms")
+            if (uris.isEmpty()) {
+                Log.w("MainViewModel", "No images found! Check your source settings.")
+            }
             
             // Create LoadedImage objects without pre-loading metadata since BitmapHelper will handle it
             val loadedImages = uris.mapIndexed { index, uri ->
@@ -85,8 +88,12 @@ class MainViewModel(
             // Load initial bitmap (this will also load EXIF data)
             val bitmapStartTime = System.currentTimeMillis()
             val initialResult = if (loadedImages.isNotEmpty()) {
+                Log.d("MainViewModel", "Attempting to load initial bitmap for: ${loadedImages[0].uri}")
                 bitmapHelper.loadResizedBitmap(loadedImages[0].uri)
-            } else null
+            } else {
+                Log.w("MainViewModel", "Cannot load initial bitmap: loadedImages is empty")
+                null
+            }
             
             val initialMetadataLabel = initialResult?.metadata?.let { resolveLocationOrModel(it) }
 
