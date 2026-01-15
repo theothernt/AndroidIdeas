@@ -18,7 +18,8 @@ import androidx.core.graphics.createBitmap
 
 data class BitmapResult(
     val bitmap: Bitmap,
-    val metadata: ExifMetadata
+    val metadata: ExifMetadata,
+    val rotationDegrees: Float
 )
 
 class BitmapHelper(private val imageRepository: ImageRepository) {
@@ -130,8 +131,7 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
                 Log.d("BitmapHelper", "Step 4 complete: Decoded ${bitmap.width}x${bitmap.height} bitmap in ${System.currentTimeMillis() - decodeStartTime}ms")
 
                 val rotateStartTime = System.currentTimeMillis()
-                //val rotatedBitmap = rotateBitmap(bitmap, orientation)
-                Log.d("BitmapHelper", "Rotation complete in ${System.currentTimeMillis() - rotateStartTime}ms")
+                Log.d("BitmapHelper", "Rotation analysis complete in ${System.currentTimeMillis() - rotateStartTime}ms")
                 
                 // Calculate memory savings
                 val originalPixels = originalWidth.toLong() * originalHeight.toLong()
@@ -142,7 +142,23 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
                 
                 Log.d("BitmapHelper", "LOAD COMPLETE: Total duration ${System.currentTimeMillis() - startTime}ms. Memory reduction: ${reductionPercent}%")
                 
-                BitmapResult(bitmap, metadata)
+                // Calculate rotation degrees from EXIF orientation
+                val rotationDegrees = when (orientation) {
+                    ExifInterface.ORIENTATION_ROTATE_90 -> 90f
+                    ExifInterface.ORIENTATION_ROTATE_180 -> 180f
+                    ExifInterface.ORIENTATION_ROTATE_270 -> 270f
+                    else -> 0f
+                }
+
+                if (rotationDegrees > 0) {
+                    Log.i("BitmapHelper", "Rotating bitmap by $rotationDegrees degrees")
+                    val matrix = Matrix().apply { postRotate(rotationDegrees) }
+                    val rotatedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+                    Log.i("BitmapHelper", "Rotated bitmap size: ${rotatedBitmap.width}x${rotatedBitmap.height}")
+                    BitmapResult(rotatedBitmap, metadata, rotationDegrees)
+                } else {
+                    BitmapResult(bitmap, metadata, rotationDegrees)
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 null
@@ -158,7 +174,8 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
             val halfHeight: Int = height / 2
             val halfWidth: Int = width / 2
 
-            while ((halfHeight / inSampleSize) >= reqHeight && (halfWidth / inSampleSize) >= reqWidth) {
+            // Calculate sample size based on the larger dimension
+            while (maxOf(halfHeight, halfWidth) / inSampleSize >= maxOf(reqHeight, reqWidth)) {
                 inSampleSize *= 2
             }
         }
@@ -176,70 +193,5 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
             totalRead += read
         }
         return output.toByteArray()
-    }
-
-    private fun rotateBitmap(bitmap: Bitmap, orientation: Int): Bitmap {
-        when (orientation) {
-            ExifInterface.ORIENTATION_UNDEFINED,
-            ExifInterface.ORIENTATION_NORMAL -> return bitmap
-            ExifInterface.ORIENTATION_ROTATE_90 -> return rotateFast(bitmap, 90f)
-            ExifInterface.ORIENTATION_ROTATE_180 -> return rotateFast(bitmap, 180f)
-            ExifInterface.ORIENTATION_ROTATE_270 -> return rotateFast(bitmap, 270f)
-        }
-        
-        val matrix = Matrix()
-        when (orientation) {
-            ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> matrix.preScale(-1.0f, 1.0f)
-            ExifInterface.ORIENTATION_FLIP_VERTICAL -> matrix.preScale(1.0f, -1.0f)
-            ExifInterface.ORIENTATION_TRANSPOSE -> {
-                matrix.postRotate(90f)
-                matrix.postScale(-1.0f, 1.0f)
-            }
-            ExifInterface.ORIENTATION_TRANSVERSE -> {
-                matrix.postRotate(-90f)
-                matrix.postScale(-1.0f, 1.0f)
-            }
-            else -> return bitmap
-        }
-        return try {
-            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-            if (rotated != bitmap) {
-                bitmap.recycle()
-            }
-            rotated
-        } catch (e: Exception) {
-            e.printStackTrace()
-            bitmap
-        }
-    }
-
-    private fun rotateFast(bitmap: Bitmap, degrees: Float): Bitmap {
-        return try {
-            val matrix = Matrix()
-            matrix.postRotate(degrees)
-            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-            if (rotated != bitmap) {
-                bitmap.recycle()
-            }
-            rotated
-        } catch (e: OutOfMemoryError) {
-            // Fallback to simple dimension swap for 90/270 if OOM
-            if (degrees == 90f || degrees == 270f) {
-                val width = bitmap.width
-                val height = bitmap.height
-                val config = bitmap.config ?: Bitmap.Config.ARGB_8888
-                val rotated = createBitmap(height, width, config)
-                val canvas = android.graphics.Canvas(rotated)
-                canvas.rotate(degrees, width / 2f, height / 2f)
-                canvas.drawBitmap(bitmap, 0f, 0f, null)
-                bitmap.recycle()
-                rotated
-            } else {
-                bitmap
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            bitmap
-        }
     }
 }
