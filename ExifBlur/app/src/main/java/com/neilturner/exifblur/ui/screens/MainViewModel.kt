@@ -29,9 +29,9 @@ class MainViewModel(
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
 
     companion object {
-        const val TRANSITION_DURATION = 1500 // Image crossfade duration (ms)
-        const val DISPLAY_DURATION = 4000L // How long to show image before transitioning
-        const val RAM_UPDATE_INTERVAL = 1000L // Update RAM usage every second
+        const val TRANSITION_DURATION = 2000 // Image crossfade duration (ms)
+        const val DISPLAY_DURATION = 6000L // How long to show image before transitioning
+        const val RAM_UPDATE_INTERVAL = 500L // Update RAM usage every second
     }
 
     fun updatePermissionStatus(granted: Boolean) {
