@@ -35,7 +35,7 @@ class SambaImageProvider : ImageProvider {
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        images
+        images.shuffled()
     }
 
     private fun listImagesRecursive(share: DiskShare, relativePath: String, images: MutableList<Uri>, shareName: String) {
@@ -49,7 +49,7 @@ class SambaImageProvider : ImageProvider {
                 if (isDirectory(f)) {
                     listImagesRecursive(share, fullPath, images, shareName)
                 } else {
-                    if (fileName.lowercase().endsWith(".jpg") || fileName.lowercase().endsWith(".jpeg")) {
+                    if (SUPPORTED_EXTENSIONS.any { fileName.lowercase().endsWith(it) }) {
                         val uriPath = "$shareName/${fullPath.replace('\\', '/')}"
                         images.add("smb://${BuildConfig.SAMBA_IP}/$uriPath".toUri())
                     }
@@ -58,6 +58,12 @@ class SambaImageProvider : ImageProvider {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    companion object {
+        private val SUPPORTED_EXTENSIONS = setOf(
+            ".jpg", ".jpeg", ".png", ".webp", ".heic", ".heif", ".bmp", ".gif"
+        )
     }
 
     private fun isDirectory(f: FileIdBothDirectoryInformation): Boolean {
@@ -91,10 +97,6 @@ class SambaImageProvider : ImageProvider {
             e.printStackTrace()
             ExifMetadata()
         }
-    }
-
-    private fun parseGpsCoordinate(coordinate: String?): Double? {
-        return coordinate?.toDoubleOrNull()
     }
 
     override suspend fun openInputStream(uri: Uri): java.io.InputStream? = withContext(Dispatchers.IO) {

@@ -9,6 +9,8 @@ import com.neilturner.exifblur.data.ExifMetadata
 import com.neilturner.exifblur.data.ImageRepository
 import com.neilturner.exifblur.util.BitmapHelper
 import com.neilturner.exifblur.util.LocationHelper
+import com.neilturner.exifblur.util.RamMonitor
+import com.neilturner.exifblur.util.RamInfo
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -16,12 +18,12 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.InputStream
 
 class MainViewModel(
     private val imageRepository: ImageRepository,
     private val locationHelper: LocationHelper,
-    private val bitmapHelper: BitmapHelper
+    private val bitmapHelper: BitmapHelper,
+    private val ramMonitor: RamMonitor
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -30,6 +32,7 @@ class MainViewModel(
         const val TRANSITION_DURATION = 1500 // Image crossfade duration (ms)
         const val OVERLAY_FADE_DURATION = 500L // Text fade duration (ms)
         const val DISPLAY_DURATION = 4000L // How long to show image before transitioning
+        const val RAM_UPDATE_INTERVAL = 1000L // Update RAM usage every second
     }
 
     fun updatePermissionStatus(granted: Boolean) {
@@ -41,6 +44,7 @@ class MainViewModel(
         )
         if (granted) {
             loadImages()
+            startRamMonitoring()
         }
     }
 
@@ -55,27 +59,27 @@ class MainViewModel(
             val fetchUrisDuration = System.currentTimeMillis() - fetchUrisStartTime
             Log.d("MainViewModel", "Fetched ${uris.size} image URIs in ${fetchUrisDuration}ms")
             
-            val metadataStartTime = System.currentTimeMillis()
+            // Create LoadedImage objects without pre-loading metadata since BitmapHelper will handle it
             val loadedImages = uris.mapIndexed { index, uri ->
                 if ((index + 1) % 10 == 0 || index == 0 || index == uris.size - 1) {
-                    Log.d("MainViewModel", "Processing metadata for image ${index + 1}/${uris.size}")
+                    Log.d("MainViewModel", "Processing for image ${index + 1}/${uris.size}")
                 }
-                // val exif = imageRepository.getExifMetadata(uri)
-                val locationText = "No metadata" // resolveLocationOrModel(exif)
-                LoadedImage(uri = uri, metadataLabel = locationText)
+                LoadedImage(uri = uri, metadataLabel = null)
             }
-            val metadataDuration = System.currentTimeMillis() - metadataStartTime
-            Log.d("MainViewModel", "Processed metadata for ${loadedImages.size} images in ${metadataDuration}ms")
+            
+            Log.d("MainViewModel", "Created ${loadedImages.size} LoadedImage objects")
 
-            // Load initial bitmap
+            // Load initial bitmap (this will also load EXIF data)
             val bitmapStartTime = System.currentTimeMillis()
-            val initialBitmap = if (loadedImages.isNotEmpty()) {
+            val initialResult = if (loadedImages.isNotEmpty()) {
                 bitmapHelper.loadResizedBitmap(loadedImages[0].uri)
             } else null
+            
+            val initialMetadataLabel = initialResult?.metadata?.let { resolveLocationOrModel(it) }
 
             val bitmapDuration = System.currentTimeMillis() - bitmapStartTime
-            if (initialBitmap != null) {
-                Log.d("MainViewModel", "Loaded initial bitmap in ${bitmapDuration}ms")
+            if (initialResult != null) {
+                Log.d("MainViewModel", "Loaded initial bitmap with metadata in ${bitmapDuration}ms")
             }
 
             val totalDuration = System.currentTimeMillis() - startTime
@@ -86,7 +90,7 @@ class MainViewModel(
                 images = loadedImages,
                 isLoading = false,
                 currentImageIndex = 0,
-                currentDisplayImage = initialBitmap?.let { DisplayImage(it, loadedImages.firstOrNull()?.metadataLabel) },
+                currentDisplayImage = initialResult?.let { DisplayImage(it.bitmap, initialMetadataLabel) },
                 areOverlaysVisible = true
             )
             
@@ -112,14 +116,16 @@ class MainViewModel(
                     val nextIndex = (currentState.currentImageIndex + 1) % currentState.images.size
                     val nextImage = currentState.images[nextIndex]
                     
-                    // Load the next bitmap
-                    val bitmap = bitmapHelper.loadResizedBitmap(nextImage.uri)
+                    // Load the next bitmap (this will also load EXIF data)
+                    val result = bitmapHelper.loadResizedBitmap(nextImage.uri)
+                    
+                    val metadataLabel = result?.metadata?.let { resolveLocationOrModel(it) }
                     
                     // 4. Switch image (starts crossfade)
                     _uiState.update { 
                         it.copy(
                             currentImageIndex = nextIndex,
-                            currentDisplayImage = bitmap?.let { bmp -> DisplayImage(bmp, nextImage.metadataLabel) }
+                            currentDisplayImage = result?.let { res -> DisplayImage(res.bitmap, metadataLabel) }
                         ) 
                     }
                     
@@ -186,6 +192,16 @@ class MainViewModel(
 
         return if (parts.isNotEmpty()) parts.joinToString(" • ") else null
     }
+
+    private fun startRamMonitoring() {
+        viewModelScope.launch {
+            while (isActive) {
+                val ramInfo = ramMonitor.getCurrentRamUsage()
+                _uiState.update { it.copy(ramInfo = ramInfo) }
+                delay(RAM_UPDATE_INTERVAL)
+            }
+        }
+    }
 }
 
 data class LoadedImage(
@@ -209,5 +225,6 @@ data class MainUiState(
     val currentDisplayImage: DisplayImage? = null,
     val areOverlaysVisible: Boolean = true,
     val transitionDuration: Int = 1000,
-    val overlayFadeDuration: Int = 500
+    val overlayFadeDuration: Int = 500,
+    val ramInfo: RamInfo? = null
 )

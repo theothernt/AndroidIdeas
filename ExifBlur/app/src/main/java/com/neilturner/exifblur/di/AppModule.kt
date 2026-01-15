@@ -7,6 +7,7 @@ import com.neilturner.exifblur.data.SambaImageProvider
 import com.neilturner.exifblur.ui.screens.MainViewModel
 import com.neilturner.exifblur.util.BitmapHelper
 import com.neilturner.exifblur.util.LocationHelper
+import com.neilturner.exifblur.util.RamMonitor
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.module.dsl.bind
 import org.koin.core.module.dsl.singleOf
@@ -17,7 +18,8 @@ val appModule = module {
     single { LocalImageProvider(androidContext()) }
     single { SambaImageProvider() }
     single { LocationHelper(androidContext()) }
+    single { RamMonitor(androidContext()) }
     single { BitmapHelper(get()) }
     singleOf(::ImageRepositoryImpl) { bind<ImageRepository>() }
-    viewModel { MainViewModel(get(), get(), get()) }
+    viewModel { MainViewModel(get(), get(), get(), get()) }
 }

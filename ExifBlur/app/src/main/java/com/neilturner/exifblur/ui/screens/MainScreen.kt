@@ -172,6 +172,42 @@ fun MainScreen(
                             }
                         }
                     }
+
+                    // Top Right: RAM Usage
+                    uiState.ramInfo?.let { ram ->
+                        AnimatedVisibility(
+                            visible = true, // Always visible
+                            enter = fadeIn(animationSpec = tween(durationMillis = 500)),
+                            exit = fadeOut(animationSpec = tween(durationMillis = 500)),
+                            modifier = Modifier.align(Alignment.TopEnd)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .alpha(0.8F)
+                                    .background(
+                                        color = Color.Black,
+                                        shape = RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(12.dp)
+                            ) {
+                                Column {
+                                    Text(
+                                        text = "RAM: ${ram.usedMemoryMB}MB/${ram.maxMemoryMB}MB",
+                                        color = Color.White
+                                    )
+                                    Text(
+                                        text = "Usage: ${ram.usagePercentage}%",
+                                        color = if (ram.usagePercentage > 80) Color.Red else Color.White
+                                    )
+                                    Text(
+                                        text = "Native: ${ram.nativeHeapMB}MB",
+                                        color = Color.Gray
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
