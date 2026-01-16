@@ -42,12 +42,21 @@ fun Slideshow(
                             .data(bitmap)
                             .build(),
                         contentDescription = null,
-                        contentScale = ContentScale.Crop,
+                        contentScale = ContentScale.FillWidth,
                         modifier = Modifier
                             .fillMaxSize()
                             .blur(radius = 25.dp)
                             .alpha(0.4f)
                     )
+
+                    // Fallback for Android 11 or lower where blur might not work
+                    if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.R) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.5f))
+                        )
+                    }
                     
                     // Foreground Image (fitted)
                     AsyncImage(
