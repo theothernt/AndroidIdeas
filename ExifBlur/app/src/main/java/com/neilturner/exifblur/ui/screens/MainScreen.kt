@@ -14,6 +14,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -24,8 +25,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -93,7 +100,19 @@ fun MainScreen(
     }
 
     Surface(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .focusRequester(focusRequester)
+            .focusable()
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyDown && 
+                    (keyEvent.key == Key.DirectionCenter || keyEvent.key == Key.Enter)) {
+                    viewModel.toggleOverlays()
+                    true
+                } else {
+                    false
+                }
+            },
         shape = RectangleShape,
         colors = SurfaceDefaults.colors(
             containerColor = MaterialTheme.colorScheme.background
@@ -139,17 +158,15 @@ fun MainScreen(
                     )
 
                     MetadataOverlay(
-                        isVisible = uiState.areOverlaysVisible,
                         label = uiState.currentDisplayImage?.metadataLabel,
                         modifier = Modifier.align(Alignment.BottomEnd)
                     )
 
-                    uiState.ramInfo?.let { ram ->
-                        RamUsageOverlay(
-                            ramInfo = ram,
-                            modifier = Modifier.align(Alignment.TopEnd)
-                        )
-                    }
+                    RamUsageOverlay(
+                        isVisible = uiState.areOverlaysVisible,
+                        ramInfo = uiState.ramInfo,
+                        modifier = Modifier.align(Alignment.TopEnd)
+                    )
                 }
             }
         }

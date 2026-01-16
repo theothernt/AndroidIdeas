@@ -111,7 +111,7 @@ class MainViewModel(
                 isLoading = false,
                 currentImageIndex = 0,
                 currentDisplayImage = initialResult?.let { DisplayImage(it.bitmap, initialMetadataLabel, it.rotation) },
-                areOverlaysVisible = true
+                areOverlaysVisible = false
             )
             
             if (loadedImages.isNotEmpty()) {
@@ -205,6 +205,10 @@ class MainViewModel(
             }
         }
     }
+
+    fun toggleOverlays() {
+        _uiState.update { it.copy(areOverlaysVisible = !it.areOverlaysVisible) }
+    }
 }
 
 data class LoadedImage(
@@ -227,7 +231,7 @@ data class MainUiState(
     val images: List<LoadedImage> = emptyList(),
     val currentImageIndex: Int = 0,
     val currentDisplayImage: DisplayImage? = null,
-    val areOverlaysVisible: Boolean = true,
+    val areOverlaysVisible: Boolean = false,
     val transitionDuration: Int = 1000,
     val ramInfo: RamInfo? = null
 )

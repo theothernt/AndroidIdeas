@@ -25,9 +25,14 @@ fun ImageCountOverlay(
     imageCount: Int,
     modifier: Modifier = Modifier
 ) {
-    if (isVisible) {
+    AnimatedVisibility(
+        visible = isVisible,
+        enter = fadeIn(animationSpec = tween(durationMillis = 800)),
+        exit = fadeOut(animationSpec = tween(durationMillis = 800)),
+        modifier = modifier
+    ) {
         Box(
-            modifier = modifier
+            modifier = Modifier
                 .padding(16.dp)
                 .alpha(0.8F)
                 .background(
@@ -51,12 +56,11 @@ fun ImageCountOverlay(
 
 @Composable
 fun MetadataOverlay(
-    isVisible: Boolean,
     label: String?,
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
-        visible = isVisible && !label.isNullOrBlank(),
+        visible = !label.isNullOrBlank(),
         enter = fadeIn(animationSpec = tween(durationMillis = 800)),
         exit = fadeOut(animationSpec = tween(durationMillis = 800)),
         modifier = modifier
@@ -82,32 +86,42 @@ fun MetadataOverlay(
 
 @Composable
 fun RamUsageOverlay(
-    ramInfo: RamInfo,
+    isVisible: Boolean,
+    ramInfo: RamInfo?,
     modifier: Modifier = Modifier
 ) {
-    Box(
+    AnimatedVisibility(
+        visible = isVisible && ramInfo != null,
+        enter = fadeIn(animationSpec = tween(durationMillis = 800)),
+        exit = fadeOut(animationSpec = tween(durationMillis = 800)),
         modifier = modifier
-            .padding(16.dp)
-            .alpha(0.8F)
-            .background(
-                color = Color.Black,
-                shape = RoundedCornerShape(8.dp)
-            )
-            .padding(12.dp)
     ) {
-        Column {
-            Text(
-                text = "RAM: ${ramInfo.usedMemoryMB}MB/${ramInfo.maxMemoryMB}MB",
-                color = Color.White
-            )
-            Text(
-                text = "Usage: ${ramInfo.usagePercentage}%",
-                color = if (ramInfo.usagePercentage > 80) Color.Red else Color.White
-            )
-            Text(
-                text = "Native: ${ramInfo.nativeHeapMB}MB",
-                color = Color.Gray
-            )
+        if (ramInfo != null) {
+            Box(
+                modifier = Modifier
+                    .padding(16.dp)
+                    .alpha(0.8F)
+                    .background(
+                        color = Color.Black,
+                        shape = RoundedCornerShape(8.dp)
+                    )
+                    .padding(12.dp)
+            ) {
+                Column {
+                    Text(
+                        text = "RAM: ${ramInfo.usedMemoryMB}MB/${ramInfo.maxMemoryMB}MB",
+                        color = Color.White
+                    )
+                    Text(
+                        text = "Usage: ${ramInfo.usagePercentage}%",
+                        color = if (ramInfo.usagePercentage > 80) Color.Red else Color.White
+                    )
+                    Text(
+                        text = "Native: ${ramInfo.nativeHeapMB}MB",
+                        color = Color.Gray
+                    )
+                }
+            }
         }
     }
 }
