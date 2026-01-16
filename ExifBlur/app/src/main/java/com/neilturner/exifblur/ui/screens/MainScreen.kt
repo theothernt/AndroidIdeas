@@ -1,8 +1,12 @@
 package com.neilturner.exifblur.ui.screens
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.os.Build
+import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -13,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -78,6 +83,15 @@ fun MainScreen(
         }
     }
 
+    // Keep the screen on during the slideshow
+    DisposableEffect(Unit) {
+        val activity = context.findActivity()
+        activity?.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
     Surface(
         modifier = Modifier.fillMaxSize(),
         shape = RectangleShape,
@@ -124,13 +138,11 @@ fun MainScreen(
                         modifier = Modifier.align(Alignment.BottomStart)
                     )
 
-                    uiState.currentDisplayImage?.metadataLabel?.let { label ->
-                        MetadataOverlay(
-                            isVisible = uiState.areOverlaysVisible,
-                            label = label,
-                            modifier = Modifier.align(Alignment.BottomEnd)
-                        )
-                    }
+                    MetadataOverlay(
+                        isVisible = uiState.areOverlaysVisible,
+                        label = uiState.currentDisplayImage?.metadataLabel,
+                        modifier = Modifier.align(Alignment.BottomEnd)
+                    )
 
                     uiState.ramInfo?.let { ram ->
                         RamUsageOverlay(
@@ -142,4 +154,10 @@ fun MainScreen(
             }
         }
     }
+}
+
+private fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
