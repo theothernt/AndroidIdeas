@@ -1,6 +1,10 @@
 package com.neilturner.exifblur.ui.components
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -48,12 +52,17 @@ fun ImageCountOverlay(
 @Composable
 fun MetadataOverlay(
     isVisible: Boolean,
-    label: String,
+    label: String?,
     modifier: Modifier = Modifier
 ) {
-    if (isVisible) {
+    AnimatedVisibility(
+        visible = isVisible && !label.isNullOrBlank(),
+        enter = fadeIn(animationSpec = tween(durationMillis = 800)),
+        exit = fadeOut(animationSpec = tween(durationMillis = 800)),
+        modifier = modifier
+    ) {
         Box(
-            modifier = modifier
+            modifier = Modifier
                 .padding(16.dp)
                 .alpha(0.8F)
                 .background(
@@ -64,7 +73,7 @@ fun MetadataOverlay(
                 .padding(12.dp)
         ) {
             Text(
-                text = label,
+                text = label ?: "",
                 color = Color.White
             )
         }
