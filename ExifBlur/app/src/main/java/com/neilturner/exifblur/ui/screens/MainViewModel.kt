@@ -98,9 +98,9 @@ class MainViewModel(
             val initialMetadataLabel = initialResult?.metadata?.let { resolveLocationOrModel(it) }
 
             val bitmapDuration = System.currentTimeMillis() - bitmapStartTime
-            if (initialResult != null) {
-                Log.d("MainViewModel", "Loaded initial bitmap with metadata in ${bitmapDuration}ms")
-            }
+//            if (initialResult != null) {
+//                Log.d("MainViewModel", "Loaded initial bitmap with metadata in ${bitmapDuration}ms")
+//            }
 
             val totalDuration = System.currentTimeMillis() - startTime
             Log.d("MainViewModel", "Image loading process complete. Total images: ${loadedImages.size}, Total time: ${totalDuration}ms")
@@ -138,7 +138,7 @@ class MainViewModel(
                     
                     val resolveStartTime = System.currentTimeMillis()
                     val metadataLabel = result?.metadata?.let { resolveLocationOrModel(it) }
-                    Log.d("MainViewModel", "Metadata resolution took ${System.currentTimeMillis() - resolveStartTime}ms for index $nextIndex")
+                    // Log.d("MainViewModel", "Metadata resolution took ${System.currentTimeMillis() - resolveStartTime}ms for index $nextIndex")
                     
                     // 3. Switch image (starts crossfade)
                     _uiState.update { 

@@ -28,7 +28,7 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
         private const val HEADER_BUFFER_SIZE = 512 * 1024 // 512KB
     }
 
-    suspend fun loadResizedBitmap(uri: Uri, targetWidth: Int = 1080, targetHeight: Int = 1920): BitmapResult? {
+    suspend fun loadResizedBitmap(uri: Uri, targetWidth: Int = 1920, targetHeight: Int = 1080): BitmapResult? {
         return withContext(Dispatchers.IO) {
             try {
                 val finalUri = prepareUri(uri)
@@ -59,11 +59,12 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
                     ((1.0 - finalPixels.toDouble() / originalPixels.toDouble()) * 100).roundToInt()
                 } else 0
 
-                Log.d("BitmapHelper", "LOAD COMPLETE: Total duration ${System.currentTimeMillis() - startTime}ms. " +
-                        "Memory reduction: ${reductionPercent}% \"Final size: \${resultBitmap.width}x\${resultBitmap.height}")
-
                 // Step 5: Apply Rotation
                 val resultBitmap = applyRotation2(originalBitmap, rotationDegrees)
+
+                Log.d("BitmapHelper", "LOAD COMPLETE: Total duration ${System.currentTimeMillis() - startTime}ms. " +
+                        "Memory reduction: ${reductionPercent}% Final size: ${resultBitmap.width}x${resultBitmap.height}")
+
                 BitmapResult(resultBitmap, metadata)
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading bitmap", e)

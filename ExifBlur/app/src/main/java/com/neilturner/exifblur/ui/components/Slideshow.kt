@@ -41,8 +41,8 @@ fun Slideshow(
                         model = ImageRequest.Builder(context)
                             .data(bitmap)
                             .build(),
-                        contentDescription = null,
-                        contentScale = ContentScale.FillWidth,
+                        contentDescription = "Blurred Background Image",
+                        contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
                             .blur(radius = 25.dp)
@@ -54,14 +54,14 @@ fun Slideshow(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.5f))
+                                .background(Color.Black.copy(alpha = 0.7f))
                         )
                     }
                     
                     // Foreground Image (fitted)
                     AsyncImage(
                         model = bitmap,
-                        contentDescription = null,
+                        contentDescription = "Foreground Image",
                         contentScale = ContentScale.Fit,
                         modifier = Modifier.fillMaxSize()
                     )
