@@ -40,20 +40,10 @@ class LocalImageProvider(private val context: Context) : ImageProvider {
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 val exifInterface = ExifInterface(inputStream)
                 val date = exifInterface.getAttribute(ExifInterface.TAG_DATETIME)
-                val model = exifInterface.getAttribute(ExifInterface.TAG_MODEL)
-                val aperture = exifInterface.getAttribute(ExifInterface.TAG_F_NUMBER)
-                val shutterSpeed = exifInterface.getAttribute(ExifInterface.TAG_EXPOSURE_TIME)
-                val iso = exifInterface.getAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY)
-                val focalLength = exifInterface.getAttribute(ExifInterface.TAG_FOCAL_LENGTH)
                 val latLng = exifInterface.latLong
 
                 ExifMetadata(
                     date = date,
-                    cameraModel = model,
-                    aperture = aperture,
-                    shutterSpeed = shutterSpeed,
-                    iso = iso,
-                    focalLength = focalLength,
                     latitude = latLng?.get(0),
                     longitude = latLng?.get(1)
                 )

@@ -14,11 +14,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
 import java.io.InputStream
+import kotlin.math.roundToInt
 
 data class BitmapResult(
     val bitmap: Bitmap,
     val metadata: ExifMetadata,
-    val rotationDegrees: Float
 )
 
 class BitmapHelper(private val imageRepository: ImageRepository) {
@@ -45,19 +45,26 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
                 val options = decodeDimensions(headerBytes) ?: return@withContext null
                 options.inSampleSize = calculateInSampleSize(options, targetWidth, targetHeight)
                 options.inJustDecodeBounds = false
+                val originalWidth = options.outWidth
+                val originalHeight = options.outHeight
 
                 // Step 4: Final Decode
                 val rotationDegrees = getRotationDegrees(orientation)
                 val originalBitmap = decodeBitmap(finalUri, options, rotationDegrees) ?: return@withContext null
 
+                // Calculate memory savings
+                val originalPixels = originalWidth.toLong() * originalHeight.toLong()
+                val finalPixels = originalBitmap.width.toLong() * originalBitmap.height.toLong()
+                val reductionPercent = if (originalPixels > 0) {
+                    ((1.0 - finalPixels.toDouble() / originalPixels.toDouble()) * 100).roundToInt()
+                } else 0
+
+                Log.d("BitmapHelper", "LOAD COMPLETE: Total duration ${System.currentTimeMillis() - startTime}ms. " +
+                        "Memory reduction: ${reductionPercent}% \"Final size: \${resultBitmap.width}x\${resultBitmap.height}")
+
                 // Step 5: Apply Rotation
-                val resultBitmap = applyRotation(originalBitmap, rotationDegrees)
-
-                Log.d(TAG, "Load complete in ${System.currentTimeMillis() - startTime}ms. " +
-                        "Final size: ${resultBitmap.width}x${resultBitmap.height}")
-
-                BitmapResult(resultBitmap, metadata, rotationDegrees)
-
+                val resultBitmap = applyRotation2(originalBitmap, rotationDegrees)
+                BitmapResult(resultBitmap, metadata)
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading bitmap", e)
                 null
@@ -78,24 +85,24 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
     }
 
     private suspend fun readHeaderBytes(uri: Uri): ByteArray? {
+        val headerStartTime = System.currentTimeMillis()
+        Log.d(TAG, "Step 1: Reading 512KB header buffer...")
         return imageRepository.openInputStream(uri)?.use { stream ->
-            readStreamBytes(stream, HEADER_BUFFER_SIZE)
+            val headerBytes = readStreamBytes(stream, HEADER_BUFFER_SIZE)
+            Log.d(TAG, "Step 1 complete: Read ${headerBytes.size} bytes in ${System.currentTimeMillis() - headerStartTime}ms")
+            headerBytes
         } ?: run {
-            Log.e(TAG, "Failed to open input stream or read header.")
+            Log.e(TAG, "Step 1 failed: Could not open header stream after ${System.currentTimeMillis() - headerStartTime}ms")
             null
         }
     }
 
     private fun extractMetadata(headerBytes: ByteArray): Pair<ExifMetadata, Int> {
+        val metadataStartTime = System.currentTimeMillis()
         return ByteArrayInputStream(headerBytes).use { stream ->
             val exifInterface = ExifInterface(stream)
             val meta = ExifMetadata(
                 date = exifInterface.getAttribute(ExifInterface.TAG_DATETIME),
-                cameraModel = exifInterface.getAttribute(ExifInterface.TAG_MODEL),
-                aperture = exifInterface.getAttribute(ExifInterface.TAG_F_NUMBER),
-                shutterSpeed = exifInterface.getAttribute(ExifInterface.TAG_EXPOSURE_TIME),
-                iso = exifInterface.getAttribute(ExifInterface.TAG_PHOTOGRAPHIC_SENSITIVITY),
-                focalLength = exifInterface.getAttribute(ExifInterface.TAG_FOCAL_LENGTH),
                 latitude = exifInterface.latLong?.get(0),
                 longitude = exifInterface.latLong?.get(1)
             )
@@ -103,20 +110,23 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
                 ExifInterface.TAG_ORIENTATION,
                 ExifInterface.ORIENTATION_NORMAL
             )
+            Log.d(TAG, "Step 2 complete: Extracted metadata in ${System.currentTimeMillis() - metadataStartTime}ms")
             meta to orient
         }
     }
 
     private fun decodeDimensions(headerBytes: ByteArray): BitmapFactory.Options? {
+        val dimensionsStartTime = System.currentTimeMillis()
         val options = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
         }
         BitmapFactory.decodeByteArray(headerBytes, 0, headerBytes.size, options)
         
         if (options.outWidth <= 0 || options.outHeight <= 0) {
-            Log.e(TAG, "Failed to decode bounds from header bytes.")
+            Log.e(TAG, "Step 3 failed: Could not determine dimensions after ${System.currentTimeMillis() - dimensionsStartTime}ms")
             return null
         }
+        Log.d(TAG, "Step 3 complete in ${System.currentTimeMillis() - dimensionsStartTime}ms")
         return options
     }
 
@@ -130,6 +140,8 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
     }
 
     private suspend fun decodeBitmap(uri: Uri, options: BitmapFactory.Options, rotationDegrees: Float): Bitmap? {
+        val decodeStartTime = System.currentTimeMillis()
+        Log.d(TAG, "Step 4: Opening final stream for decoding...")
         val isRotationNeeded = rotationDegrees != 0f
         
         // Use HARDWARE config only if we don't need to modify (rotate) the bitmap.
@@ -143,11 +155,12 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
 
         val bitmap = imageRepository.openInputStream(uri)?.use { stream ->
             BitmapFactory.decodeStream(stream, null, options)
+        } ?: run {
+            Log.e(TAG, "Step 4 failed: Could not open final stream after ${System.currentTimeMillis() - decodeStartTime}ms")
+            return null
         }
-        
-        if (bitmap == null) {
-            Log.e(TAG, "Failed to decode final bitmap.")
-        }
+
+        Log.d(TAG, "Step 4 complete: Decoded ${bitmap.width}x${bitmap.height} bitmap in ${System.currentTimeMillis() - decodeStartTime}ms")
         return bitmap
     }
 
@@ -172,6 +185,19 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
         } catch (e: OutOfMemoryError) {
             Log.e(TAG, "OOM during rotation", e)
             // Fallback: return original (wrong orientation is better than crash)
+            originalBitmap
+        }
+    }
+
+    private fun applyRotation2(originalBitmap: Bitmap, rotationDegrees: Float): Bitmap {
+        val rotateStartTime = System.currentTimeMillis()
+        return if (rotationDegrees > 0) {
+            val matrix = Matrix().apply { postRotate(rotationDegrees) }
+            val rotatedBitmap = Bitmap.createBitmap(originalBitmap, 0, 0, originalBitmap.width, originalBitmap.height, matrix, true)
+            Log.d(TAG, "Step 5 complete: Bitmap rotated by $rotationDegrees degrees ${System.currentTimeMillis() - rotateStartTime}ms")
+            rotatedBitmap
+        } else {
+            Log.d(TAG, "Step 5 complete: No rotation needed")
             originalBitmap
         }
     }

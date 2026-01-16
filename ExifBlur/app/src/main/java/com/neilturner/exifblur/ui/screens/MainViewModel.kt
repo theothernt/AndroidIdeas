@@ -192,27 +192,6 @@ class MainViewModel(
             }
             parts.add(formattedDate)
         }
-        exif.cameraModel?.let { parts.add(it) }
-        exif.focalLength?.let { 
-            val fl = it.toDoubleOrNull()
-            if (fl != null) parts.add("${fl.toInt()}mm") else parts.add(it)
-        }
-        exif.aperture?.let { parts.add("f/$it") }
-        exif.shutterSpeed?.let { 
-            val ss = it.toDoubleOrNull()
-            if (ss != null) {
-                if (ss < 1.0) {
-                    val reciprocal = (1.0 / ss).toInt()
-                    parts.add("1/$reciprocal s")
-                } else {
-                    parts.add("${ss}s")
-                }
-            } else {
-                parts.add("${it}s")
-            }
-        }
-        exif.iso?.let { parts.add("ISO $it") }
-
         return if (parts.isNotEmpty()) parts.joinToString(" • ") else null
     }
 
