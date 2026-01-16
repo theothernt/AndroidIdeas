@@ -22,3 +22,22 @@
 
 -dontwarn javax.el.**
 -dontwarn org.ietf.jgss.**
+
+# Keep smbj (SMB library)
+-keep class com.hierynomus.smbj.** { *; }
+-keep class com.hierynomus.mssmb2.** { *; }
+-keep class com.hierynomus.msfscc.** { *; }
+-keep class com.hierynomus.msdtyp.** { *; }
+-keep class com.hierynomus.protocol.** { *; }
+-keep class com.hierynomus.ntlm.** { *; }
+-keep class com.hierynomus.security.** { *; }
+-keep class com.hierynomus.spnego.** { *; }
+-dontwarn com.hierynomus.smbj.**
+
+# Keep mbassy (Event bus used by smbj)
+-keep class net.engio.mbassy.** { *; }
+-keep interface net.engio.mbassy.** { *; }
+-dontwarn net.engio.mbassy.**
+
+# General reflection requirements
+-keepattributes *Annotation*,Signature,EnclosingMethod
