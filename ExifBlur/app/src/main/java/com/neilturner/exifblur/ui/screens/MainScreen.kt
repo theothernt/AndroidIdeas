@@ -5,6 +5,11 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -14,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -89,6 +95,15 @@ fun MainScreen(
                     ),
                     transitionDuration = uiState.transitionDuration
                 )
+            }
+
+            // Black Splash Overlay that fades out once the first image is loaded
+            AnimatedVisibility(
+                visible = uiState.isLoading || uiState.currentDisplayImage == null,
+                enter = fadeIn(),
+                exit = fadeOut(animationSpec = tween(durationMillis = 1000))
+            ) {
+                Box(modifier = Modifier.fillMaxSize().background(Color.Black))
             }
 
             if (uiState.isPermissionCheckComplete) {
