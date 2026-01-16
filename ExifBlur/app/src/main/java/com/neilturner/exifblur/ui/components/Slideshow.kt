@@ -2,6 +2,7 @@ package com.neilturner.exifblur.ui.components
 
 import android.graphics.Bitmap
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -10,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -17,9 +19,14 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 
+data class SlideshowData(
+    val bitmap: Bitmap,
+    val rotation: Float
+)
+
 @Composable
 fun Slideshow(
-    currentBitmap: Bitmap?,
+    currentImage: SlideshowData?,
     transitionDuration: Int,
     modifier: Modifier = Modifier
 ) {
@@ -30,16 +37,16 @@ fun Slideshow(
             .background(Color.Black)
     ) {
         Crossfade(
-            targetState = currentBitmap,
-            animationSpec = tween(durationMillis = transitionDuration),
+            targetState = currentImage,
+            animationSpec = tween(durationMillis = transitionDuration, easing = LinearEasing),
             label = "Slideshow Crossfade"
-        ) { bitmap ->
-            if (bitmap != null) {
+        ) { image ->
+            if (image != null) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     // Background Image (fills screen and blurred)
                     AsyncImage(
                         model = ImageRequest.Builder(context)
-                            .data(bitmap)
+                            .data(image.bitmap)
                             .build(),
                         contentDescription = "Blurred Background Image",
                         contentScale = ContentScale.Crop,
@@ -60,10 +67,12 @@ fun Slideshow(
                     
                     // Foreground Image (fitted)
                     AsyncImage(
-                        model = bitmap,
+                        model = image.bitmap,
                         contentDescription = "Foreground Image",
                         contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .rotate(image.rotation)
                     )
                 }
             } else {

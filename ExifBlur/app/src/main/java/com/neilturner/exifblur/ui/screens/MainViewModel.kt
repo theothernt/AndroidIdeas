@@ -110,7 +110,7 @@ class MainViewModel(
                 images = loadedImages,
                 isLoading = false,
                 currentImageIndex = 0,
-                currentDisplayImage = initialResult?.let { DisplayImage(it.bitmap, initialMetadataLabel) },
+                currentDisplayImage = initialResult?.let { DisplayImage(it.bitmap, initialMetadataLabel, it.rotation) },
                 areOverlaysVisible = true
             )
             
@@ -144,7 +144,7 @@ class MainViewModel(
                     _uiState.update { 
                         it.copy(
                             currentImageIndex = nextIndex,
-                            currentDisplayImage = result?.let { res -> DisplayImage(res.bitmap, metadataLabel) }
+                            currentDisplayImage = result?.let { res -> DisplayImage(res.bitmap, metadataLabel, res.rotation) }
                         ) 
                     }
                     
@@ -214,7 +214,8 @@ data class LoadedImage(
 
 data class DisplayImage(
     val bitmap: Bitmap,
-    val metadataLabel: String?
+    val metadataLabel: String?,
+    val rotation: Float
 )
 
 data class MainUiState(

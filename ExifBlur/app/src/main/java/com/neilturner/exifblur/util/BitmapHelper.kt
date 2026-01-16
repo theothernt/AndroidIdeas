@@ -2,7 +2,6 @@ package com.neilturner.exifblur.util
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -19,6 +18,7 @@ import kotlin.math.roundToInt
 data class BitmapResult(
     val bitmap: Bitmap,
     val metadata: ExifMetadata,
+    val rotation: Float
 )
 
 class BitmapHelper(private val imageRepository: ImageRepository) {
@@ -59,13 +59,11 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
                     ((1.0 - finalPixels.toDouble() / originalPixels.toDouble()) * 100).roundToInt()
                 } else 0
 
-                // Step 5: Apply Rotation
-                val resultBitmap = applyRotation2(originalBitmap, rotationDegrees)
-
+                // Step 5: Return result with rotation
                 Log.d("BitmapHelper", "LOAD COMPLETE: Total duration ${System.currentTimeMillis() - startTime}ms. " +
-                        "Memory reduction: ${reductionPercent}% Final size: ${resultBitmap.width}x${resultBitmap.height}")
+                        "Memory reduction: ${reductionPercent}% Final size: ${originalBitmap.width}x${originalBitmap.height}, Rotation: $rotationDegrees")
 
-                BitmapResult(resultBitmap, metadata)
+                BitmapResult(originalBitmap, metadata, rotationDegrees)
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading bitmap", e)
                 null
@@ -163,44 +161,6 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
 
         Log.d(TAG, "Step 4 complete: Decoded ${bitmap.width}x${bitmap.height} bitmap in ${System.currentTimeMillis() - decodeStartTime}ms")
         return bitmap
-    }
-
-    private fun applyRotation(originalBitmap: Bitmap, rotationDegrees: Float): Bitmap {
-        if (rotationDegrees == 0f) return originalBitmap
-
-        Log.d(TAG, "Rotating bitmap by $rotationDegrees degrees")
-        return try {
-            val matrix = Matrix().apply { postRotate(rotationDegrees) }
-            // Filter=true for better quality rotation
-            val rotated = Bitmap.createBitmap(
-                originalBitmap, 0, 0,
-                originalBitmap.width, originalBitmap.height,
-                matrix, true
-            )
-
-            // Critical: Recycle the original if it's different to free memory immediately
-            if (rotated != originalBitmap) {
-                originalBitmap.recycle()
-            }
-            rotated
-        } catch (e: OutOfMemoryError) {
-            Log.e(TAG, "OOM during rotation", e)
-            // Fallback: return original (wrong orientation is better than crash)
-            originalBitmap
-        }
-    }
-
-    private fun applyRotation2(originalBitmap: Bitmap, rotationDegrees: Float): Bitmap {
-        val rotateStartTime = System.currentTimeMillis()
-        return if (rotationDegrees > 0) {
-            val matrix = Matrix().apply { postRotate(rotationDegrees) }
-            val rotatedBitmap = Bitmap.createBitmap(originalBitmap, 0, 0, originalBitmap.width, originalBitmap.height, matrix, true)
-            Log.d(TAG, "Step 5 complete: Bitmap rotated by $rotationDegrees degrees ${System.currentTimeMillis() - rotateStartTime}ms")
-            rotatedBitmap
-        } else {
-            Log.d(TAG, "Step 5 complete: No rotation needed")
-            originalBitmap
-        }
     }
 
     private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {

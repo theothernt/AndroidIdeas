@@ -81,8 +81,12 @@ fun MainScreen(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             if (uiState.currentDisplayImage != null) {
+                val displayImage = uiState.currentDisplayImage!!
                 Slideshow(
-                    currentBitmap = uiState.currentDisplayImage?.bitmap,
+                    currentImage = com.neilturner.exifblur.ui.components.SlideshowData(
+                        bitmap = displayImage.bitmap,
+                        rotation = displayImage.rotation
+                    ),
                     transitionDuration = uiState.transitionDuration
                 )
             }
