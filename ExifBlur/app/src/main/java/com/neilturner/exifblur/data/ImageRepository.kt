@@ -7,6 +7,7 @@ interface ImageRepository {
     suspend fun getExifMetadata(uri: Uri): ExifMetadata
     suspend fun openInputStream(uri: Uri): java.io.InputStream?
     fun isExifEnabled(): Boolean
+    fun getSourceName(): String
 }
 
 class ImageRepositoryImpl(
@@ -29,4 +30,8 @@ class ImageRepositoryImpl(
     }
 
     override fun isExifEnabled(): Boolean = exifEnabled
+
+    override fun getSourceName(): String {
+        return if (useSamba) "Samba" else "Local"
+    }
 }

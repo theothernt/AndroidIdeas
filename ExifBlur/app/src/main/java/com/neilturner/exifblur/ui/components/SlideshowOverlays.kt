@@ -23,6 +23,7 @@ fun ImageCountOverlay(
     isVisible: Boolean,
     currentImageIndex: Int,
     imageCount: Int,
+    imageSource: String,
     modifier: Modifier = Modifier
 ) {
     AnimatedVisibility(
@@ -44,7 +45,11 @@ fun ImageCountOverlay(
             val statusText = if (imageCount == 0) {
                 "No images found"
             } else {
-                "Image ${currentImageIndex + 1} of $imageCount"
+                if (imageSource.isNotBlank()) {
+                    "$imageSource • Image ${currentImageIndex + 1} of $imageCount"
+                } else {
+                    "Image ${currentImageIndex + 1} of $imageCount"
+                }
             }
             Text(
                 text = statusText,

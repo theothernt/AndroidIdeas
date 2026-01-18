@@ -111,7 +111,8 @@ class MainViewModel(
                 isLoading = false,
                 currentImageIndex = 0,
                 currentDisplayImage = initialResult?.let { DisplayImage(it.bitmap, initialMetadataLabel, it.rotation) },
-                areOverlaysVisible = false
+                areOverlaysVisible = false,
+                imageSource = imageRepository.getSourceName()
             )
             
             if (loadedImages.isNotEmpty()) {
@@ -233,5 +234,6 @@ data class MainUiState(
     val currentDisplayImage: DisplayImage? = null,
     val areOverlaysVisible: Boolean = false,
     val transitionDuration: Int = 1000,
-    val ramInfo: RamInfo? = null
+    val ramInfo: RamInfo? = null,
+    val imageSource: String = ""
 )

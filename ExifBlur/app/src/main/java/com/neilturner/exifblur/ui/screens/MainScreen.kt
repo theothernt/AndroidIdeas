@@ -154,6 +154,7 @@ fun MainScreen(
                         isVisible = uiState.areOverlaysVisible,
                         currentImageIndex = uiState.currentImageIndex,
                         imageCount = uiState.imageCount,
+                        imageSource = uiState.imageSource,
                         modifier = Modifier.align(Alignment.BottomStart)
                     )
 
