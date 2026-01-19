@@ -1,6 +1,5 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
 }
 
@@ -19,16 +18,18 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isShrinkResources = true
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             //isMinifyEnabled = true
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = "-debug"
+            //applicationIdSuffix = ".debug"
+            //versionNameSuffix = "-debug"
         }
     }
     compileOptions {
