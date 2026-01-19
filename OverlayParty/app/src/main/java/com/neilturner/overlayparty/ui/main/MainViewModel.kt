@@ -1,20 +1,47 @@
 package com.neilturner.overlayparty.ui.main
 
 import androidx.lifecycle.ViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.lifecycle.viewModelScope
+import com.neilturner.overlayparty.data.LocationRepository
+import com.neilturner.overlayparty.data.MusicRepository
+import com.neilturner.overlayparty.data.TimeRepository
+import com.neilturner.overlayparty.data.WeatherRepository
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 
-class MainViewModel : ViewModel() {
-    private val _topLeftText = MutableStateFlow("Top Left")
-    val topLeftText: StateFlow<String> = _topLeftText.asStateFlow()
+class MainViewModel(
+    weatherRepository: WeatherRepository,
+    timeRepository: TimeRepository,
+    musicRepository: MusicRepository,
+    locationRepository: LocationRepository
+) : ViewModel() {
 
-    private val _topRightText = MutableStateFlow("Top Right")
-    val topRightText: StateFlow<String> = _topRightText.asStateFlow()
+    val weatherText: StateFlow<String> = weatherRepository.getWeatherStream()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "Loading Weather..."
+        )
 
-    private val _bottomLeftText = MutableStateFlow("Bottom Left")
-    val bottomLeftText: StateFlow<String> = _bottomLeftText.asStateFlow()
+    val timeDateText: StateFlow<String> = timeRepository.getTimeStream()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "Loading Time..."
+        )
 
-    private val _bottomRightText = MutableStateFlow("Bottom Right")
-    val bottomRightText: StateFlow<String> = _bottomRightText.asStateFlow()
+    val nowPlayingText: StateFlow<String> = musicRepository.getMusicStream()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "Loading Music..."
+        )
+
+    val locationText: StateFlow<String> = locationRepository.getLocationStream()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "Loading Location..."
+        )
 }
