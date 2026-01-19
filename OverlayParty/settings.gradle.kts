@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "Media Provider Test"
+rootProject.name = "Overlay Party"
 include(":app")
  
