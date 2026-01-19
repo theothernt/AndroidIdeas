@@ -26,7 +26,10 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.LoadControl
+import androidx.media3.exoplayer.upstream.DefaultAllocator
 import androidx.media3.ui.compose.PlayerSurface
 import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
 import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
@@ -38,6 +41,10 @@ import kotlin.math.min
 private const val CROSS_FADE_DURATION_MS = 2000
 private const val PRELOAD_BUFFER_MS = 5000L // Prepare next video 5s before current ends
 private const val TAG = "VideoPlayer"
+
+// Configuration Flags
+private const val PRELOAD_AT_END = false // Set to false to revert to start-of-video preload
+private const val USE_MINIMAL_BUFFER = true // Set to true to use minimal buffer settings
 
 @OptIn(UnstableApi::class)
 @Composable
@@ -51,17 +58,44 @@ fun VideoPlayer(
     val context = LocalContext.current
     
     LaunchedEffect(Unit) {
-        Log.d(TAG, "Initializing VideoPlayer with ${videos.size} videos. useSurfaceView=$useSurfaceView")
+        Log.d(TAG, "Initializing VideoPlayer with ${videos.size} videos. useSurfaceView=$useSurfaceView, PRELOAD_AT_END=$PRELOAD_AT_END, USE_MINIMAL_BUFFER=$USE_MINIMAL_BUFFER")
     }
 
     // Startup Fade State
     val startupBlackAlpha = remember { Animatable(1f) }
     var hasStartedPlayback by remember { mutableStateOf(false) }
 
+    // Helper to create LoadControl
+    fun createLoadControl(): LoadControl {
+        val builder = DefaultLoadControl.Builder()
+        val allocator = DefaultAllocator(true, C.DEFAULT_BUFFER_SEGMENT_SIZE)
+        builder.setAllocator(allocator)
+
+        if (USE_MINIMAL_BUFFER) {
+            // Minimal Buffer Settings
+            builder.setBufferDurationsMs(
+                2000,  // minBufferMs
+                10000, // maxBufferMs
+                500,   // bufferForPlaybackMs
+                1000   // bufferForPlaybackAfterRebufferMs
+            )
+        } else {
+            // Default ExoPlayer Settings
+            builder.setBufferDurationsMs(
+                50000, // minBufferMs (Default: 50000)
+                50000, // maxBufferMs (Default: 50000)
+                2500,  // bufferForPlaybackMs (Default: 2500)
+                5000   // bufferForPlaybackAfterRebufferMs (Default: 5000)
+            )
+        }
+        return builder.build()
+    }
+
     // Initialize two players for cross-fading
     val player1 = remember {
         ExoPlayer.Builder(context)
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
+            .setLoadControl(createLoadControl())
             .build()
             .apply { 
                 volume = 1f 
@@ -81,6 +115,7 @@ fun VideoPlayer(
     val player2 = remember {
         ExoPlayer.Builder(context)
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
+            .setLoadControl(createLoadControl())
             .build()
             .apply { 
                 volume = 0f 
@@ -132,9 +167,21 @@ fun VideoPlayer(
         preparePlayer(player1, videos[0].url)
         player1.playWhenReady = true
 
-        // We DO NOT prepare Player 2 immediately here anymore.
-        // It will be handled by the polling loop when PRELOAD_BUFFER_MS is reached.
-        isNextPlayerPrepared = false
+        // Initial Preload Logic
+        if (!PRELOAD_AT_END) {
+             // OLD LOGIC: Prepare Player 2 shortly after start
+             val nextIndex = (0 + 1) % videos.size
+             scope.launch {
+                Log.d(TAG, "Waiting 3s before preparing next player (Legacy Mode)...")
+                delay(3000)
+                preparePlayer(player2, videos[nextIndex].url)
+                player2.playWhenReady = false 
+             }
+             isNextPlayerPrepared = true // Mark as handled
+        } else {
+            // NEW LOGIC: Wait for polling loop
+            isNextPlayerPrepared = false
+        }
     }
 
     // Cleanup
@@ -167,7 +214,11 @@ fun VideoPlayer(
         
         isCrossFading = false
         // Next player starts as unprepared for this new cycle
-        isNextPlayerPrepared = false
+        // UNLESS we are in Legacy mode, where we might want to trigger it immediately, 
+        // but for simplicity, let the loop handle subsequent preloads if desired or stick to the logic below.
+        // Actually, in Legacy mode, we usually prepare immediately after the switch.
+        // So we reset this flag based on our target behavior.
+        isNextPlayerPrepared = !PRELOAD_AT_END 
 
         while (true) {
             delay(100) // Poll frequency
@@ -184,9 +235,9 @@ fun VideoPlayer(
                 val logicalEnd = if (videoLimit < duration) videoLimit else duration
                 val remaining = logicalEnd - position
                 
-                // 1. Check for Preload
-                if (!isCrossFading && !isNextPlayerPrepared && remaining <= PRELOAD_BUFFER_MS) {
-                    Log.d(TAG, "Preload Triggered. Remaining: $remaining")
+                // 1. Check for Preload (Only if PRELOAD_AT_END is true)
+                if (PRELOAD_AT_END && !isCrossFading && !isNextPlayerPrepared && remaining <= PRELOAD_BUFFER_MS) {
+                    Log.d(TAG, "Preload Triggered (End Mode). Remaining: $remaining")
                     isNextPlayerPrepared = true
                     val nextIndex = (currentVideoIndex + 1) % videos.size
                     preparePlayer(nextPlayer, videos[nextIndex].url)
@@ -235,6 +286,19 @@ fun VideoPlayer(
                  activePlayer.stop()
                  activePlayer.clearMediaItems()
                  Log.d(TAG, "Cleared media items for inactive player")
+                 
+                 // Legacy Preload Logic: Prepare next video shortly after switch
+                 if (!PRELOAD_AT_END) {
+                     val nextNextIndex = (currentVideoIndex + 2) % videos.size
+                     val videoUrl = videos[nextNextIndex].url
+                     val playerToPrepare = activePlayer
+                     scope.launch {
+                         Log.d(TAG, "Waiting 4s before preparing player for next video (Legacy Mode)...")
+                         delay(4000)
+                         preparePlayer(playerToPrepare, videoUrl)
+                         playerToPrepare.playWhenReady = false
+                     }
+                 }
                  
                  // Update global state to restart this effect
                  currentVideoIndex = (currentVideoIndex + 1) % videos.size
