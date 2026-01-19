@@ -31,6 +31,8 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             .fillMaxSize()
             .background(Color.DarkGray)
     ) {
+        Slideshow()
+
         WeatherOverlay(
             text = weatherText,
             modifier = Modifier
