@@ -36,6 +36,7 @@ import kotlinx.coroutines.launch
 import kotlin.math.min
 
 private const val CROSS_FADE_DURATION_MS = 2000
+private const val PRELOAD_BUFFER_MS = 5000L // Prepare next video 5s before current ends
 private const val TAG = "VideoPlayer"
 
 @OptIn(UnstableApi::class)
@@ -53,6 +54,10 @@ fun VideoPlayer(
         Log.d(TAG, "Initializing VideoPlayer with ${videos.size} videos. useSurfaceView=$useSurfaceView")
     }
 
+    // Startup Fade State
+    val startupBlackAlpha = remember { Animatable(1f) }
+    var hasStartedPlayback by remember { mutableStateOf(false) }
+
     // Initialize two players for cross-fading
     val player1 = remember {
         ExoPlayer.Builder(context)
@@ -66,6 +71,9 @@ fun VideoPlayer(
                     }
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         Log.d(TAG, "Player 1 IsPlaying: $isPlaying")
+                        if (isPlaying && !hasStartedPlayback) {
+                            hasStartedPlayback = true
+                        }
                     }
                 })
             }
@@ -91,6 +99,8 @@ fun VideoPlayer(
     var activePlayerIs1 by remember { mutableStateOf(true) }
     var currentVideoIndex by remember { mutableIntStateOf(0) }
     var isCrossFading by remember { mutableStateOf(false) }
+    // Track if next player has been prepared to avoid repetitive calls
+    var isNextPlayerPrepared by remember { mutableStateOf(false) }
 
     // Coroutine scope for delayed preparation that outlives the LaunchedEffect key change
     val scope = rememberCoroutineScope()
@@ -98,6 +108,14 @@ fun VideoPlayer(
     // Alpha animations
     val player1Alpha = remember { Animatable(1f) }
     val player2Alpha = remember { Animatable(0f) }
+
+    // Handle startup fade out
+    LaunchedEffect(hasStartedPlayback) {
+        if (hasStartedPlayback) {
+            Log.d(TAG, "First playback detected. Fading out black screen.")
+            startupBlackAlpha.animateTo(0f, animationSpec = tween(1000, easing = LinearEasing))
+        }
+    }
 
     // Helper to prepare a player with a URL
     fun preparePlayer(player: ExoPlayer, url: String) {
@@ -114,14 +132,9 @@ fun VideoPlayer(
         preparePlayer(player1, videos[0].url)
         player1.playWhenReady = true
 
-        // Prepare Player 2 with second video (Delayed by 3s)
-        val nextIndex = (0 + 1) % videos.size
-        scope.launch {
-            Log.d(TAG, "Waiting 3s before preparing next player...")
-            delay(3000)
-            preparePlayer(player2, videos[nextIndex].url)
-            player2.playWhenReady = false 
-        }
+        // We DO NOT prepare Player 2 immediately here anymore.
+        // It will be handled by the polling loop when PRELOAD_BUFFER_MS is reached.
+        isNextPlayerPrepared = false
     }
 
     // Cleanup
@@ -132,7 +145,7 @@ fun VideoPlayer(
         }
     }
 
-    // Polling loop for cross-fade trigger
+    // Polling loop for playback monitoring and cross-fade trigger
     LaunchedEffect(activePlayerIs1, currentVideoIndex, useSurfaceView) {
         Log.d(TAG, "State Changed: activePlayerIs1=$activePlayerIs1, index=$currentVideoIndex")
         
@@ -153,6 +166,8 @@ fun VideoPlayer(
         }
         
         isCrossFading = false
+        // Next player starts as unprepared for this new cycle
+        isNextPlayerPrepared = false
 
         while (true) {
             delay(100) // Poll frequency
@@ -164,23 +179,33 @@ fun VideoPlayer(
             // Determine effective end time
             val videoLimit = currentVideo.durationMs ?: Long.MAX_VALUE
             
-            // Check if we should start transition
-            if (!isCrossFading && duration > 0 && duration != C.TIME_UNSET) {
+            // Logic works only if we have a valid duration
+            if (duration > 0 && duration != C.TIME_UNSET) {
                 val logicalEnd = if (videoLimit < duration) videoLimit else duration
                 val remaining = logicalEnd - position
                 
-                // Trigger transition slightly before end (e.g. 200ms) to ensure we catch it before actual completion
-                if (remaining <= 200) {
+                // 1. Check for Preload
+                if (!isCrossFading && !isNextPlayerPrepared && remaining <= PRELOAD_BUFFER_MS) {
+                    Log.d(TAG, "Preload Triggered. Remaining: $remaining")
+                    isNextPlayerPrepared = true
+                    val nextIndex = (currentVideoIndex + 1) % videos.size
+                    preparePlayer(nextPlayer, videos[nextIndex].url)
+                    nextPlayer.playWhenReady = false
+                }
+
+                // 2. Check for Cross-fade transition
+                // Trigger transition slightly before end (e.g. 200ms)
+                if (!isCrossFading && remaining <= 200) {
                     Log.d(TAG, "Transition Triggered. Remaining: $remaining")
                     isCrossFading = true
                     
-                    // 1. Pause the finishing video to hold the last frame
+                    // Pause the finishing video to hold the last frame
                     activePlayer.pause()
                     
-                    // 2. Start the next player
+                    // Start the next player
                     nextPlayer.playWhenReady = true
                     
-                    // 3. Fade in the next player (which should be on TOP)
+                    // Fade in the next player (which should be on TOP)
                     launch {
                         val fadeDuration = if (useSurfaceView) 0 else CROSS_FADE_DURATION_MS
                         Log.d(TAG, "Animating fade: duration=$fadeDuration")
@@ -203,26 +228,13 @@ fun VideoPlayer(
                  
                  Log.d(TAG, "Transition Complete. Switching State.")
                  
-                 // NOW switch state.
-                 // activePlayer (old) is now hidden behind nextPlayer (new).
-                 
                  // CRITICAL FIX: Snap old player to invisible BEFORE we flip the state.
                  if (activePlayerIs1) player1Alpha.snapTo(0f) else player2Alpha.snapTo(0f)
 
-                 // Stop old player immediately
+                 // Stop and CLEAR old player to save RAM
                  activePlayer.stop()
-                 // activePlayer.clearMediaItems()
-                 
-                 val nextNextIndex = (currentVideoIndex + 2) % videos.size
-                 val videoUrl = videos[nextNextIndex].url
-                 
-                 // Prepare for *next next* video AFTER 3s delay
-                 scope.launch {
-                     Log.d(TAG, "Waiting 4s before preparing player for next video logic...")
-                     delay(4000)
-                     preparePlayer(activePlayer, videoUrl)
-                     activePlayer.playWhenReady = false
-                 }
+                 activePlayer.clearMediaItems()
+                 Log.d(TAG, "Cleared media items for inactive player")
                  
                  // Update global state to restart this effect
                  currentVideoIndex = (currentVideoIndex + 1) % videos.size
@@ -281,6 +293,18 @@ fun VideoPlayer(
                     .fillMaxSize()
                     .zIndex(p2ZIndex)
                     .alpha(player2Alpha.value)
+            )
+        }
+
+        // Startup Fade-Out Black Overlay
+        // High Z-Index to cover everything initially
+        if (startupBlackAlpha.value > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(100f)
+                    .alpha(startupBlackAlpha.value)
+                    .background(Color.Black)
             )
         }
     }
