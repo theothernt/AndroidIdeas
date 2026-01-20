@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
@@ -28,9 +29,11 @@ fun TextBlock(
     icon: ImageVector? = null,
     iconPosition: IconPosition = IconPosition.LEADING,
     showBackground: Boolean = true,
-    animateSize: Boolean = true
+    animateSize: Boolean = true,
+    scale: Float = 1f,
+    padding: Dp = 8.dp
 ) {
-    OverlayContainer(modifier, showBackground, animateSize) {
+    OverlayContainer(modifier, showBackground, animateSize, padding) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -39,7 +42,7 @@ fun TextBlock(
                 OverlayIcon(icon)
             }
 
-            OverlayText(text, showBackground)
+            OverlayText(text, showBackground, scale = scale)
 
             if (icon != null && iconPosition == IconPosition.TRAILING) {
                 OverlayIcon(icon)
@@ -53,16 +56,17 @@ fun MultiItemBlock(
     items: List<OverlayItem>,
     modifier: Modifier = Modifier,
     showBackground: Boolean = true,
-    animateSize: Boolean = true
+    animateSize: Boolean = true,
+    padding: Dp = 8.dp
 ) {
-    OverlayContainer(modifier, showBackground, animateSize) {
+    OverlayContainer(modifier, showBackground, animateSize, padding) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items.forEach { item ->
                 when (item) {
-                    is OverlayItem.Text -> OverlayText(item.text, showBackground)
+                    is OverlayItem.Text -> OverlayText(item.text, showBackground, scale = item.scale)
                     is OverlayItem.Icon -> OverlayIcon(item.icon)
                 }
             }
@@ -75,6 +79,7 @@ private fun OverlayContainer(
     modifier: Modifier,
     showBackground: Boolean,
     animateSize: Boolean,
+    padding: Dp,
     content: @Composable () -> Unit
 ) {
     Box(
@@ -90,7 +95,7 @@ private fun OverlayContainer(
                     Modifier
                 }
             )
-            .padding(8.dp)
+            .padding(padding)
     ) {
         content()
     }
@@ -100,15 +105,21 @@ private fun OverlayContainer(
 private fun OverlayText(
     text: String,
     showBackground: Boolean,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    scale: Float = 1f
 ) {
+    val baseStyle = MaterialTheme.typography.bodyLarge
+    val scaledStyle = baseStyle.copy(
+        fontSize = baseStyle.fontSize * scale
+    )
+
     Text(
         text = text,
         modifier = modifier,
         style = if (showBackground) {
-            MaterialTheme.typography.bodyLarge
+            scaledStyle
         } else {
-            MaterialTheme.typography.bodyLarge.copy(
+            scaledStyle.copy(
                 shadow = Shadow(
                     color = Color.Black,
                     offset = Offset(2f, 2f),

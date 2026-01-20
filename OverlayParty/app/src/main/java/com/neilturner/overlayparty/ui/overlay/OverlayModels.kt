@@ -1,6 +1,18 @@
 package com.neilturner.overlayparty.ui.overlay
 
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+/**
+ * Position enum for the 4 screen corners where overlays can be placed.
+ */
+enum class OverlayPosition {
+    TOP_START,
+    TOP_END,
+    BOTTOM_START,
+    BOTTOM_END
+}
 
 /**
  * Position of the icon relative to the text.
@@ -14,7 +26,7 @@ enum class IconPosition {
  * Items that can be used in a flexible multi-item overlay.
  */
 sealed interface OverlayItem {
-    data class Text(val text: String) : OverlayItem
+    data class Text(val text: String, val scale: Float = 1f) : OverlayItem
     data class Icon(val icon: ImageVector) : OverlayItem
 }
 
@@ -32,13 +44,16 @@ enum class OverlayAnimationType {
  */
 sealed interface OverlayContent {
     val animationType: OverlayAnimationType
+    val padding: Dp
 
     /**
      * Simple text-only overlay content.
      */
     data class TextOnly(
         val text: String,
-        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING
+        val scale: Float = 1f,
+        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING,
+        override val padding: Dp = 8.dp
     ) : OverlayContent
 
     /**
@@ -48,7 +63,9 @@ sealed interface OverlayContent {
         val text: String, 
         val icon: ImageVector,
         val iconPosition: IconPosition = IconPosition.LEADING,
-        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING
+        val scale: Float = 1f,
+        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING,
+        override val padding: Dp = 8.dp
     ) : OverlayContent
 
     /**
@@ -56,7 +73,8 @@ sealed interface OverlayContent {
      */
     data class MultiItemContent(
         val items: List<OverlayItem>,
-        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING
+        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING,
+        override val padding: Dp = 8.dp
     ) : OverlayContent
 
     /**
@@ -64,6 +82,7 @@ sealed interface OverlayContent {
      */
     data class VerticalStack(
         val items: List<OverlayContent>,
-        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING
+        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING,
+        override val padding: Dp = 8.dp
     ) : OverlayContent
 }

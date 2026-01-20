@@ -69,7 +69,9 @@ private fun RenderOverlayContent(
             text = content.text,
             modifier = modifier,
             showBackground = showBackground,
-            animateSize = animateSize
+            animateSize = animateSize,
+            scale = content.scale,
+            padding = content.padding
         )
         is OverlayContent.IconWithText -> TextBlock(
             text = content.text,
@@ -77,13 +79,16 @@ private fun RenderOverlayContent(
             iconPosition = content.iconPosition,
             modifier = modifier,
             showBackground = showBackground,
-            animateSize = animateSize
+            animateSize = animateSize,
+            scale = content.scale,
+            padding = content.padding
         )
         is OverlayContent.MultiItemContent -> MultiItemBlock(
             items = content.items,
             modifier = modifier,
             showBackground = showBackground,
-            animateSize = animateSize
+            animateSize = animateSize,
+            padding = content.padding
         )
         is OverlayContent.VerticalStack -> {
             Column(

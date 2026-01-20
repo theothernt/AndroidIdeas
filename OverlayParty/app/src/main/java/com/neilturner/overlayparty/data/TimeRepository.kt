@@ -16,9 +16,11 @@ data class DateTimeInfo(
 )
 
 class TimeRepository {
-    fun getTimeStream(): Flow<DateTimeInfo> = flow {
+    fun getTimeStream(showSeconds: Boolean = true): Flow<DateTimeInfo> = flow {
+        val timePattern = if (showSeconds) "HH:mm:ss" else "HH:mm"
+        
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+            val timeFormatter = DateTimeFormatter.ofPattern(timePattern)
             val dateFormatter = DateTimeFormatter.ofPattern("MMM dd, yyyy")
             while (true) {
                 val now = LocalDateTime.now()
@@ -29,7 +31,7 @@ class TimeRepository {
                 delay(1000)
             }
         } else {
-            val timeFormatter = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            val timeFormatter = SimpleDateFormat(timePattern, Locale.getDefault())
             val dateFormatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
             while (true) {
                 val now = Date()

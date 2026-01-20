@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material.icons.filled.WbSunny
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neilturner.overlayparty.data.LocationRepository
@@ -47,21 +48,22 @@ class MainViewModel(
                     OverlayItem.Icon(icon),
                     OverlayItem.Text(weather.temperature)
                 ),
-                animationType = OverlayAnimationType.FADE_AND_REPLACE
+                animationType = OverlayAnimationType.FADE_AND_REPLACE,
+                padding = 4.dp
             )
         }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = OverlayContent.TextOnly("Loading Weather...", OverlayAnimationType.FADE_AND_REPLACE)
+            initialValue = OverlayContent.TextOnly("Loading Weather...", animationType = OverlayAnimationType.FADE_AND_REPLACE)
         )
 
-    val topEndOverlay: StateFlow<OverlayContent?> = timeRepository.getTimeStream()
+    val topEndOverlay: StateFlow<OverlayContent?> = timeRepository.getTimeStream(showSeconds = false)
         .map { dateTime ->
             OverlayContent.VerticalStack(
                 items = listOf(
-                    OverlayContent.TextOnly(dateTime.date),
-                    OverlayContent.TextOnly(dateTime.time)
+                    OverlayContent.TextOnly(dateTime.date, padding = 4.dp),
+                    OverlayContent.TextOnly(dateTime.time, scale = 2f, padding = 0.dp)
                 )
             )
         }
@@ -72,12 +74,12 @@ class MainViewModel(
         )
 
     val bottomStartOverlay: StateFlow<OverlayContent?> = musicRepository.getMusicStream()
-        .map { 
+        .map {
             OverlayContent.IconWithText(
-                text = it, 
+                text = it,
                 icon = Icons.Default.MusicNote,
                 iconPosition = IconPosition.TRAILING
-            ) 
+            )
         }
         .stateIn(
             scope = viewModelScope,
@@ -91,8 +93,8 @@ class MainViewModel(
     ) { location, message ->
         OverlayContent.VerticalStack(
             items = listOf(
-                OverlayContent.TextOnly(message),
-                OverlayContent.TextOnly(location)
+                OverlayContent.TextOnly(message, animationType = OverlayAnimationType.FADE_AND_REPLACE),
+                OverlayContent.TextOnly(location, animationType = OverlayAnimationType.FADE_AND_REPLACE)
             )
         )
     }.stateIn(
