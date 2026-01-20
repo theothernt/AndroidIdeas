@@ -46,6 +46,7 @@ import com.neilturner.exifblur.ui.components.MetadataOverlay
 import com.neilturner.exifblur.ui.components.PermissionRequestContent
 import com.neilturner.exifblur.ui.components.RamUsageOverlay
 import com.neilturner.exifblur.ui.components.Slideshow
+import com.neilturner.exifblur.ui.components.SlideshowData
 import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -122,7 +123,7 @@ fun MainScreen(
             if (uiState.currentDisplayImage != null) {
                 val displayImage = uiState.currentDisplayImage!!
                 Slideshow(
-                    currentImage = com.neilturner.exifblur.ui.components.SlideshowData(
+                    currentImage = SlideshowData(
                         bitmap = displayImage.bitmap,
                         rotation = displayImage.rotation
                     ),
