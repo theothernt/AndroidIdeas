@@ -11,6 +11,8 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
+import androidx.compose.ui.Alignment
+
 /**
  * A flexible layout composable that positions overlays in the 4 screen corners.
  *
@@ -37,19 +39,21 @@ fun OverlayLayout(
             .fillMaxSize()
             .padding(16.dp)
     ) {
-        // Top row with adaptive spacing
+        // Top row with adaptive spacing - Top aligned
         AdaptiveOverlayRow(
             startContent = topStart,
-            endContent = topEnd
+            endContent = topEnd,
+            verticalAlignment = Alignment.Top
         )
 
         // Flexible spacer pushes bottom row to the bottom
         Spacer(modifier = Modifier.weight(1f))
 
-        // Bottom row with adaptive spacing
+        // Bottom row with adaptive spacing - Bottom aligned
         AdaptiveOverlayRow(
             startContent = bottomStart,
-            endContent = bottomEnd
+            endContent = bottomEnd,
+            verticalAlignment = Alignment.Bottom
         )
     }
 }
@@ -63,12 +67,14 @@ fun OverlayLayout(
  * @param startContent Content for the left/start position
  * @param endContent Content for the right/end position
  * @param minGap Minimum gap between overlays
+ * @param verticalAlignment Vertical alignment for items in the row
  */
 @Composable
 private fun AdaptiveOverlayRow(
     startContent: OverlayContent?,
     endContent: OverlayContent?,
-    minGap: Dp = 16.dp
+    minGap: Dp = 16.dp,
+    verticalAlignment: Alignment.Vertical = Alignment.Top
 ) {
     SubcomposeLayout { constraints ->
         val gapPx = minGap.roundToPx()
@@ -106,11 +112,13 @@ private fun AdaptiveOverlayRow(
         val height = maxOf(startPlaceable?.height ?: 0, endPlaceable?.height ?: 0)
 
         layout(constraints.maxWidth, height) {
-            // Place start overlay at left edge
-            startPlaceable?.placeRelative(0, 0)
+            // Place start overlay
+            val startY = verticalAlignment.align(startPlaceable?.height ?: 0, height)
+            startPlaceable?.placeRelative(0, startY)
 
-            // Place end overlay at right edge
-            endPlaceable?.placeRelative(constraints.maxWidth - endWidth, 0)
+            // Place end overlay
+            val endY = verticalAlignment.align(endPlaceable?.height ?: 0, height)
+            endPlaceable?.placeRelative(constraints.maxWidth - endWidth, endY)
         }
     }
 }
