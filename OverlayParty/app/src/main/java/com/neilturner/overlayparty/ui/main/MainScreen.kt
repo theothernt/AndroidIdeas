@@ -39,7 +39,7 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
 
     LaunchedEffect(Unit) {
         delay(500) // Brief pause before starting the fade
-        showInitialBlackout = false
+        showInitialBlackout = false // Linter mistake
     }
 
     Box(

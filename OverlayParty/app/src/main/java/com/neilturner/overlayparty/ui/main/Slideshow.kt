@@ -15,6 +15,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -27,13 +28,14 @@ fun Slideshow(
     crossfadeDurationMillis: Int = 2000
 ) {
     val context = LocalContext.current
-    val configuration = LocalConfiguration.current
-    val density = LocalDensity.current
-    
+
     // Calculate screen size in pixels to limit memory usage
-    val screenWidthPx = with(density) { configuration.screenWidthDp.dp.roundToPx() }
-    val screenHeightPx = with(density) { configuration.screenHeightDp.dp.roundToPx() }
-    
+    val windowInfo = LocalWindowInfo.current
+    val containerSize = windowInfo.containerSize
+
+    val screenWidthPx = containerSize.width
+    val screenHeightPx = containerSize.height
+
     // Get all images from assets/slideshow
     val imagePaths = remember {
         context.assets.list("slideshow")?.map { "file:///android_asset/slideshow/$it" } ?: emptyList()

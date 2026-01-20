@@ -66,7 +66,7 @@ class MainViewModel(
             OverlayContent.IconWithText(
                 text = it, 
                 icon = Icons.Default.MusicNote,
-                iconPosition = IconPosition.TRAILING
+                iconPosition = IconPosition.LEADING
             ) 
         }
         .stateIn(

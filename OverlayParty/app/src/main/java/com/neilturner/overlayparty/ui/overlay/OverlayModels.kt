@@ -3,16 +3,6 @@ package com.neilturner.overlayparty.ui.overlay
 import androidx.compose.ui.graphics.vector.ImageVector
 
 /**
- * Position enum for the 4 screen corners where overlays can be placed.
- */
-enum class OverlayPosition {
-    TOP_START,
-    TOP_END,
-    BOTTOM_START,
-    BOTTOM_END
-}
-
-/**
  * Position of the icon relative to the text.
  */
 enum class IconPosition {
