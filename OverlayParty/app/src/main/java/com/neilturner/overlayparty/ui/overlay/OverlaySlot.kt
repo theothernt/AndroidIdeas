@@ -5,8 +5,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.neilturner.overlayparty.ui.components.MultiItemBlock
 import com.neilturner.overlayparty.ui.components.TextBlock
 
@@ -31,7 +35,7 @@ fun OverlaySlot(
         AnimatedContent(
             targetState = content,
             transitionSpec = {
-                fadeIn(animationSpec = tween(1500)) togetherWith fadeOut(animationSpec = tween(1500))
+                fadeIn(animationSpec = tween(500)) togetherWith fadeOut(animationSpec = tween(500))
             },
             label = "OverlayFade"
         ) { targetContent ->
@@ -81,5 +85,20 @@ private fun RenderOverlayContent(
             showBackground = showBackground,
             animateSize = animateSize
         )
+        is OverlayContent.VerticalStack -> {
+            Column(
+                modifier = modifier,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalAlignment = Alignment.End // Default to end alignment for stacks, usually top-right or bottom-right
+            ) {
+                content.items.forEach { childContent ->
+                    OverlaySlot(
+                        content = childContent,
+                        modifier = Modifier, // Modifier is applied to the stack container, not individual items
+                        showBackground = showBackground
+                    )
+                }
+            }
+        }
     }
 }

@@ -10,18 +10,33 @@ import java.time.format.DateTimeFormatter
 import java.util.Date
 import java.util.Locale
 
+data class DateTimeInfo(
+    val time: String,
+    val date: String
+)
+
 class TimeRepository {
-    fun getTimeStream(): Flow<String> = flow {
+    fun getTimeStream(): Flow<DateTimeInfo> = flow {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val formatter = DateTimeFormatter.ofPattern("MMM dd | HH:mm:ss")
+            val timeFormatter = DateTimeFormatter.ofPattern("HH:mm:ss")
+            val dateFormatter = DateTimeFormatter.ofPattern("MMM dd, yyyy")
             while (true) {
-                emit(LocalDateTime.now().format(formatter))
+                val now = LocalDateTime.now()
+                emit(DateTimeInfo(
+                    time = now.format(timeFormatter),
+                    date = now.format(dateFormatter)
+                ))
                 delay(1000)
             }
         } else {
-            val formatter = SimpleDateFormat("MMM dd | HH:mm:ss", Locale.getDefault())
+            val timeFormatter = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+            val dateFormatter = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
             while (true) {
-                emit(formatter.format(Date()))
+                val now = Date()
+                emit(DateTimeInfo(
+                    time = timeFormatter.format(now),
+                    date = dateFormatter.format(now)
+                ))
                 delay(1000)
             }
         }

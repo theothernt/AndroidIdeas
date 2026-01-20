@@ -1,6 +1,7 @@
 package com.neilturner.overlayparty.di
 
 import com.neilturner.overlayparty.data.LocationRepository
+import com.neilturner.overlayparty.data.MessageRepository
 import com.neilturner.overlayparty.data.MusicRepository
 import com.neilturner.overlayparty.data.TimeRepository
 import com.neilturner.overlayparty.data.WeatherRepository
@@ -13,6 +14,7 @@ val appModule = module {
     single { TimeRepository() }
     single { MusicRepository() }
     single { LocationRepository() }
+    single { MessageRepository() }
 
-    viewModel { MainViewModel(get(), get(), get(), get()) }
+    viewModel { MainViewModel(get(), get(), get(), get(), get()) }
 }

@@ -6,12 +6,13 @@ import kotlinx.coroutines.flow.flow
 
 class MusicRepository {
     private val nowPlayingSongs = listOf(
+        "The Midnight\nDays of Thunder - Extended Mix",
         "Depeche Mode\nEverything Counts",
         "The Cure\nLovesong",
+        "Tears for Fears\nEverybody Wants to Rule the World",
         "New Order\nBlue Monday",
         "Pet Shop Boys\nWest End Girls",
         "Erasure\nA Little Respect",
-        "Tears for Fears\nEverybody Wants to Rule the World",
         "Simple Minds\nDon't You (Forget About Me)",
         "Duran Duran\nRio",
         "The Smiths\nThis Charming Man",
@@ -23,7 +24,7 @@ class MusicRepository {
         while (true) {
             emit(nowPlayingSongs[index])
             index = (index + 1) % nowPlayingSongs.size
-            delay(12_000)
+            delay(5_000)
         }
     }
 }

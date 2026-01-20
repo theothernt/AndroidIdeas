@@ -58,4 +58,12 @@ sealed interface OverlayContent {
         val items: List<OverlayItem>,
         override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING
     ) : OverlayContent
+
+    /**
+     * Vertical stack of independent overlay contents.
+     */
+    data class VerticalStack(
+        val items: List<OverlayContent>,
+        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING
+    ) : OverlayContent
 }

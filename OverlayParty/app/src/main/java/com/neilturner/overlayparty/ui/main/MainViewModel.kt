@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.WbSunny
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neilturner.overlayparty.data.LocationRepository
+import com.neilturner.overlayparty.data.MessageRepository
 import com.neilturner.overlayparty.data.MusicRepository
 import com.neilturner.overlayparty.data.TimeRepository
 import com.neilturner.overlayparty.data.WeatherRepository
@@ -18,6 +19,7 @@ import com.neilturner.overlayparty.ui.overlay.OverlayContent
 import com.neilturner.overlayparty.ui.overlay.OverlayItem
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 
@@ -25,7 +27,8 @@ class MainViewModel(
     weatherRepository: WeatherRepository,
     timeRepository: TimeRepository,
     musicRepository: MusicRepository,
-    locationRepository: LocationRepository
+    locationRepository: LocationRepository,
+    messageRepository: MessageRepository
 ) : ViewModel() {
 
     val topStartOverlay: StateFlow<OverlayContent?> = weatherRepository.getWeatherStream()
@@ -54,7 +57,14 @@ class MainViewModel(
         )
 
     val topEndOverlay: StateFlow<OverlayContent?> = timeRepository.getTimeStream()
-        .map { OverlayContent.TextOnly(it) }
+        .map { dateTime ->
+            OverlayContent.VerticalStack(
+                items = listOf(
+                    OverlayContent.TextOnly(dateTime.date),
+                    OverlayContent.TextOnly(dateTime.time)
+                )
+            )
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -66,7 +76,7 @@ class MainViewModel(
             OverlayContent.IconWithText(
                 text = it, 
                 icon = Icons.Default.MusicNote,
-                iconPosition = IconPosition.LEADING
+                iconPosition = IconPosition.TRAILING
             ) 
         }
         .stateIn(
@@ -75,11 +85,19 @@ class MainViewModel(
             initialValue = OverlayContent.IconWithText("Loading Music...", Icons.Default.MusicNote)
         )
 
-    val bottomEndOverlay: StateFlow<OverlayContent?> = locationRepository.getLocationStream()
-        .map { OverlayContent.TextOnly(it) }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = OverlayContent.TextOnly("Loading Location...")
+    val bottomEndOverlay: StateFlow<OverlayContent?> = combine(
+        locationRepository.getLocationStream(),
+        messageRepository.getMessageStream()
+    ) { location, message ->
+        OverlayContent.VerticalStack(
+            items = listOf(
+                OverlayContent.TextOnly(message),
+                OverlayContent.TextOnly(location)
+            )
         )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = OverlayContent.TextOnly("Loading Location...")
+    )
 }
