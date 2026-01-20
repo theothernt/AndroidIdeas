@@ -1,6 +1,7 @@
 package com.neilturner.overlayparty.ui.overlay
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -35,7 +36,14 @@ fun OverlaySlot(
         AnimatedContent(
             targetState = content,
             transitionSpec = {
-                fadeIn(animationSpec = tween(500)) togetherWith fadeOut(animationSpec = tween(500))
+                (fadeIn(animationSpec = tween(700, delayMillis = 700)) togetherWith 
+                 fadeOut(animationSpec = tween(700)))
+                 .using(
+                     SizeTransform { _, _ ->
+                         // Delay the size animation to match the fade-in start (after fade-out completes)
+                         tween(durationMillis = 700, delayMillis = 700)
+                     }
+                 )
             },
             label = "OverlayFade"
         ) { targetContent ->

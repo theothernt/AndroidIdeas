@@ -79,7 +79,7 @@ class MainViewModel(
                     OverlayItem.Text(weather.temperature)
                 ),
                 animationType = OverlayAnimationType.FADE_AND_REPLACE,
-                padding = 12.dp
+                padding = 4.dp
             )
         }
     }.stateIn(
@@ -89,7 +89,7 @@ class MainViewModel(
     )
 
     val topEndOverlay: StateFlow<OverlayContent?> = combine(
-        timeRepository.getTimeStream(showSeconds = false),
+        timeRepository.getTimeStream(showSeconds = true),
         _visibleOverlays
     ) { dateTime, visibleOverlays ->
         if (!visibleOverlays.contains(OverlayPosition.TOP_END)) {
@@ -98,7 +98,7 @@ class MainViewModel(
             OverlayContent.VerticalStack(
                 items = listOf(
                     OverlayContent.TextOnly(dateTime.date, padding = 4.dp),
-                    OverlayContent.TextOnly(dateTime.time, scale = 2f, padding = 16.dp)
+                    OverlayContent.TextOnly(dateTime.time, scale = 2f, padding = 4.dp)
                 )
             )
         }
@@ -118,7 +118,8 @@ class MainViewModel(
             OverlayContent.IconWithText(
                 text = music, 
                 icon = Icons.Default.MusicNote,
-                iconPosition = IconPosition.TRAILING
+                iconPosition = IconPosition.LEADING,
+                animationType = OverlayAnimationType.FADE_AND_REPLACE,
             )
         }
     }.stateIn(
