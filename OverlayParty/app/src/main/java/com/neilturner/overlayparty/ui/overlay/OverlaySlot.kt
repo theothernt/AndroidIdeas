@@ -33,16 +33,16 @@ fun OverlaySlot(
     val animationType = content.animationType
 
     when (animationType) {
-        OverlayAnimationType.FADE_AND_REPLACE -> {
+        OverlayAnimationType.FADE -> {
             AnimatedContent(
                 targetState = content,
                 transitionSpec = {
-                    (fadeIn(animationSpec = tween(700, delayMillis = 700)) togetherWith 
-                     fadeOut(animationSpec = tween(700)))
+                    (fadeIn(animationSpec = tween(1000, delayMillis = 1000)) togetherWith
+                     fadeOut(animationSpec = tween(1000)))
                      .using(
                          SizeTransform { _, _ ->
                              // Delay the size animation to match the fade-in start (after fade-out completes)
-                             tween(durationMillis = 700, delayMillis = 700)
+                             tween(durationMillis = 200, delayMillis = 1000)
                          }
                      )
                 },
@@ -56,7 +56,7 @@ fun OverlaySlot(
                 )
             }
         }
-        OverlayAnimationType.CONTENT_RESIZING -> {
+        OverlayAnimationType.RESIZE -> {
             RenderOverlayContent(
                 content = content,
                 modifier = modifier,

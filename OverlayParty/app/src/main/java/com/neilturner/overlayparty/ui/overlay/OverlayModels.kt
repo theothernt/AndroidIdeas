@@ -35,8 +35,8 @@ sealed interface OverlayItem {
  */
 enum class OverlayAnimationType {
     NONE,             // No animation
-    CONTENT_RESIZING, // Standard size animation, no fade
-    FADE_AND_REPLACE  // Crossfade between content updates
+    RESIZE, // Standard size animation, no fade
+    FADE  // Crossfade between content updates
 }
 
 /**

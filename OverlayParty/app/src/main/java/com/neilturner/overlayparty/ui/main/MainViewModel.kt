@@ -23,7 +23,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 
@@ -78,7 +77,7 @@ class MainViewModel(
                     OverlayItem.Icon(icon),
                     OverlayItem.Text(weather.temperature)
                 ),
-                animationType = OverlayAnimationType.NONE,
+                animationType = OverlayAnimationType.FADE,
                 padding = 12.dp
             )
         }
@@ -119,7 +118,7 @@ class MainViewModel(
                 text = music, 
                 icon = Icons.Default.MusicNote,
                 iconPosition = IconPosition.LEADING,
-                animationType = OverlayAnimationType.NONE
+                animationType = OverlayAnimationType.FADE
             )
         }
     }.stateIn(
@@ -138,8 +137,8 @@ class MainViewModel(
         } else {
             OverlayContent.VerticalStack(
                 items = listOf(
-                    OverlayContent.TextOnly(message, animationType = OverlayAnimationType.NONE),
-                    OverlayContent.TextOnly(location, animationType = OverlayAnimationType.NONE)
+                    OverlayContent.TextOnly(message, animationType = OverlayAnimationType.FADE),
+                    OverlayContent.TextOnly(location, animationType = OverlayAnimationType.RESIZE)
                 )
             )
         }
