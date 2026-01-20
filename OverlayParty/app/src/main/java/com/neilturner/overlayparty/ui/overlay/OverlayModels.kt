@@ -40,6 +40,15 @@ enum class OverlayAnimationType {
 }
 
 /**
+ * Alignment options for the vertical stack items.
+ */
+enum class StackAlignment {
+    START,
+    CENTER,
+    END
+}
+
+/**
  * Sealed interface representing different types of overlay content.
  * This allows any overlay type to be assigned to any corner position.
  */
@@ -78,12 +87,16 @@ sealed interface OverlayContent {
         override val padding: Dp = 8.dp
     ) : OverlayContent
 
+
+
     /**
      * Vertical stack of independent overlay contents.
      */
     data class VerticalStack(
         val items: List<OverlayContent>,
+        val alignment: StackAlignment = StackAlignment.END,
         override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
         override val padding: Dp = 8.dp
     ) : OverlayContent
 }
+

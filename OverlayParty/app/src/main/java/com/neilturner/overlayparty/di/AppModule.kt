@@ -1,5 +1,6 @@
 package com.neilturner.overlayparty.di
 
+import com.neilturner.overlayparty.data.CountdownRepository
 import com.neilturner.overlayparty.data.LocationRepository
 import com.neilturner.overlayparty.data.MessageRepository
 import com.neilturner.overlayparty.data.MusicRepository
@@ -15,6 +16,7 @@ val appModule = module {
     single { MusicRepository() }
     single { LocationRepository() }
     single { MessageRepository() }
+    single { CountdownRepository() }
 
-    viewModel { MainViewModel(get(), get(), get(), get(), get()) }
+    viewModel { MainViewModel(get(), get(), get(), get(), get(), get()) }
 }

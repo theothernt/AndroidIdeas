@@ -15,7 +15,7 @@ class MessageRepository {
         while (true) {
             emit(countries[index])
             index = (index + 1) % countries.size
-            delay(3_000)
+            delay(6_000)
         }
     }
 }

@@ -109,10 +109,16 @@ private fun RenderOverlayContent(
             padding = content.padding
         )
         is OverlayContent.VerticalStack -> {
+            val horizontalAlignment = when (content.alignment) {
+                StackAlignment.START -> Alignment.Start
+                StackAlignment.CENTER -> Alignment.CenterHorizontally
+                StackAlignment.END -> Alignment.End
+            }
+
             Column(
                 modifier = modifier,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = Alignment.End // Default to end alignment for stacks, usually top-right or bottom-right
+                horizontalAlignment = horizontalAlignment
             ) {
                 content.items.forEach { childContent ->
                     OverlaySlot(

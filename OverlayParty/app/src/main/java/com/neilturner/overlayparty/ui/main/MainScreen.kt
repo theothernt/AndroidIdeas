@@ -33,7 +33,7 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
     var showInitialBlackout by remember { mutableStateOf(true) }
     val blackoutAlpha by animateFloatAsState(
         targetValue = if (showInitialBlackout) 1f else 0f,
-        animationSpec = tween(durationMillis = 2500),
+        animationSpec = tween(durationMillis = 500),
         label = "InitialBlackoutFade"
     )
 

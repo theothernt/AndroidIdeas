@@ -24,7 +24,7 @@ class MusicRepository {
         while (true) {
             emit(nowPlayingSongs[index])
             index = (index + 1) % nowPlayingSongs.size
-            delay(5_000)
+            delay(8_000)
         }
     }
 }

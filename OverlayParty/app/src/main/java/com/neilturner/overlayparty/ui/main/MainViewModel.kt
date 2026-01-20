@@ -9,6 +9,7 @@ import androidx.compose.material.icons.filled.WbSunny
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.neilturner.overlayparty.data.CountdownRepository
 import com.neilturner.overlayparty.data.LocationRepository
 import com.neilturner.overlayparty.data.MessageRepository
 import com.neilturner.overlayparty.data.MusicRepository
@@ -19,6 +20,7 @@ import com.neilturner.overlayparty.ui.overlay.OverlayAnimationType
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
 import com.neilturner.overlayparty.ui.overlay.OverlayItem
 import com.neilturner.overlayparty.ui.overlay.OverlayPosition
+import com.neilturner.overlayparty.ui.overlay.StackAlignment
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +33,8 @@ class MainViewModel(
     timeRepository: TimeRepository,
     musicRepository: MusicRepository,
     locationRepository: LocationRepository,
-    messageRepository: MessageRepository
+    messageRepository: MessageRepository,
+    countdownRepository: CountdownRepository
 ) : ViewModel() {
 
     // Default all overlays to visible
@@ -78,17 +81,17 @@ class MainViewModel(
                     OverlayItem.Text(weather.temperature)
                 ),
                 animationType = OverlayAnimationType.FADE,
-                padding = 12.dp
+                padding = 4.dp
             )
         }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = OverlayContent.TextOnly("Loading Weather...")
+        initialValue = OverlayContent.TextOnly("Loading Weather...", animationType = OverlayAnimationType.FADE)
     )
 
     val topEndOverlay: StateFlow<OverlayContent?> = combine(
-        timeRepository.getTimeStream(showSeconds = true),
+        timeRepository.getTimeStream(showSeconds = false),
         _visibleOverlays
     ) { dateTime, visibleOverlays ->
         if (!visibleOverlays.contains(OverlayPosition.TOP_END)) {
@@ -96,9 +99,10 @@ class MainViewModel(
         } else {
             OverlayContent.VerticalStack(
                 items = listOf(
-                    OverlayContent.TextOnly(dateTime.date, padding = 4.dp, animationType = OverlayAnimationType.NONE),
-                    OverlayContent.TextOnly(dateTime.time, scale = 2f, padding = 4.dp, animationType = OverlayAnimationType.NONE)
-                )
+                    OverlayContent.TextOnly(dateTime.date, padding = 4.dp),
+                    OverlayContent.TextOnly(dateTime.time, scale = 2f, padding = 4.dp)
+                ),
+                alignment = StackAlignment.END
             )
         }
     }.stateIn(
@@ -109,22 +113,29 @@ class MainViewModel(
 
     val bottomStartOverlay: StateFlow<OverlayContent?> = combine(
         musicRepository.getMusicStream(),
+        countdownRepository.getCountdownStream(durationMinutes = 2),
         _visibleOverlays
-    ) { music, visibleOverlays ->
+    ) { music, countdown, visibleOverlays ->
         if (!visibleOverlays.contains(OverlayPosition.BOTTOM_START)) {
             null
         } else {
-            OverlayContent.IconWithText(
-                text = music, 
-                icon = Icons.Default.MusicNote,
-                iconPosition = IconPosition.LEADING,
-                animationType = OverlayAnimationType.FADE
+            OverlayContent.VerticalStack(
+                items = listOf(
+                    OverlayContent.TextOnly(countdown),
+                    OverlayContent.IconWithText(
+                        text = music,
+                        icon = Icons.Default.MusicNote,
+                        iconPosition = IconPosition.LEADING,
+                        animationType = OverlayAnimationType.FADE
+                    )
+                ),
+                alignment = StackAlignment.START
             )
         }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = OverlayContent.IconWithText("Loading Music...", Icons.Default.MusicNote)
+        initialValue = OverlayContent.IconWithText("Loading Music...", Icons.Default.MusicNote, animationType = OverlayAnimationType.FADE)
     )
 
     val bottomEndOverlay: StateFlow<OverlayContent?> = combine(
@@ -137,8 +148,8 @@ class MainViewModel(
         } else {
             OverlayContent.VerticalStack(
                 items = listOf(
-                    OverlayContent.TextOnly(message, animationType = OverlayAnimationType.FADE),
-                    OverlayContent.TextOnly(location, animationType = OverlayAnimationType.RESIZE)
+                    OverlayContent.TextOnly(message),
+                    OverlayContent.TextOnly(location)
                 )
             )
         }
