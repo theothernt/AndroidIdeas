@@ -1,7 +1,13 @@
 package com.neilturner.overlayparty.ui.overlay
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import com.neilturner.overlayparty.ui.components.MultiItemBlock
 import com.neilturner.overlayparty.ui.components.TextBlock
 
 /**
@@ -19,17 +25,61 @@ fun OverlaySlot(
 ) {
     if (content == null) return
 
+    val animationType = content.animationType
+
+    if (animationType == OverlayAnimationType.FADE_AND_REPLACE) {
+        AnimatedContent(
+            targetState = content,
+            transitionSpec = {
+                fadeIn(animationSpec = tween(1500)) togetherWith fadeOut(animationSpec = tween(1500))
+            },
+            label = "OverlayFade"
+        ) { targetContent ->
+            RenderOverlayContent(
+                content = targetContent,
+                modifier = modifier,
+                showBackground = showBackground,
+                animateSize = false // Size animation handled by AnimatedContent implicitly or not needed during fade
+            )
+        }
+    } else {
+        // CONTENT_RESIZING
+        RenderOverlayContent(
+            content = content,
+            modifier = modifier,
+            showBackground = showBackground,
+            animateSize = true
+        )
+    }
+}
+
+@Composable
+private fun RenderOverlayContent(
+    content: OverlayContent,
+    modifier: Modifier,
+    showBackground: Boolean,
+    animateSize: Boolean
+) {
     when (content) {
         is OverlayContent.TextOnly -> TextBlock(
             text = content.text,
             modifier = modifier,
-            showBackground = showBackground
+            showBackground = showBackground,
+            animateSize = animateSize
         )
         is OverlayContent.IconWithText -> TextBlock(
             text = content.text,
             icon = content.icon,
+            iconPosition = content.iconPosition,
             modifier = modifier,
-            showBackground = showBackground
+            showBackground = showBackground,
+            animateSize = animateSize
+        )
+        is OverlayContent.MultiItemContent -> MultiItemBlock(
+            items = content.items,
+            modifier = modifier,
+            showBackground = showBackground,
+            animateSize = animateSize
         )
     }
 }

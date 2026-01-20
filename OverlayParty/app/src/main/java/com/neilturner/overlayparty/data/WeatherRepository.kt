@@ -3,20 +3,34 @@ package com.neilturner.overlayparty.data
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlin.random.Random
+
+data class WeatherInfo(
+    val city: String,
+    val temperature: String,
+    val condition: String
+)
 
 class WeatherRepository {
-    private val weatherLocations = listOf(
-        "Dublin 10°C", "London 12°C", "Paris 14°C", "New York 20°C",
-        "Tokyo 18°C", "Sydney 22°C", "Berlin 11°C", "Rome 16°C",
-        "Madrid 17°C", "Toronto 15°C"
+    private val cities = listOf(
+        "Dublin", "London", "Paris", "New York",
+        "Tokyo", "Sydney", "Berlin", "Rome",
+        "Madrid", "Toronto"
     )
 
-    fun getWeatherStream(): Flow<String> = flow {
+    private val conditions = listOf("Sunny", "Cloudy", "Rainy", "Snowy")
+
+    fun getWeatherStream(): Flow<WeatherInfo> = flow {
         var index = 0
         while (true) {
-            emit(weatherLocations[index])
-            index = (index + 1) % weatherLocations.size
-            delay(11_000)
+            val city = cities[index]
+            val temp = "${Random.nextInt(0, 30)}°C"
+            val condition = conditions.random()
+            
+            emit(WeatherInfo(city, temp, condition))
+            
+            index = (index + 1) % cities.size
+            delay(5_000) // Faster updates for demo
         }
     }
 }
