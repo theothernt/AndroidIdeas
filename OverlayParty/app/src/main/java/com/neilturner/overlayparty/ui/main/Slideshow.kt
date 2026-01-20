@@ -14,9 +14,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import com.neilturner.overlayparty.R
 import kotlinx.coroutines.delay
-import java.lang.reflect.Field
 
 @Composable
 fun Slideshow(
@@ -26,35 +24,30 @@ fun Slideshow(
 ) {
     val context = LocalContext.current
     
-    // Get all raw resource IDs dynamically
-    val imageIds = remember {
-        try {
-            val fields: Array<Field> = R.raw::class.java.fields
-            fields.map { it.getInt(null) }
-        } catch (e: Exception) {
-            emptyList<Int>()
-        }
+    // Get all images from assets/slideshow
+    val imagePaths = remember {
+        context.assets.list("slideshow")?.map { "file:///android_asset/slideshow/$it" } ?: emptyList()
     }
 
-    if (imageIds.isEmpty()) return
+    if (imagePaths.isEmpty()) return
 
     var currentIndex by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
         while (true) {
             delay(delayMillis)
-            currentIndex = (currentIndex + 1) % imageIds.size
+            currentIndex = (currentIndex + 1) % imagePaths.size
         }
     }
 
     Crossfade(
-        targetState = imageIds[currentIndex],
+        targetState = imagePaths[currentIndex],
         animationSpec = tween(durationMillis = crossfadeDurationMillis),
         modifier = modifier.fillMaxSize()
-    ) { imageId ->
+    ) { imagePath ->
         AsyncImage(
             model = ImageRequest.Builder(context)
-                .data(imageId)
+                .data(imagePath)
                 .build(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
