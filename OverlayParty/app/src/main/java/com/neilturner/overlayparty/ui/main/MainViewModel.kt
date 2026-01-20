@@ -79,7 +79,7 @@ class MainViewModel(
                     OverlayItem.Text(weather.temperature)
                 ),
                 animationType = OverlayAnimationType.FADE_AND_REPLACE,
-                padding = 4.dp
+                padding = 12.dp
             )
         }
     }.stateIn(
@@ -119,13 +119,13 @@ class MainViewModel(
                 text = music, 
                 icon = Icons.Default.MusicNote,
                 iconPosition = IconPosition.LEADING,
-                animationType = OverlayAnimationType.FADE_AND_REPLACE,
+                animationType = OverlayAnimationType.FADE_AND_REPLACE
             )
         }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = OverlayContent.IconWithText("Loading Music...", Icons.Default.MusicNote)
+        initialValue = OverlayContent.IconWithText("Loading Music...", Icons.Default.MusicNote, animationType = OverlayAnimationType.FADE_AND_REPLACE)
     )
 
     val bottomEndOverlay: StateFlow<OverlayContent?> = combine(

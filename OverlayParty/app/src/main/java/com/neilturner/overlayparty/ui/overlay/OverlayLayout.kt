@@ -96,7 +96,6 @@ private fun AdaptiveOverlayRow(
                 maxHeight = constraints.maxHeight
             )
         )
-
         val startWidth = startPlaceable?.width ?: 0
 
         // End overlay gets remaining space after start overlay and gap
