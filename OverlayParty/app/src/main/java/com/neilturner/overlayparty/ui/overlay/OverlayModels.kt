@@ -34,6 +34,7 @@ sealed interface OverlayItem {
  * Animation types for overlay updates.
  */
 enum class OverlayAnimationType {
+    NONE,             // No animation
     CONTENT_RESIZING, // Standard size animation, no fade
     FADE_AND_REPLACE  // Crossfade between content updates
 }
@@ -52,7 +53,7 @@ sealed interface OverlayContent {
     data class TextOnly(
         val text: String,
         val scale: Float = 1f,
-        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING,
+        override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
         override val padding: Dp = 8.dp
     ) : OverlayContent
 
@@ -64,7 +65,7 @@ sealed interface OverlayContent {
         val icon: ImageVector,
         val iconPosition: IconPosition = IconPosition.LEADING,
         val scale: Float = 1f,
-        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING,
+        override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
         override val padding: Dp = 8.dp
     ) : OverlayContent
 
@@ -73,7 +74,7 @@ sealed interface OverlayContent {
      */
     data class MultiItemContent(
         val items: List<OverlayItem>,
-        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING,
+        override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
         override val padding: Dp = 8.dp
     ) : OverlayContent
 
@@ -82,7 +83,7 @@ sealed interface OverlayContent {
      */
     data class VerticalStack(
         val items: List<OverlayContent>,
-        override val animationType: OverlayAnimationType = OverlayAnimationType.CONTENT_RESIZING,
+        override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
         override val padding: Dp = 8.dp
     ) : OverlayContent
 }

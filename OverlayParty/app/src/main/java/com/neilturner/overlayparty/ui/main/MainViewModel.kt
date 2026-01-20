@@ -78,14 +78,14 @@ class MainViewModel(
                     OverlayItem.Icon(icon),
                     OverlayItem.Text(weather.temperature)
                 ),
-                animationType = OverlayAnimationType.FADE_AND_REPLACE,
+                animationType = OverlayAnimationType.NONE,
                 padding = 12.dp
             )
         }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = OverlayContent.TextOnly("Loading Weather...", animationType = OverlayAnimationType.FADE_AND_REPLACE)
+        initialValue = OverlayContent.TextOnly("Loading Weather...")
     )
 
     val topEndOverlay: StateFlow<OverlayContent?> = combine(
@@ -97,8 +97,8 @@ class MainViewModel(
         } else {
             OverlayContent.VerticalStack(
                 items = listOf(
-                    OverlayContent.TextOnly(dateTime.date, padding = 4.dp),
-                    OverlayContent.TextOnly(dateTime.time, scale = 2f, padding = 4.dp)
+                    OverlayContent.TextOnly(dateTime.date, padding = 4.dp, animationType = OverlayAnimationType.NONE),
+                    OverlayContent.TextOnly(dateTime.time, scale = 2f, padding = 4.dp, animationType = OverlayAnimationType.NONE)
                 )
             )
         }
@@ -119,13 +119,13 @@ class MainViewModel(
                 text = music, 
                 icon = Icons.Default.MusicNote,
                 iconPosition = IconPosition.LEADING,
-                animationType = OverlayAnimationType.FADE_AND_REPLACE
+                animationType = OverlayAnimationType.NONE
             )
         }
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5000),
-        initialValue = OverlayContent.IconWithText("Loading Music...", Icons.Default.MusicNote, animationType = OverlayAnimationType.FADE_AND_REPLACE)
+        initialValue = OverlayContent.IconWithText("Loading Music...", Icons.Default.MusicNote)
     )
 
     val bottomEndOverlay: StateFlow<OverlayContent?> = combine(
@@ -138,8 +138,8 @@ class MainViewModel(
         } else {
             OverlayContent.VerticalStack(
                 items = listOf(
-                    OverlayContent.TextOnly(message),
-                    OverlayContent.TextOnly(location)
+                    OverlayContent.TextOnly(message, animationType = OverlayAnimationType.NONE),
+                    OverlayContent.TextOnly(location, animationType = OverlayAnimationType.NONE)
                 )
             )
         }

@@ -32,36 +32,46 @@ fun OverlaySlot(
 
     val animationType = content.animationType
 
-    if (animationType == OverlayAnimationType.FADE_AND_REPLACE) {
-        AnimatedContent(
-            targetState = content,
-            transitionSpec = {
-                (fadeIn(animationSpec = tween(700, delayMillis = 800)) togetherWith
-                 fadeOut(animationSpec = tween(700)))
-                 .using(
-                     SizeTransform { _, _ ->
-                         // Delay the size animation to match the fade-in start (after fade-out completes)
-                         tween(durationMillis = 700, delayMillis = 700)
-                     }
-                 )
-            },
-            label = "OverlayFade"
-        ) { targetContent ->
+    when (animationType) {
+        OverlayAnimationType.FADE_AND_REPLACE -> {
+            AnimatedContent(
+                targetState = content,
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(700, delayMillis = 700)) togetherWith 
+                     fadeOut(animationSpec = tween(700)))
+                     .using(
+                         SizeTransform { _, _ ->
+                             // Delay the size animation to match the fade-in start (after fade-out completes)
+                             tween(durationMillis = 700, delayMillis = 700)
+                         }
+                     )
+                },
+                label = "OverlayFade"
+            ) { targetContent ->
+                RenderOverlayContent(
+                    content = targetContent,
+                    modifier = modifier,
+                    showBackground = showBackground,
+                    animateSize = false // Size animation handled by AnimatedContent
+                )
+            }
+        }
+        OverlayAnimationType.CONTENT_RESIZING -> {
             RenderOverlayContent(
-                content = targetContent,
+                content = content,
                 modifier = modifier,
                 showBackground = showBackground,
-                animateSize = false // Size animation handled by AnimatedContent implicitly or not needed during fade
+                animateSize = true
             )
         }
-    } else {
-        // CONTENT_RESIZING
-        RenderOverlayContent(
-            content = content,
-            modifier = modifier,
-            showBackground = showBackground,
-            animateSize = true
-        )
+        OverlayAnimationType.NONE -> {
+            RenderOverlayContent(
+                content = content,
+                modifier = modifier,
+                showBackground = showBackground,
+                animateSize = false
+            )
+        }
     }
 }
 
