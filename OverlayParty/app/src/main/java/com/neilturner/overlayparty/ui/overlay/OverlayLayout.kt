@@ -43,7 +43,8 @@ fun OverlayLayout(
         AdaptiveOverlayRow(
             startContent = topStart,
             endContent = topEnd,
-            verticalAlignment = Alignment.Top
+            verticalAlignment = Alignment.Top,
+            showBackground = false
         )
 
         // Flexible spacer pushes bottom row to the bottom
@@ -53,7 +54,8 @@ fun OverlayLayout(
         AdaptiveOverlayRow(
             startContent = bottomStart,
             endContent = bottomEnd,
-            verticalAlignment = Alignment.Bottom
+            verticalAlignment = Alignment.Bottom,
+            showBackground = true
         )
     }
 }
@@ -68,13 +70,15 @@ fun OverlayLayout(
  * @param endContent Content for the right/end position
  * @param minGap Minimum gap between overlays
  * @param verticalAlignment Vertical alignment for items in the row
+ * @param showBackground Whether to show background for overlays in this row
  */
 @Composable
 private fun AdaptiveOverlayRow(
     startContent: OverlayContent?,
     endContent: OverlayContent?,
     minGap: Dp = 16.dp,
-    verticalAlignment: Alignment.Vertical = Alignment.Top
+    verticalAlignment: Alignment.Vertical = Alignment.Top,
+    showBackground: Boolean = true
 ) {
     SubcomposeLayout { constraints ->
         val gapPx = minGap.roundToPx()
@@ -83,7 +87,7 @@ private fun AdaptiveOverlayRow(
         // but is capped at 50% of available width to prevent it from taking everything
         val maxStartWidth = (constraints.maxWidth - gapPx) / 2
         val startPlaceable = subcompose("start") {
-            OverlaySlot(content = startContent)
+            OverlaySlot(content = startContent, showBackground = showBackground)
         }.firstOrNull()?.measure(
             Constraints(
                 minWidth = 0,
@@ -98,7 +102,7 @@ private fun AdaptiveOverlayRow(
         // End overlay gets remaining space after start overlay and gap
         val endMaxWidth = constraints.maxWidth - startWidth - gapPx
         val endPlaceable = subcompose("end") {
-            OverlaySlot(content = endContent)
+            OverlaySlot(content = endContent, showBackground = showBackground)
         }.firstOrNull()?.measure(
             Constraints(
                 minWidth = 0,

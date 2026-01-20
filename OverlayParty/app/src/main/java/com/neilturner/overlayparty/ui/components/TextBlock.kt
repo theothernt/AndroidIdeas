@@ -9,7 +9,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -20,14 +22,21 @@ import androidx.tv.material3.Text
 fun TextBlock(
     text: String,
     modifier: Modifier = Modifier,
-    icon: ImageVector? = null
+    icon: ImageVector? = null,
+    showBackground: Boolean = true
 ) {
     Box(
         modifier = modifier
             .animateContentSize()
-            .background(
-                color = Color.Black.copy(alpha = 0.6f),
-                shape = RoundedCornerShape(12.dp)
+            .then(
+                if (showBackground) {
+                    Modifier.background(
+                        color = Color.Black.copy(alpha = 0.6f),
+                        shape = RoundedCornerShape(12.dp)
+                    )
+                } else {
+                    Modifier
+                }
             )
             .padding(8.dp)
     ) {
@@ -42,7 +51,17 @@ fun TextBlock(
             }
             Text(
                 text = text,
-                style = MaterialTheme.typography.bodyLarge,
+                style = if (showBackground) {
+                    MaterialTheme.typography.bodyLarge
+                } else {
+                    MaterialTheme.typography.bodyLarge.copy(
+                        shadow = Shadow(
+                            color = Color.Black,
+                            offset = Offset(2f, 2f),
+                            blurRadius = 2f
+                        )
+                    )
+                },
                 color = Color.White
             )
         }

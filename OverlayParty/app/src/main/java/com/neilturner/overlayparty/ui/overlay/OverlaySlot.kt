@@ -14,19 +14,22 @@ import com.neilturner.overlayparty.ui.components.TextBlock
 @Composable
 fun OverlaySlot(
     content: OverlayContent?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showBackground: Boolean = true
 ) {
     if (content == null) return
 
     when (content) {
         is OverlayContent.TextOnly -> TextBlock(
             text = content.text,
-            modifier = modifier
+            modifier = modifier,
+            showBackground = showBackground
         )
         is OverlayContent.IconWithText -> TextBlock(
             text = content.text,
             icon = content.icon,
-            modifier = modifier
+            modifier = modifier,
+            showBackground = showBackground
         )
     }
 }
