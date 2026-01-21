@@ -37,12 +37,12 @@ fun OverlaySlot(
             AnimatedContent(
                 targetState = content,
                 transitionSpec = {
-                    (fadeIn(animationSpec = tween(1000, delayMillis = 1000)) togetherWith
-                     fadeOut(animationSpec = tween(1000)))
+                    (fadeIn(animationSpec = tween(500, delayMillis = 500)) togetherWith
+                     fadeOut(animationSpec = tween(500)))
                      .using(
                          SizeTransform { _, _ ->
                              // Delay the size animation to match the fade-in start (after fade-out completes)
-                             tween(durationMillis = 200, delayMillis = 1000)
+                             tween(durationMillis = 100, delayMillis = 500)
                          }
                      )
                 },
