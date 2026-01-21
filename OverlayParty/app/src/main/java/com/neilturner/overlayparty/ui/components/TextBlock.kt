@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -22,6 +23,15 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.overlayparty.ui.overlay.IconPosition
 import com.neilturner.overlayparty.ui.overlay.OverlayItem
+
+private val OverlayShape = RoundedCornerShape(12.dp)
+private val OverlayBackgroundColor = Color.Black.copy(alpha = 0.6f)
+
+private val OverlayContentShadow = Shadow(
+    color = Color.Black,
+    offset = Offset(2f, 2f),
+    blurRadius = 2f
+)
 
 @Composable
 fun TextBlock(
@@ -75,6 +85,17 @@ fun MultiItemBlock(
     }
 }
 
+private fun Modifier.overlayBackground(showBackground: Boolean): Modifier = this.then(
+    if (showBackground) {
+        Modifier.background(
+            color = OverlayBackgroundColor,
+            shape = OverlayShape
+        )
+    } else {
+        Modifier
+    }
+)
+
 @Composable
 private fun OverlayContainer(
     modifier: Modifier,
@@ -86,20 +107,17 @@ private fun OverlayContainer(
     Box(
         modifier = modifier
             .then(if (animateSize) Modifier.animateContentSize() else Modifier)
-            .then(
-                if (showBackground) {
-                    Modifier.background(
-                        color = Color.Black.copy(alpha = 0.6f),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                } else {
-                    Modifier
-                }
-            )
+            .overlayBackground(showBackground)
             .padding(padding)
     ) {
         content()
     }
+}
+
+private fun TextStyle.applyShadow(useShadow: Boolean): TextStyle = if (useShadow) {
+    this.copy(shadow = OverlayContentShadow)
+} else {
+    this
 }
 
 @Composable
@@ -109,25 +127,16 @@ private fun OverlayText(
     modifier: Modifier = Modifier,
     scale: Float = 1f
 ) {
+    val useShadow = !showBackground
     val baseStyle = MaterialTheme.typography.bodyLarge
     val scaledStyle = baseStyle.copy(
         fontSize = baseStyle.fontSize * scale
-    )
+    ).applyShadow(useShadow)
 
     Text(
         text = text,
         modifier = modifier,
-        style = if (showBackground) {
-            scaledStyle
-        } else {
-            scaledStyle.copy(
-                shadow = Shadow(
-                    color = Color.Black,
-                    offset = Offset(2f, 2f),
-                    blurRadius = 2f
-                )
-            )
-        },
+        style = scaledStyle,
         color = Color.White
     )
 }
@@ -139,25 +148,30 @@ private fun OverlayIcon(
     useShadow: Boolean = false
 ) {
     if (useShadow) {
-        Box(modifier = modifier) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Color.Black,
-                modifier = Modifier.offset(2.dp, 2.dp)
-            )
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = Color.White
-            )
-        }
+        ShadowedIcon(icon, modifier)
     } else {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = Color.White,
             modifier = modifier
+        )
+    }
+}
+
+@Composable
+private fun ShadowedIcon(icon: ImageVector, modifier: Modifier = Modifier) {
+    Box(modifier = modifier) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.Black,
+            modifier = Modifier.offset(2.dp, 2.dp)
+        )
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White
         )
     }
 }
