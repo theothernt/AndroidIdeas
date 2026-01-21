@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -39,13 +40,13 @@ fun TextBlock(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (icon != null && iconPosition == IconPosition.LEADING) {
-                OverlayIcon(icon)
+                OverlayIcon(icon, useShadow = !showBackground)
             }
 
             OverlayText(text, showBackground, scale = scale)
 
             if (icon != null && iconPosition == IconPosition.TRAILING) {
-                OverlayIcon(icon)
+                OverlayIcon(icon, useShadow = !showBackground)
             }
         }
     }
@@ -67,7 +68,7 @@ fun MultiItemBlock(
             items.forEach { item ->
                 when (item) {
                     is OverlayItem.Text -> OverlayText(item.text, showBackground, scale = item.scale)
-                    is OverlayItem.Icon -> OverlayIcon(item.icon)
+                    is OverlayItem.Icon -> OverlayIcon(item.icon, useShadow = !showBackground)
                 }
             }
         }
@@ -134,12 +135,29 @@ private fun OverlayText(
 @Composable
 private fun OverlayIcon(
     icon: ImageVector,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    useShadow: Boolean = false
 ) {
-    Icon(
-        imageVector = icon,
-        contentDescription = null,
-        tint = Color.White,
-        modifier = modifier
-    )
+    if (useShadow) {
+        Box(modifier = modifier) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color.Black,
+                modifier = Modifier.offset(2.dp, 2.dp)
+            )
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = Color.White
+            )
+        }
+    } else {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = Color.White,
+            modifier = modifier
+        )
+    }
 }

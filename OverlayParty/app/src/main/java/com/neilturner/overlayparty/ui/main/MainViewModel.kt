@@ -148,8 +148,8 @@ class MainViewModel(
         } else {
             OverlayContent.VerticalStack(
                 items = listOf(
-                    OverlayContent.TextOnly(message),
-                    OverlayContent.TextOnly(location)
+                    OverlayContent.TextOnly(message, animationType = OverlayAnimationType.RESIZE),
+                    OverlayContent.TextOnly(location, animationType = OverlayAnimationType.RESIZE)
                 )
             )
         }
