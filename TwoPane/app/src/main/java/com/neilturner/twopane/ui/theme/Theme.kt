@@ -1,7 +1,9 @@
 package com.neilturner.twopane.ui.theme
 
+import android.content.pm.PackageManager
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalContext
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.darkColorScheme
@@ -13,7 +15,10 @@ fun TwoPaneTheme(
     isInDarkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = if (isInDarkTheme) {
+    val context = LocalContext.current
+    val isTv = context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
+    
+    val colorScheme = if (isInDarkTheme || isTv) {
         darkColorScheme(
             primary = Purple80,
             secondary = PurpleGrey80,
