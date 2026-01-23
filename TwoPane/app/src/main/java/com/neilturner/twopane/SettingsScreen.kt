@@ -8,7 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.neilturner.twopane.ui.viewmodel.SettingsViewModel
+import com.neilturner.twopane.ui.settings.SettingsViewModel
 
 @Composable
 fun SettingsScreen(
