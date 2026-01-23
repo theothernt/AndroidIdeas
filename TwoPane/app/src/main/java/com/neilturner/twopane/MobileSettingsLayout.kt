@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -15,46 +14,41 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-
-// Simple data model for settings items
-data class SettingItem(val title: String, val description: String)
-
-val settingItems = listOf(
-    SettingItem("Network & Internet", "Wi-Fi, Mobile, Data usage"),
-    SettingItem("Connected devices", "Bluetooth, Cast"),
-    SettingItem("Apps", "Recent apps, Default apps"),
-    SettingItem("Notifications", "Notification history, Conversations"),
-    SettingItem("Battery", "100%")
-)
+import com.neilturner.twopane.data.SettingItem
+import com.neilturner.twopane.ui.theme.TwoPaneTheme
 
 @Composable
-fun MobileSettingsLayout(isTwoPane: Boolean) {
-    var selectedItem by rememberSaveable { mutableStateOf<String?>(null) }
-
+fun MobileSettingsLayout(
+    items: List<SettingItem>,
+    selectedItem: SettingItem?,
+    isTwoPane: Boolean,
+    onItemSelect: (SettingItem) -> Unit,
+    onBack: () -> Unit
+) {
     if (isTwoPane) {
         MobileTwoPaneLayout(
+            items = items,
             selectedItem = selectedItem,
-            onItemSelect = { selectedItem = it }
+            onItemSelect = onItemSelect
         )
     } else {
         MobileSinglePaneLayout(
+            items = items,
             selectedItem = selectedItem,
-            onItemSelect = { selectedItem = it },
-            onBack = { selectedItem = null }
+            onItemSelect = onItemSelect,
+            onBack = onBack
         )
     }
 }
 
 @Composable
 fun MobileTwoPaneLayout(
-    selectedItem: String?,
-    onItemSelect: (String) -> Unit
+    items: List<SettingItem>,
+    selectedItem: SettingItem?,
+    onItemSelect: (SettingItem) -> Unit
 ) {
     Row(modifier = Modifier.fillMaxSize()) {
         // List Pane
@@ -69,12 +63,11 @@ fun MobileTwoPaneLayout(
                     modifier = Modifier.padding(16.dp)
                 )
                 SettingsList(
-                    items = settingItems,
-                    onItemClick = { onItemSelect(it.title) },
+                    items = items,
+                    onItemClick = onItemSelect,
                     selectedItem = selectedItem
                 )
             }
-           
         }
         
         // Detail Pane
@@ -89,8 +82,9 @@ fun MobileTwoPaneLayout(
 
 @Composable
 fun MobileSinglePaneLayout(
-    selectedItem: String?,
-    onItemSelect: (String) -> Unit,
+    items: List<SettingItem>,
+    selectedItem: SettingItem?,
+    onItemSelect: (SettingItem) -> Unit,
     onBack: () -> Unit
 ) {
     if (selectedItem != null) {
@@ -114,8 +108,8 @@ fun MobileSinglePaneLayout(
                     modifier = Modifier.padding(16.dp)
                 )
                 SettingsList(
-                    items = settingItems,
-                    onItemClick = { onItemSelect(it.title) },
+                    items = items,
+                    onItemClick = onItemSelect,
                     selectedItem = null
                 )
             }
@@ -127,7 +121,7 @@ fun MobileSinglePaneLayout(
 fun SettingsList(
     items: List<SettingItem>,
     onItemClick: (SettingItem) -> Unit,
-    selectedItem: String?
+    selectedItem: SettingItem?
 ) {
     LazyColumn {
         items(items) { item ->
@@ -137,8 +131,8 @@ fun SettingsList(
                 modifier = Modifier
                     .clickable { onItemClick(item) }
                     .then(
-                        if (selectedItem == item.title) 
-                            Modifier.padding(start = 8.dp) // Simple visual indicator
+                        if (selectedItem?.id == item.id) 
+                            Modifier.padding(start = 8.dp) 
                         else Modifier
                     )
             )
@@ -148,15 +142,15 @@ fun SettingsList(
 }
 
 @Composable
-fun DetailContent(selectedItem: String?) {
+fun DetailContent(selectedItem: SettingItem?) {
     Column(modifier = Modifier.padding(24.dp)) {
         if (selectedItem != null) {
             Text(
-                text = selectedItem,
+                text = selectedItem.title,
                 style = MaterialTheme.typography.headlineLarge
             )
             Text(
-                text = "Details for $selectedItem would go here.",
+                text = "Details for ${selectedItem.title} would go here.",
                 style = MaterialTheme.typography.bodyLarge,
                 modifier = Modifier.padding(top = 16.dp)
             )
@@ -167,5 +161,19 @@ fun DetailContent(selectedItem: String?) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@Preview(showBackground = true, widthDp = 840)
+@Composable
+fun MobileTwoPanePreview() {
+    TwoPaneTheme {
+        MobileSettingsLayout(
+            items = listOf(SettingItem("1", "Title", "Desc")),
+            selectedItem = SettingItem("1", "Title", "Desc"),
+            isTwoPane = true,
+            onItemSelect = {},
+            onBack = {}
+        )
     }
 }

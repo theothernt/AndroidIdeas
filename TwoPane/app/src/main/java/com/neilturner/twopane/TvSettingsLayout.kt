@@ -1,64 +1,43 @@
 package com.neilturner.twopane
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.runtime.mutableStateOf
-import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Text
-import androidx.tv.material3.DrawerValue
-import androidx.tv.material3.rememberDrawerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.automirrored.filled.Help
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.tv.material3.Icon
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Icon
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Text
+import com.neilturner.twopane.data.SettingItem
+import com.neilturner.twopane.ui.theme.TwoPaneTheme
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun TvSettingsLayout() {
+fun TvSettingsLayout(
+    items: List<SettingItem>,
+    selectedItem: SettingItem?,
+    isSubtitlesEnabled: Boolean,
+    onItemSelect: (SettingItem) -> Unit,
+    onToggleSubtitles: (Boolean) -> Unit
+) {
     // Basic implementation matching the screenshot structure
     // Left: List of categories
     // Right: Content for the selected category
     
-    val drawerState = rememberDrawerState(initialValue = DrawerValue.Open)
-    var selectedIndex by remember { mutableIntStateOf(0) }
-    
-    val items = listOf(
-        "Accounts" to Icons.Default.AccountCircle,
-        "About" to Icons.Default.Info,
-        "Subtitles" to Icons.Default.Subtitles,
-        "Language" to Icons.Default.Translate,
-        "Search history" to Icons.Default.History,
-        "Help and Support" to Icons.AutoMirrored.Filled.Help
-    )
-
     Row(modifier = Modifier.fillMaxSize()) {
-        // Left Pane (Simulated with a column for now as per screenshot layout)
-        // In a real TV app, NavigationDrawer is often used, but for this fixed 2-pane settings view, 
-        // a Row with 2 columns is better if we want it always visible.
-        
+        // Left Pane
         Column(
             modifier = Modifier
                 .width(300.dp)
@@ -66,12 +45,12 @@ fun TvSettingsLayout() {
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-             items.forEachIndexed { index, item ->
+             items.forEach { item ->
                 TvSettingsItem(
-                    text = item.first,
-                    icon = item.second,
-                    isSelected = index == selectedIndex,
-                    onClick = { selectedIndex = index }
+                    text = item.title,
+                    icon = item.icon,
+                    isSelected = selectedItem?.id == item.id,
+                    onClick = { onItemSelect(item) }
                 )
             }
         }
@@ -90,9 +69,13 @@ fun TvSettingsLayout() {
             )
             
             // Content based on selection
-            when (selectedIndex) {
-                2 -> SubtitlesSettingsContent() // Matches "Subtitles" index
-                else -> Text("Content for ${items[selectedIndex].first}")
+            if (selectedItem?.id == "subtitles") {
+                 SubtitlesSettingsContent(
+                     isEnabled = isSubtitlesEnabled,
+                     onToggle = onToggleSubtitles
+                 )
+            } else {
+                 Text("Content for ${selectedItem?.title}")
             }
         }
     }
@@ -102,12 +85,10 @@ fun TvSettingsLayout() {
 @Composable
 fun TvSettingsItem(
     text: String,
-    icon: ImageVector,
+    icon: ImageVector?,
     isSelected: Boolean,
     onClick: () -> Unit
 ) {
-    // Placeholder for a focusable TV item
-    // In real implementation, use Surface or Button with focus interactions
    androidx.tv.material3.Surface(
         onClick = onClick,
         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.small),
@@ -122,11 +103,13 @@ fun TvSettingsItem(
            horizontalArrangement = Arrangement.Start,
            verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
        ) {
-           Icon(
-               imageVector = icon,
-               contentDescription = null,
-               modifier = Modifier.padding(end = 12.dp)
-           )
+           if (icon != null) {
+               Icon(
+                   imageVector = icon,
+                   contentDescription = null,
+                   modifier = Modifier.padding(end = 12.dp)
+               )
+           }
            Text(text = text)
        }
    }
@@ -134,13 +117,14 @@ fun TvSettingsItem(
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun SubtitlesSettingsContent() {
-    var subtitlesEnabled by remember { mutableStateOf(true) }
-    
+fun SubtitlesSettingsContent(
+    isEnabled: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         // Subtitles Toggle
         androidx.tv.material3.Surface(
-            onClick = { subtitlesEnabled = !subtitlesEnabled },
+            onClick = { onToggle(!isEnabled) },
             modifier = Modifier.width(400.dp),
              shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.small),
              colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
@@ -155,8 +139,8 @@ fun SubtitlesSettingsContent() {
             ) {
                 Text("Subtitles")
                 androidx.tv.material3.Switch(
-                    checked = subtitlesEnabled,
-                    onCheckedChange = { subtitlesEnabled = it }
+                    checked = isEnabled,
+                    onCheckedChange = { onToggle(it) }
                 )
             }
         }
@@ -180,5 +164,22 @@ fun SubtitlesSettingsContent() {
                 Text("English", style = MaterialTheme.typography.bodyMedium)
             }
         }
+    }
+}
+
+@Preview(device = "id:tv_1080p")
+@Composable
+fun TvSettingsPreview() {
+    TwoPaneTheme {
+        TvSettingsLayout(
+            items = listOf(
+                SettingItem("1", "Accounts", icon = Icons.Default.AccountCircle),
+                SettingItem("2", "About", icon = Icons.Default.Info)
+            ),
+            selectedItem = SettingItem("1", "Accounts"),
+            isSubtitlesEnabled = true,
+            onItemSelect = {},
+            onToggleSubtitles = {}
+        )
     }
 }
