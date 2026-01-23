@@ -26,9 +26,7 @@ fun SettingsScreen(
         TvSettingsLayout(
             items = uiState.tvItems,
             selectedItem = uiState.selectedItem ?: uiState.tvItems.firstOrNull(),
-            isSubtitlesEnabled = uiState.isSubtitlesEnabled,
-            onItemSelect = { viewModel.selectItem(it) },
-            onToggleSubtitles = { viewModel.toggleSubtitles(it) }
+            onItemSelect = { viewModel.selectItem(it) }
         )
     } else {
         MobileSettingsLayout(

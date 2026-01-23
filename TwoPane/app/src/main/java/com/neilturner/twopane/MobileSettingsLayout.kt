@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.neilturner.twopane.data.SettingItem
+import com.neilturner.twopane.ui.settings.SettingsDetailContent
 import com.neilturner.twopane.ui.theme.TwoPaneTheme
 
 @Composable
@@ -56,18 +57,11 @@ fun MobileTwoPaneLayout(
             modifier = Modifier.weight(1f),
             color = MaterialTheme.colorScheme.surface
         ) {
-            Column {
-                 Text(
-                    text = "Settings",
-                    style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.padding(16.dp)
-                )
-                SettingsList(
-                    items = items,
-                    onItemClick = onItemSelect,
-                    selectedItem = selectedItem
-                )
-            }
+            SettingsList(
+                items = items,
+                onItemClick = onItemSelect,
+                selectedItem = selectedItem
+            )
         }
         
         // Detail Pane
@@ -90,29 +84,15 @@ fun MobileSinglePaneLayout(
     if (selectedItem != null) {
         BackHandler(onBack = onBack)
         Surface(modifier = Modifier.fillMaxSize()) {
-             Column {
-                 Text(
-                     text = "Details", 
-                     style = MaterialTheme.typography.headlineSmall,
-                     modifier = Modifier.padding(16.dp)
-                 )
-                 DetailContent(selectedItem)
-             }
+             DetailContent(selectedItem)
         }
     } else {
         Surface(modifier = Modifier.fillMaxSize()) {
-             Column {
-                Text(
-                    text = "Settings",
-                    style = MaterialTheme.typography.headlineMedium,
-                    modifier = Modifier.padding(16.dp)
-                )
-                SettingsList(
-                    items = items,
-                    onItemClick = onItemSelect,
-                    selectedItem = null
-                )
-            }
+            SettingsList(
+                items = items,
+                onItemClick = onItemSelect,
+                selectedItem = null
+            )
         }
     }
 }
@@ -143,25 +123,7 @@ fun SettingsList(
 
 @Composable
 fun DetailContent(selectedItem: SettingItem?) {
-    Column(modifier = Modifier.padding(24.dp)) {
-        if (selectedItem != null) {
-            Text(
-                text = selectedItem.title,
-                style = MaterialTheme.typography.headlineLarge
-            )
-            Text(
-                text = "Details for ${selectedItem.title} would go here.",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(top = 16.dp)
-            )
-        } else {
-             Text(
-                text = "Select an item to view details",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
+    SettingsDetailContent(selectedItem = selectedItem)
 }
 
 @Preview(showBackground = true, widthDp = 840)

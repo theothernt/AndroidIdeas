@@ -1,12 +1,11 @@
 package com.neilturner.twopane.ui.viewmodel
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Help
-import androidx.compose.material.icons.filled.AccountCircle
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Subtitles
-import androidx.compose.material.icons.filled.Translate
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Layers
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.PermMedia
+import androidx.compose.material.icons.filled.Settings
 import androidx.lifecycle.ViewModel
 import com.neilturner.twopane.data.SettingItem
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -28,27 +27,18 @@ class SettingsViewModel : ViewModel() {
 
     init {
         // Initialize data
-        val mobileItems = listOf(
-            SettingItem("network", "Network & Internet", "Wi-Fi, Mobile, Data usage"),
-            SettingItem("devices", "Connected devices", "Bluetooth, Cast"),
-            SettingItem("apps", "Apps", "Recent apps, Default apps"),
-            SettingItem("notifications", "Notifications", "Notification history, Conversations"),
-            SettingItem("battery", "Battery", "100%")
-        )
-
-        val tvItems = listOf(
-            SettingItem("accounts", "Accounts", icon = Icons.Default.AccountCircle),
-            SettingItem("about", "About", icon = Icons.Default.Info),
-            SettingItem("subtitles", "Subtitles", icon = Icons.Default.Subtitles),
-            SettingItem("language", "Language", icon = Icons.Default.Translate),
-            SettingItem("history", "Search history", icon = Icons.Default.History),
-            SettingItem("help", "Help and Support", icon = Icons.AutoMirrored.Filled.Help)
+        val items = listOf(
+            SettingItem("media_sources", "Media Sources", "Manage your media sources", Icons.Default.PermMedia),
+            SettingItem("overlays", "Overlays", "Configure overlay settings", Icons.Default.Layers),
+            SettingItem("appearance", "Appearance", "Customize the look and feel", Icons.Default.Palette),
+            SettingItem("playlist", "Playlist", "Manage playlist settings", Icons.AutoMirrored.Filled.List),
+            SettingItem("other", "Other", "Advanced settings", Icons.Default.Settings)
         )
 
         _uiState.update { 
             it.copy(
-                mobileItems = mobileItems,
-                tvItems = tvItems
+                mobileItems = items,
+                tvItems = items
             ) 
         }
     }

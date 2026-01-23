@@ -21,6 +21,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.twopane.data.SettingItem
+import com.neilturner.twopane.ui.settings.SettingsDetailContent
 import com.neilturner.twopane.ui.theme.TwoPaneTheme
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -28,9 +29,7 @@ import com.neilturner.twopane.ui.theme.TwoPaneTheme
 fun TvSettingsLayout(
     items: List<SettingItem>,
     selectedItem: SettingItem?,
-    isSubtitlesEnabled: Boolean,
-    onItemSelect: (SettingItem) -> Unit,
-    onToggleSubtitles: (Boolean) -> Unit
+    onItemSelect: (SettingItem) -> Unit
 ) {
     // Basic implementation matching the screenshot structure
     // Left: List of categories
@@ -60,22 +59,14 @@ fun TvSettingsLayout(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxHeight()
-                .padding(48.dp)
         ) {
-            Text(
-                text = "Settings",
-                style = MaterialTheme.typography.displaySmall,
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
-            
             // Content based on selection
-            if (selectedItem?.id == "subtitles") {
-                 SubtitlesSettingsContent(
-                     isEnabled = isSubtitlesEnabled,
-                     onToggle = onToggleSubtitles
-                 )
-            } else {
-                 Text("Content for ${selectedItem?.title}")
+            androidx.compose.material3.Surface(
+                modifier = Modifier.fillMaxSize(),
+                color = androidx.compose.ui.graphics.Color.Transparent,
+                contentColor = MaterialTheme.colorScheme.onSurface
+            ) {
+                SettingsDetailContent(selectedItem = selectedItem)
             }
         }
     }
@@ -115,58 +106,6 @@ fun TvSettingsItem(
    }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-fun SubtitlesSettingsContent(
-    isEnabled: Boolean,
-    onToggle: (Boolean) -> Unit
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        // Subtitles Toggle
-        androidx.tv.material3.Surface(
-            onClick = { onToggle(!isEnabled) },
-            modifier = Modifier.width(400.dp),
-             shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.small),
-             colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
-             )
-        ) {
-            Row(
-                 modifier = Modifier.fillMaxWidth().padding(16.dp),
-                 horizontalArrangement = Arrangement.SpaceBetween,
-                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-            ) {
-                Text("Subtitles")
-                androidx.tv.material3.Switch(
-                    checked = isEnabled,
-                    onCheckedChange = { onToggle(it) }
-                )
-            }
-        }
-        
-        // Subtitles Language
-        androidx.tv.material3.Surface(
-            onClick = {}, // Open language picker
-            modifier = Modifier.width(400.dp),
-             shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.small),
-             colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant
-             )
-        ) {
-            Row(
-                 modifier = Modifier.fillMaxWidth().padding(16.dp),
-                 horizontalArrangement = Arrangement.SpaceBetween,
-                 verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-            ) {
-                Text("Subtitles Language")
-                Text("English", style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-    }
-}
-
 @Preview(device = "id:tv_1080p")
 @Composable
 fun TvSettingsPreview() {
@@ -177,9 +116,7 @@ fun TvSettingsPreview() {
                 SettingItem("2", "About", icon = Icons.Default.Info)
             ),
             selectedItem = SettingItem("1", "Accounts"),
-            isSubtitlesEnabled = true,
-            onItemSelect = {},
-            onToggleSubtitles = {}
+            onItemSelect = {}
         )
     }
 }
