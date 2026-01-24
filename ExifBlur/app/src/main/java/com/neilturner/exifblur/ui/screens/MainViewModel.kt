@@ -2,6 +2,7 @@ package com.neilturner.exifblur.ui.screens
 
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Build
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -87,12 +88,25 @@ class MainViewModel(
 
             // Load initial bitmap (this will also load EXIF data)
             val bitmapStartTime = System.currentTimeMillis()
-            val initialResult = if (loadedImages.isNotEmpty()) {
+            var initialResult = if (loadedImages.isNotEmpty()) {
                 Log.d("MainViewModel", "Attempting to load initial bitmap for: ${loadedImages[0].uri}")
                 bitmapHelper.loadResizedBitmap(loadedImages[0].uri)
             } else {
                 Log.w("MainViewModel", "Cannot load initial bitmap: loadedImages is empty")
                 null
+            }
+
+            if (initialResult != null) {
+                // Create background image for all Android versions
+                Log.d("MainViewModel", "Creating background image for initial image")
+                val blurredBitmap = bitmapHelper.blurBitmap(initialResult.bitmap, 25)
+                val backgroundMetadataLabel = initialResult.metadata?.let { resolveLocationOrModel(it) }
+                val backgroundImage = DisplayImage(blurredBitmap, backgroundMetadataLabel, initialResult.rotation)
+                
+                _uiState.value = _uiState.value.copy(currentBackgroundImage = backgroundImage)
+                Log.d("MainViewModel", "Background image created and set in UI state")
+            } else {
+                Log.w("MainViewModel", "No initial result to create background image from")
             }
             
             val initialMetadataLabel = initialResult?.metadata?.let { resolveLocationOrModel(it) }
@@ -111,6 +125,7 @@ class MainViewModel(
                 isLoading = false,
                 currentImageIndex = 0,
                 currentDisplayImage = initialResult?.let { DisplayImage(it.bitmap, initialMetadataLabel, it.rotation) },
+                currentBackgroundImage = _uiState.value.currentBackgroundImage,
                 areOverlaysVisible = false,
                 imageSource = imageRepository.getSourceName()
             )
@@ -135,7 +150,16 @@ class MainViewModel(
                     val nextImage = currentState.images[nextIndex]
                     
                     // Load the next bitmap (this will also load EXIF data)
-                    val result = bitmapHelper.loadResizedBitmap(nextImage.uri)
+                    var result = bitmapHelper.loadResizedBitmap(nextImage.uri)
+
+                    if (result != null) {
+                        // Create background image for all Android versions
+                        val blurredBitmap = bitmapHelper.blurBitmap(result.bitmap, 25)
+                        val backgroundMetadataLabel = result.metadata?.let { resolveLocationOrModel(it) }
+                        val backgroundImage = DisplayImage(blurredBitmap, backgroundMetadataLabel, result.rotation)
+                        
+                        _uiState.value = _uiState.value.copy(currentBackgroundImage = backgroundImage)
+                    }
                     
                     val resolveStartTime = System.currentTimeMillis()
                     val metadataLabel = result?.metadata?.let { resolveLocationOrModel(it) }
@@ -145,7 +169,8 @@ class MainViewModel(
                     _uiState.update { 
                         it.copy(
                             currentImageIndex = nextIndex,
-                            currentDisplayImage = result?.let { res -> DisplayImage(res.bitmap, metadataLabel, res.rotation) }
+                            currentDisplayImage = result?.let { res -> DisplayImage(res.bitmap, metadataLabel, res.rotation) },
+                            currentBackgroundImage = it.currentBackgroundImage
                         ) 
                     }
                     
@@ -232,6 +257,7 @@ data class MainUiState(
     val images: List<LoadedImage> = emptyList(),
     val currentImageIndex: Int = 0,
     val currentDisplayImage: DisplayImage? = null,
+    val currentBackgroundImage: DisplayImage? = null,
     val areOverlaysVisible: Boolean = false,
     val transitionDuration: Int = 1000,
     val ramInfo: RamInfo? = null,

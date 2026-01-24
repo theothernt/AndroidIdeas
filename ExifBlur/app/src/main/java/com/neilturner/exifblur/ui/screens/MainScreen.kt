@@ -1,11 +1,12 @@
 package com.neilturner.exifblur.ui.screens
 
-import android.Manifest
 import android.app.Activity
+import android.Manifest
 import android.content.Context
 import android.content.ContextWrapper
 import android.content.pm.PackageManager
 import android.os.Build
+import android.util.Log
 import android.view.WindowManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -17,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -28,12 +30,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -56,7 +59,19 @@ fun MainScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val view = LocalView.current
     val focusRequester = remember { FocusRequester() }
+
+    // Hide system UI for immersive experience
+    DisposableEffect(Unit) {
+        val window = (context as? Activity)?.window
+        window?.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose {
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+            window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
 
     val permissions = remember {
         buildList {
@@ -122,13 +137,23 @@ fun MainScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             if (uiState.currentDisplayImage != null) {
                 val displayImage = uiState.currentDisplayImage!!
+                val backgroundImage = uiState.currentBackgroundImage?.let { 
+                    SlideshowData(bitmap = it.bitmap, rotation = it.rotation)
+                }
+                
+                Log.d("MainScreen", "Display image: ${displayImage.bitmap.width}x${displayImage.bitmap.height}")
+                Log.d("MainScreen", "Background image: ${backgroundImage?.bitmap?.width}x${backgroundImage?.bitmap?.height}")
+                
                 Slideshow(
                     currentImage = SlideshowData(
                         bitmap = displayImage.bitmap,
                         rotation = displayImage.rotation
                     ),
+                    currentBackgroundImage = backgroundImage,
                     transitionDuration = uiState.transitionDuration
                 )
+            } else {
+                Log.d("MainScreen", "No current display image")
             }
 
             // Black Splash Overlay that fades out once the first image is loaded

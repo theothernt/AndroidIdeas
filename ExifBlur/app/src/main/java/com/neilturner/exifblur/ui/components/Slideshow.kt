@@ -1,6 +1,7 @@
 package com.neilturner.exifblur.ui.components
 
 import android.graphics.Bitmap
+import android.util.Log
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -27,56 +28,72 @@ data class SlideshowData(
 @Composable
 fun Slideshow(
     currentImage: SlideshowData?,
+    currentBackgroundImage: SlideshowData?,
     transitionDuration: Int,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    
+    Log.d("Slideshow", "Current image: ${currentImage?.bitmap?.width}x${currentImage?.bitmap?.height}")
+    Log.d("Slideshow", "Background image: ${currentBackgroundImage?.bitmap?.width}x${currentBackgroundImage?.bitmap?.height}")
+    
     Box(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
+        // Background Image (fills screen - use blurred version on Android 11 and below)
         Crossfade(
-            targetState = currentImage,
+            targetState = currentBackgroundImage,
             animationSpec = tween(durationMillis = transitionDuration, easing = LinearEasing),
-            label = "Slideshow Crossfade"
-        ) { image ->
-            if (image != null) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    // Background Image (fills screen and blurred)
+            label = "Background Crossfade"
+        ) { backgroundImage ->
+            if (backgroundImage != null) {
+                Log.d("Slideshow", "Displaying background image")
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(backgroundImage)
+                        .build(),
+                    contentDescription = "Blurred Background Image",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .rotate(backgroundImage.rotation)
+                        .alpha(0.4f)
+                )
+            } else {
+                Log.d("Slideshow", "No background image, using fallback")
+                // Fallback: Use main image with blur modifier for Android 12+
+                currentImage?.let { image ->
                     AsyncImage(
-                        model = ImageRequest.Builder(context)
-                            .data(image.bitmap)
-                            .build(),
-                        contentDescription = "Blurred Background Image",
+                        model = image.bitmap,
+                        contentDescription = "Fallback Background Image",
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
+                            .rotate(image.rotation)
                             .blur(radius = 25.dp)
                             .alpha(0.4f)
                     )
-
-                    // Fallback for Android 11 or lower where blur might not work
-                    if (android.os.Build.VERSION.SDK_INT <= android.os.Build.VERSION_CODES.R) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.7f))
-                        )
-                    }
-                    
-                    // Foreground Image (fitted)
-                    AsyncImage(
-                        model = image.bitmap,
-                        contentDescription = "Foreground Image",
-                        contentScale = ContentScale.Fit,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .rotate(image.rotation)
-                    )
                 }
-            } else {
-                Box(modifier = Modifier.fillMaxSize().background(Color.Black))
+            }
+        }
+                    
+        // Foreground Image (fills screen - always sharp)
+        Crossfade(
+            targetState = currentImage,
+            animationSpec = tween(durationMillis = transitionDuration, easing = LinearEasing),
+            label = "Foreground Crossfade"
+        ) { image ->
+            if (image != null) {
+                AsyncImage(
+                    model = image.bitmap,
+                    contentDescription = "Foreground Image",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .rotate(image.rotation)
+                )
             }
         }
     }

@@ -26,6 +26,88 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
     companion object {
         private const val TAG = "BitmapHelper"
         private const val HEADER_BUFFER_SIZE = 512 * 1024 // 512KB
+
+        private fun stackBlur(sentBitmap: Bitmap, radius: Int, canReuseInBitmap: Boolean): Bitmap? {
+            val bitmap: Bitmap = if (canReuseInBitmap && sentBitmap.isMutable &&
+                (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || sentBitmap.config != Bitmap.Config.HARDWARE)) {
+                sentBitmap
+            } else {
+                sentBitmap.copy(Bitmap.Config.ARGB_8888, true)
+            }
+
+            if (radius < 1) return null
+
+            val w = bitmap.width
+            val h = bitmap.height
+            
+            // For large images, downsample first for much better performance
+            val maxDimension = maxOf(w, h)
+            val scaleFactor = if (maxDimension > 1000) {
+                // Scale down to max 1000px dimension
+                1000.0 / maxDimension
+            } else {
+                1.0
+            }
+            
+            val scaledBitmap = if (scaleFactor < 1.0) {
+                val scaledW = (w * scaleFactor).roundToInt()
+                val scaledH = (h * scaleFactor).roundToInt()
+                Bitmap.createScaledBitmap(bitmap, scaledW, scaledH, true)
+            } else {
+                bitmap
+            }
+            
+            val blurW = scaledBitmap.width
+            val blurH = scaledBitmap.height
+            val pix = IntArray(blurW * blurH)
+            scaledBitmap.getPixels(pix, 0, blurW, 0, 0, blurW, blurH)
+
+            // Fast box blur implementation
+            val temp = IntArray(blurW * blurH)
+            val effectiveRadius = (radius * scaleFactor).roundToInt().coerceAtLeast(1)
+            
+            for (y in 0 until blurH) {
+                for (x in 0 until blurW) {
+                    var r = 0
+                    var g = 0
+                    var b = 0
+                    var a = 0
+                    var count = 0
+                    
+                    for (dy in -effectiveRadius..effectiveRadius) {
+                        for (dx in -effectiveRadius..effectiveRadius) {
+                            val nx = x + dx
+                            val ny = y + dy
+                            
+                            if (nx >= 0 && nx < blurW && ny >= 0 && ny < blurH) {
+                                val pixel = pix[ny * blurW + nx]
+                                r += (pixel shr 16) and 0xFF
+                                g += (pixel shr 8) and 0xFF
+                                b += pixel and 0xFF
+                                a += (pixel shr 24) and 0xFF
+                                count++
+                            }
+                        }
+                    }
+                    
+                    if (count > 0) {
+                        temp[y * blurW + x] = (a / count shl 24) or (r / count shl 16) or (g / count shl 8) or (b / count)
+                    }
+                }
+            }
+            
+            scaledBitmap.setPixels(temp, 0, blurW, 0, 0, blurW, blurH)
+            
+            // Scale back to original size if we downsampled
+            val finalBitmap = if (scaleFactor < 1.0) {
+                Bitmap.createScaledBitmap(scaledBitmap, w, h, true)
+            } else {
+                scaledBitmap
+            }
+            
+            Log.d("BitmapHelper", "Created blurred background: ${finalBitmap.width}x${finalBitmap.height}")
+            return finalBitmap
+        }
     }
 
     suspend fun loadResizedBitmap(uri: Uri, targetWidth: Int = 1920, targetHeight: Int = 1080): BitmapResult? {
@@ -67,6 +149,33 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading bitmap", e)
                 null
+            }
+        }
+    }
+
+    suspend fun blurBitmap(bitmap: Bitmap, radius: Int): Bitmap {
+        return withContext(Dispatchers.Default) {
+            try {
+                val startTime = System.currentTimeMillis()
+                Log.d(TAG, "Starting blur operation with radius $radius on ${bitmap.width}x${bitmap.height} bitmap")
+                
+                val result = if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.R) {
+                    // Use legacy stack blur for Android 11 and below
+                    Log.d(TAG, "Using legacy stack blur for API ${Build.VERSION.SDK_INT}")
+                    stackBlur(bitmap, radius, false) ?: bitmap
+                } else {
+                    // For Android 12+, use a simple fast blur or return original
+                    // We'll use the same stack blur but it's optimized with downsampling
+                    Log.d(TAG, "Using optimized blur for API ${Build.VERSION.SDK_INT} (Android 12+)")
+                    stackBlur(bitmap, radius, false) ?: bitmap
+                }
+                
+                val duration = System.currentTimeMillis() - startTime
+                Log.d(TAG, "Blur operation completed in ${duration}ms")
+                result
+            } catch (e: Exception) {
+                Log.e(TAG, "Error blurring bitmap", e)
+                bitmap
             }
         }
     }
