@@ -15,6 +15,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -53,7 +54,6 @@ import com.neilturner.fadeloop.ui.common.TimeRemainingOverlay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import kotlin.math.min
 
 private const val CROSS_FADE_DURATION_MS = 2000
 private const val PRELOAD_BUFFER_MS = 5000L // Prepare next video 5s before current ends
@@ -111,7 +111,7 @@ fun VideoPlayer(
     var hasStartedPlayback by remember { mutableStateOf(false) }
 
     // Time Remaining State
-    var remainingSeconds by remember { mutableStateOf(0L) }
+    var remainingSeconds by remember { mutableLongStateOf(0L) }
 
     // Location Overlay State
     var locationText by remember { mutableStateOf("") }
@@ -376,12 +376,11 @@ fun VideoPlayer(
                  if (!PRELOAD_AT_END) {
                      val nextNextIndex = (currentVideoIndex + 2) % videos.size
                      val videoUrl = videos[nextNextIndex].url
-                     val playerToPrepare = activePlayer
                      scope.launch {
                          Log.d(TAG, "Waiting 4s before preparing player for next video (Legacy Mode)...")
                          delay(4000)
-                         preparePlayer(playerToPrepare, videoUrl)
-                         playerToPrepare.playWhenReady = false
+                         preparePlayer(activePlayer, videoUrl)
+                         activePlayer.playWhenReady = false
                      }
                  }
                  

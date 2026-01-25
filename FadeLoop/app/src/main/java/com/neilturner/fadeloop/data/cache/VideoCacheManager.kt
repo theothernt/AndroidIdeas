@@ -32,7 +32,7 @@ class VideoCacheManager(context: Context) {
         val contentMetadata = simpleCache.getContentMetadata(key)
         val contentLength = ContentMetadata.getContentLength(contentMetadata)
 
-        if (contentLength.toInt() == C.LENGTH_UNSET || contentLength == 0L) {
+        if (contentLength == C.LENGTH_UNSET.toLong() || contentLength == 0L) {
             return 0 // Length unknown or empty
         }
 

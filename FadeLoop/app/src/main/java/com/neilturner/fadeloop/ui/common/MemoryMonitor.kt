@@ -22,7 +22,7 @@ fun MemoryMonitor(modifier: Modifier = Modifier) {
             val runtime = Runtime.getRuntime()
             val usedMemInMB = (runtime.totalMemory() - runtime.freeMemory()) / 1048576L
             val maxMemInMB = runtime.maxMemory() / 1048576L
-            val availMemInMB = runtime.freeMemory() / 1048576L
+            // val availMemInMB = runtime.freeMemory() / 1048576L
             
             memoryText = "Used: ${usedMemInMB}MB / Max: ${maxMemInMB}MB"
             delay(1000)
