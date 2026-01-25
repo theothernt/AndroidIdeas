@@ -24,12 +24,6 @@ fun PlayerScreen(
                 videos = videos,
                 useSurfaceView = false
             )
-            
-            MemoryMonitor(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp)
-            )
         }
     }
 }

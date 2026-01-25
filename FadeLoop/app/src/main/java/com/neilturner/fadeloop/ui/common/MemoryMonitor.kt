@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -33,7 +32,7 @@ fun MemoryMonitor(modifier: Modifier = Modifier) {
     Text(
         text = memoryText,
         style = MaterialTheme.typography.labelSmall,
-        color = Color.Green,
+        color = MaterialTheme.colorScheme.primary,
         modifier = modifier.technicalBackground()
     )
 }

@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -22,6 +23,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
@@ -38,6 +44,7 @@ import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
 import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import com.neilturner.fadeloop.data.model.Video
 import com.neilturner.fadeloop.ui.common.LocationOverlay
+import com.neilturner.fadeloop.ui.common.MemoryMonitor
 import com.neilturner.fadeloop.ui.common.TimeRemainingOverlay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -65,6 +72,9 @@ fun VideoPlayer(
     LaunchedEffect(Unit) {
         Log.d(TAG, "Initializing VideoPlayer with ${videos.size} videos. useSurfaceView=$useSurfaceView, PRELOAD_AT_END=$PRELOAD_AT_END, USE_MINIMAL_BUFFER=$USE_MINIMAL_BUFFER")
     }
+
+    // Technical Overlays visibility state
+    var showTechnicalOverlays by remember { mutableStateOf(false) }
 
     // Startup Fade State
     val startupBlackAlpha = remember { Animatable(1f) }
@@ -344,6 +354,16 @@ fun VideoPlayer(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
+            .focusable()
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyUp && 
+                    (keyEvent.key == Key.DirectionCenter || keyEvent.key == Key.Enter)) {
+                    showTechnicalOverlays = !showTechnicalOverlays
+                    true
+                } else {
+                    false
+                }
+            }
     ) {
         // We use zIndex to control layering.
         // TextureView (Fade): The one that is "fading in" (nextPlayer) must be on TOP of the "finishing" (activePlayer).
@@ -403,14 +423,25 @@ fun VideoPlayer(
             )
         }
 
-        // Time Remaining Overlay
-        TimeRemainingOverlay(
-            remainingSeconds = remainingSeconds,
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(16.dp)
-                .zIndex(200f)
-        )
+        // Technical Overlays
+        if (showTechnicalOverlays) {
+            // Time Remaining Overlay
+            TimeRemainingOverlay(
+                remainingSeconds = remainingSeconds,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp)
+                    .zIndex(200f)
+            )
+
+            // Memory Monitor
+            MemoryMonitor(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .zIndex(200f)
+            )
+        }
 
         // Location Overlay
         LocationOverlay(

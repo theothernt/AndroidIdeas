@@ -12,17 +12,23 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
 // Reusable modifier for the technical background style
-fun Modifier.technicalBackground(): Modifier = this
-    .background(Color.Black.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
-    .padding(horizontal = 8.dp, vertical = 4.dp)
+@OptIn(ExperimentalTvMaterial3Api::class)
+fun Modifier.technicalBackground(): Modifier = composed {
+    this
+        .background(
+            MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
+            RoundedCornerShape(4.dp)
+        )
+        .padding(horizontal = 8.dp, vertical = 4.dp)
+}
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -39,7 +45,7 @@ fun TimeRemainingOverlay(
     Text(
         text = "${remainingSeconds}s",
         style = MaterialTheme.typography.labelSmall,
-        color = Color.Green,
+        color = MaterialTheme.colorScheme.primary,
         modifier = modifier
             .alpha(alpha)
             .technicalBackground()
@@ -62,7 +68,7 @@ fun LocationOverlay(
         Text(
             text = locationText,
             style = MaterialTheme.typography.bodyMedium,
-            color = Color.White,
+            color = MaterialTheme.colorScheme.onSurface,
             modifier = Modifier.technicalBackground()
         )
     }
