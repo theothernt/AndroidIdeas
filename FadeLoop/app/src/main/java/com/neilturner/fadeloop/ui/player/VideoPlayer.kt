@@ -35,19 +35,24 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.LoadControl
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultAllocator
 import androidx.media3.ui.compose.PlayerSurface
 import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
 import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
+import com.neilturner.fadeloop.data.cache.VideoCacheManager
 import com.neilturner.fadeloop.data.model.Video
 import com.neilturner.fadeloop.ui.common.LocationOverlay
 import com.neilturner.fadeloop.ui.common.MemoryMonitor
 import com.neilturner.fadeloop.ui.common.TimeRemainingOverlay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import kotlin.math.min
 
 private const val CROSS_FADE_DURATION_MS = 2000
@@ -68,6 +73,7 @@ fun VideoPlayer(
     if (videos.isEmpty()) return
 
     val context = LocalContext.current
+    val cacheManager: VideoCacheManager = koinInject()
     
     LaunchedEffect(Unit) {
         Log.d(TAG, "Initializing VideoPlayer with ${videos.size} videos. useSurfaceView=$useSurfaceView, PRELOAD_AT_END=$PRELOAD_AT_END, USE_MINIMAL_BUFFER=$USE_MINIMAL_BUFFER")
@@ -75,6 +81,30 @@ fun VideoPlayer(
 
     // Technical Overlays visibility state
     var showTechnicalOverlays by remember { mutableStateOf(false) }
+
+    // Cache Data Source Factory
+    val cacheDataSourceFactory = remember {
+        CacheDataSource.Factory()
+            .setCache(cacheManager.simpleCache)
+            .setUpstreamDataSourceFactory(DefaultHttpDataSource.Factory())
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+            .setEventListener(object : CacheDataSource.EventListener {
+                private var lastLogTime = 0L
+                override fun onCachedBytesRead(cacheSizeBytes: Long, cachedBytesRead: Long) {
+                    val now = System.currentTimeMillis()
+                    val totalMetaBytes = cachedBytesRead / (1024 * 1024)
+
+                    if (now - lastLogTime > 5000) { // Log every 5 seconds during playback
+                        Log.d(TAG, "Playing from Cache... (Cache item size: $totalMetaBytes MB)")
+                        lastLogTime = now
+                    }
+                }
+
+                override fun onCacheIgnored(reason: Int) {
+                    Log.w(TAG, "Cache Ignored. Reason: $reason")
+                }
+            })
+    }
 
     // Startup Fade State
     val startupBlackAlpha = remember { Animatable(1f) }
@@ -116,6 +146,7 @@ fun VideoPlayer(
     // Initialize two players for cross-fading
     val player1 = remember {
         ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(cacheDataSourceFactory))
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
             .setLoadControl(createLoadControl())
             .build()
@@ -136,6 +167,7 @@ fun VideoPlayer(
     }
     val player2 = remember {
         ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(cacheDataSourceFactory))
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
             .setLoadControl(createLoadControl())
             .build()
@@ -184,7 +216,7 @@ fun VideoPlayer(
 
     // Initial setup
     LaunchedEffect(Unit) {
-        Log.d(TAG, "Initial Setup Launched")
+        Log.d(TAG, "Initial Setup Launched. Current Cache Size: ${cacheManager.getUsedSpace() / (1024 * 1024)} MB")
         // Prepare Player 1 with first video (Immediate)
         preparePlayer(player1, videos[0].url)
         player1.playWhenReady = true
@@ -255,8 +287,20 @@ fun VideoPlayer(
             }
         }
 
+        var lastCacheLogTime = 0L
+
         while (true) {
             delay(100) // Poll frequency
+            
+            // Log cache size every 10 seconds
+            val now = System.currentTimeMillis()
+            if (now - lastCacheLogTime > 10000) {
+                val cacheSizeMb = cacheManager.getUsedSpace() / (1024 * 1024)
+                val currentUrl = videos[currentVideoIndex].url
+                val cachedPercent = cacheManager.getCachedPercentage(currentUrl)
+                Log.d(TAG, "Current Cache Size: $cacheSizeMb MB. Current Video Cached: $cachedPercent%")
+                lastCacheLogTime = now
+            }
             
             val duration = activePlayer.duration
             val position = activePlayer.currentPosition

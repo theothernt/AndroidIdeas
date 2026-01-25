@@ -24,7 +24,7 @@ class VideoRepository {
                 url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-sdr/video_inspire_oregon_lone-ranch-beach_00001.1080-sdr.mov",
                 title = "Lone Ranch Beach, OR",
                 durationMs = 30000L
-            ),
+            ), /*
             Video(
                 url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-sdr/video_inspire_california_vineyard_sierra-mar_sunrise_110.1080-sdr.mov",
                 title = "Sierra Mar Vineyard, CA - Sunrise",
@@ -104,7 +104,7 @@ class VideoRepository {
                 url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-sdr/video_inspire_california_catalina_00005.1080-sdr.mov",
                 title = "Catalina Island, CA",
                 durationMs = 30000L
-            )
+            )*/
         )
     }
 }
