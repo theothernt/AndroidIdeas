@@ -22,7 +22,7 @@ class PlayerViewModel(
 
     private fun loadVideos() {
         viewModelScope.launch {
-            _videoList.value = repository.getVideos()
+            _videoList.value = repository.getVideos().shuffled()
         }
     }
 }

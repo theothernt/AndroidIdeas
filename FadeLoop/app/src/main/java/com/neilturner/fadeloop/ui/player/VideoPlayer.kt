@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -17,10 +18,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -34,6 +37,8 @@ import androidx.media3.ui.compose.PlayerSurface
 import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
 import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import com.neilturner.fadeloop.data.model.Video
+import com.neilturner.fadeloop.ui.common.LocationOverlay
+import com.neilturner.fadeloop.ui.common.TimeRemainingOverlay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.min
@@ -64,6 +69,13 @@ fun VideoPlayer(
     // Startup Fade State
     val startupBlackAlpha = remember { Animatable(1f) }
     var hasStartedPlayback by remember { mutableStateOf(false) }
+
+    // Time Remaining State
+    var remainingSeconds by remember { mutableStateOf(0L) }
+
+    // Location Overlay State
+    var locationText by remember { mutableStateOf("") }
+    var showLocation by remember { mutableStateOf(false) }
 
     // Helper to create LoadControl
     fun createLoadControl(): LoadControl {
@@ -220,6 +232,19 @@ fun VideoPlayer(
         // So we reset this flag based on our target behavior.
         isNextPlayerPrepared = !PRELOAD_AT_END 
 
+        // Update location for the new video
+        launch {
+            val video = videos[currentVideoIndex]
+            if (video.title.isNotEmpty()) {
+                locationText = video.title
+                // Wait a bit for the new video to be visible before sliding up the text
+                delay(1000) 
+                showLocation = true
+            } else {
+                showLocation = false
+            }
+        }
+
         while (true) {
             delay(100) // Poll frequency
             
@@ -235,6 +260,9 @@ fun VideoPlayer(
                 val logicalEnd = if (videoLimit < duration) videoLimit else duration
                 val remaining = logicalEnd - position
                 
+                // Update Time Remaining State
+                remainingSeconds = remaining / 1000
+
                 // 1. Check for Preload (Only if PRELOAD_AT_END is true)
                 if (PRELOAD_AT_END && !isCrossFading && !isNextPlayerPrepared && remaining <= PRELOAD_BUFFER_MS) {
                     Log.d(TAG, "Preload Triggered (End Mode). Remaining: $remaining")
@@ -249,6 +277,9 @@ fun VideoPlayer(
                 if (!isCrossFading && remaining <= 200) {
                     Log.d(TAG, "Transition Triggered. Remaining: $remaining")
                     isCrossFading = true
+
+                    // Fade out location when transition starts
+                    showLocation = false
                     
                     // Pause the finishing video to hold the last frame
                     activePlayer.pause()
@@ -371,5 +402,24 @@ fun VideoPlayer(
                     .background(Color.Black)
             )
         }
+
+        // Time Remaining Overlay
+        TimeRemainingOverlay(
+            remainingSeconds = remainingSeconds,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(16.dp)
+                .zIndex(200f)
+        )
+
+        // Location Overlay
+        LocationOverlay(
+            locationText = locationText,
+            isVisible = showLocation,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .zIndex(200f)
+        )
     }
 }
