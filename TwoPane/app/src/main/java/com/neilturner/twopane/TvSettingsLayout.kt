@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -49,7 +50,8 @@ fun TvSettingsLayout(
                     text = item.title,
                     icon = item.icon,
                     isSelected = selectedItem?.id == item.id,
-                    onClick = { onItemSelect(item) }
+                    onClick = { onItemSelect(item) },
+                    onFocus = { onItemSelect(item) }
                 )
             }
         }
@@ -78,7 +80,8 @@ fun TvSettingsItem(
     text: String,
     icon: ImageVector?,
     isSelected: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onFocus: () -> Unit
 ) {
    androidx.tv.material3.Surface(
         onClick = onClick,
@@ -87,7 +90,9 @@ fun TvSettingsItem(
             containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceVariant else androidx.compose.ui.graphics.Color.Transparent,
             contentColor = if (isSelected) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
         ),
-        modifier = Modifier.width(250.dp)
+        modifier = Modifier
+            .width(250.dp)
+            .onFocusChanged { if (it.isFocused) onFocus() }
    ) {
        Row(
            modifier = Modifier.padding(12.dp),

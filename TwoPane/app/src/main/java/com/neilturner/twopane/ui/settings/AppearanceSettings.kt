@@ -63,15 +63,5 @@ fun AppearanceSettings() {
             )
             Text("Use Pure Black (AMOLED)", modifier = Modifier.padding(start = 8.dp))
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
-        Text("Font Size: ${fontSize.toInt()}sp", style = MaterialTheme.typography.titleMedium)
-        Slider(
-            value = fontSize,
-            onValueChange = { fontSize = it },
-            valueRange = 12f..24f,
-            steps = 5,
-            modifier = Modifier.padding(top = 8.dp)
-        )
     }
 }
