@@ -5,14 +5,18 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
@@ -33,9 +37,11 @@ fun TvSettingsLayout(
     selectedItem: SettingItem?,
     onItemSelect: (SettingItem) -> Unit
 ) {
-    // Basic implementation matching the screenshot structure
-    // Left: List of categories
-    // Right: Content for the selected category
+    val firstItemFocusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        firstItemFocusRequester.requestFocus()
+    }
     
     Row(modifier = Modifier.fillMaxSize()) {
         // Left Pane
@@ -46,13 +52,14 @@ fun TvSettingsLayout(
                 .padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-             items.forEach { item ->
+             items.forEachIndexed { index, item ->
                 TvSettingsItem(
                     text = item.title,
                     icon = item.icon,
                     isSelected = selectedItem?.id == item.id,
                     onClick = { onItemSelect(item) },
-                    onFocus = { onItemSelect(item) }
+                    onFocus = { onItemSelect(item) },
+                    modifier = if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier
                 )
             }
         }
@@ -82,7 +89,8 @@ fun TvSettingsItem(
     icon: ImageVector?,
     isSelected: Boolean,
     onClick: () -> Unit,
-    onFocus: () -> Unit
+    onFocus: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
    Surface(
         onClick = onClick,
@@ -91,14 +99,14 @@ fun TvSettingsItem(
             containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceVariant else androidx.compose.ui.graphics.Color.Transparent,
             contentColor = if (isSelected) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
         ),
-        modifier = Modifier
+        modifier = modifier
             .width(250.dp)
             .onFocusChanged { if (it.isFocused) onFocus() }
    ) {
        Row(
            modifier = Modifier.padding(12.dp),
            horizontalArrangement = Arrangement.Start,
-           verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+           verticalAlignment = Alignment.CenterVertically
        ) {
            if (icon != null) {
                Icon(
