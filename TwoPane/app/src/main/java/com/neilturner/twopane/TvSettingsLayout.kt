@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.neilturner.twopane.data.SettingItem
 import com.neilturner.twopane.ui.settings.SettingsDetailContent
@@ -83,7 +84,7 @@ fun TvSettingsItem(
     onClick: () -> Unit,
     onFocus: () -> Unit
 ) {
-   androidx.tv.material3.Surface(
+   Surface(
         onClick = onClick,
         shape = androidx.tv.material3.ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.small),
         colors = androidx.tv.material3.ClickableSurfaceDefaults.colors(
