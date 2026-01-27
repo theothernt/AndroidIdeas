@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Switch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -12,14 +13,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ClickableSurfaceDefaults
-import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun MediaSourcesSettings() {
     var appleEnabled by remember { mutableStateOf(false) }
@@ -46,24 +47,25 @@ fun MediaSourcesSettings() {
             MediaSourceItem(
                 title = "Jetson Creative videos",
                 isEnabled = jetsonEnabled,
-                onToggle = { jetsonEnabled = !jetsonEnabled }
+                onToggle = { jetsonEnabled = !jetsonEnabled },
+                modifier = Modifier.focusProperties { down = FocusRequester.Cancel }
             )
         }
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun MediaSourceItem(
     title: String,
     isEnabled: Boolean,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Surface(
         onClick = onToggle,
         shape = ClickableSurfaceDefaults.shape(shape = MaterialTheme.shapes.small),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
@@ -76,7 +78,7 @@ fun MediaSourceItem(
                 modifier = Modifier.weight(1f),
                 style = MaterialTheme.typography.titleMedium
             )
-            androidx.compose.material3.Switch(
+            Switch(
                 checked = isEnabled,
                 onCheckedChange = null // Handled by Surface onClick
             )
