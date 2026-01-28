@@ -2,9 +2,12 @@ package com.neilturner.videothumbnails.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.runtime.Composable
@@ -12,14 +15,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Button
 import androidx.tv.material3.Text
 import com.neilturner.videothumbnails.data.Video
 import com.neilturner.videothumbnails.ui.components.VideoItem
+import com.neilturner.videothumbnails.ui.components.clearThumbnailCache
+import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -56,6 +64,8 @@ fun VideoGrid(
     modifier: Modifier = Modifier
 ) {
     val focusRequester = remember { FocusRequester() }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -74,6 +84,21 @@ fun VideoGrid(
                 onClick = { /* TODO: Handle click */ },
                 modifier = if (index == 0) Modifier.focusRequester(focusRequester) else Modifier
             )
+        }
+        
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            Column(
+                modifier = Modifier.padding(top = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Button(onClick = {
+                    coroutineScope.launch {
+                        clearThumbnailCache(context)
+                    }
+                }) {
+                    Text("Clear Cache")
+                }
+            }
         }
     }
 }

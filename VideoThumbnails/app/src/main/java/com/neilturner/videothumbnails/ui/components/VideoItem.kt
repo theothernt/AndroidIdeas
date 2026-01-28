@@ -1,5 +1,8 @@
 package com.neilturner.videothumbnails.ui.components
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.media.MediaMetadataRetriever
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
@@ -31,15 +34,28 @@ import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import com.neilturner.videothumbnails.data.Video
 import com.neilturner.videothumbnails.ui.theme.VideoThumbnailsTheme
-import android.media.MediaMetadataRetriever
-import android.graphics.Bitmap
 import java.io.File
 import java.io.FileOutputStream
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import org.koin.compose.koinInject
+import org.koin.core.qualifier.named
 
-suspend fun generateVideoThumbnail(context: android.content.Context, videoUrl: String): String? {
-    return withContext(Dispatchers.IO) {
+suspend fun clearThumbnailCache(context: Context) {
+    withContext(Dispatchers.IO) {
+        context.cacheDir.listFiles { _, name -> name.startsWith("thumb_") }?.forEach { 
+            it.delete() 
+        }
+    }
+}
+
+suspend fun generateVideoThumbnail(
+    context: Context,
+    videoUrl: String,
+    dispatcher: CoroutineDispatcher = Dispatchers.IO
+): String? {
+    return withContext(dispatcher) {
         try {
             // Check if thumbnail already exists in cache
             val thumbnailFile = File(context.cacheDir, "thumb_${videoUrl.hashCode()}.jpg")
@@ -75,13 +91,16 @@ suspend fun generateVideoThumbnail(context: android.content.Context, videoUrl: S
 fun VideoItem(
     video: Video,
     onClick: (Video) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    thumbnailDispatcher: CoroutineDispatcher = koinInject(named("ThumbnailDispatcher"))
 ) {
     val context = LocalContext.current
     var thumbnailPath by remember { mutableStateOf<String?>(null) }
     
-    LaunchedEffect(video.url1080H264) {
-        thumbnailPath = generateVideoThumbnail(context, video.url1080H264)
+    LaunchedEffect(video.url1080H264, thumbnailPath) {
+        if (thumbnailPath == null) {
+            thumbnailPath = generateVideoThumbnail(context, video.url1080H264, thumbnailDispatcher)
+        }
     }
     
     Card(
