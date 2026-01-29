@@ -11,12 +11,12 @@ android {
         version = release(36)
     }
 
-    val sambaProperties = Properties().apply {
-        val propertiesFile = rootProject.file("samba.properties")
-        if (propertiesFile.exists()) {
-            load(propertiesFile.inputStream())
-        }
-    }
+	val sambaProperties = Properties().apply {
+		val propertiesFile = rootProject.file("samba.properties")
+		if (propertiesFile.exists()) {
+			load(propertiesFile.inputStream())
+		}
+	}
 
     defaultConfig {
         applicationId = "com.neilturner.exifblur"
