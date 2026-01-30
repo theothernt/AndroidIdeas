@@ -36,34 +36,38 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
         firstButtonFocusRequester.requestFocus()
     }
 
-    Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color(0xFF121212))
-    ) {
-        ControlsSection(
-            onLoadFromSamba = { viewModel.loadFromSamba() },
-            onClearDb = { viewModel.clearDb() },
-            onStartHighlighting = { viewModel.startHighlighting() },
-            onStopHighlighting = { viewModel.stopHighlighting() },
-            isScanning = isScanning,
-            isHighlighting = isHighlighting,
-            sambaDuration = sambaDuration,
-            dbDuration = dbDuration,
-            scanSource = scanSource,
-            fileCount = files.size,
-            focusRequester = firstButtonFocusRequester,
-            modifier = Modifier.weight(0.3f)
-        )
+    androidx.compose.foundation.layout.Box(modifier = Modifier.fillMaxSize()) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF121212))
+        ) {
+            ControlsSection(
+                onLoadFromSamba = { viewModel.loadFromSamba() },
+                onClearDb = { viewModel.clearDb() },
+                onStartHighlighting = { viewModel.startHighlighting() },
+                onStopHighlighting = { viewModel.stopHighlighting() },
+                isScanning = isScanning,
+                isHighlighting = isHighlighting,
+                sambaDuration = sambaDuration,
+                dbDuration = dbDuration,
+                scanSource = scanSource,
+                fileCount = files.size,
+                focusRequester = firstButtonFocusRequester,
+                modifier = Modifier.weight(0.3f)
+            )
 
-        ResultsSection(
-            error = error,
-            files = files,
-            hasLoadedFiles = hasLoadedFiles,
-            isScanning = isScanning,
-            highlightedIndex = highlightedIndex,
-            viewedCount = viewedCount,
-            modifier = Modifier.weight(0.7f)
-        )
+            ResultsSection(
+                error = error,
+                files = files,
+                hasLoadedFiles = hasLoadedFiles,
+                isScanning = isScanning,
+                highlightedIndex = highlightedIndex,
+                viewedCount = viewedCount,
+                modifier = Modifier.weight(0.7f)
+            )
+        }
+        
+        RamOverlay(modifier = Modifier.align(androidx.compose.ui.Alignment.BottomStart))
     }
 }

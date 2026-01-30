@@ -42,22 +42,29 @@ class MainViewModel(
     private val _hasLoadedFiles = MutableStateFlow(false)
     val hasLoadedFiles: StateFlow<Boolean> = _hasLoadedFiles.asStateFlow()
 
-    val files: StateFlow<List<String>> = fileRepository.allFiles
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val _files = MutableStateFlow<List<String>>(emptyList())
+    val files: StateFlow<List<String>> = _files.asStateFlow()
 
     val viewedCount: StateFlow<Int> = fileRepository.viewedCount
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     init {
         viewModelScope.launch {
-            files.collect {
-                if (it.isNotEmpty()) {
-                    _hasLoadedFiles.value = true
-                    if (_scanSource.value == null) {
-                        _scanSource.value = "Database"
-                    }
+            loadMoreFiles()
+            if (_files.value.isNotEmpty()) {
+                _hasLoadedFiles.value = true
+                if (_scanSource.value == null) {
+                    _scanSource.value = "Database"
                 }
             }
+        }
+    }
+
+    private suspend fun loadMoreFiles() {
+        val currentSize = _files.value.size
+        val newFiles = fileRepository.getUnviewedBatch(30, currentSize)
+        if (newFiles.isNotEmpty()) {
+            _files.value += newFiles
         }
     }
 
@@ -71,6 +78,7 @@ class MainViewModel(
             _dbDurationMillis.value = null
             stopHighlighting()
             _highlightedIndex.value = null
+            _files.value = emptyList()
             
             // Wait 1 second
             kotlinx.coroutines.delay(1000)
@@ -85,6 +93,9 @@ class MainViewModel(
                 _sambaDurationMillis.value = metrics.sambaDuration
                 _dbDurationMillis.value = metrics.dbDuration
                 
+                // Load first batch
+                loadMoreFiles()
+
                 // Show files
                 _hasLoadedFiles.value = true
             } catch (e: Exception) {
@@ -104,6 +115,7 @@ class MainViewModel(
             _hasLoadedFiles.value = false
             stopHighlighting()
             _highlightedIndex.value = null
+            _files.value = emptyList()
         }
     }
 
@@ -115,10 +127,14 @@ class MainViewModel(
             
             // Loop while active and files exist
             while (isActive) {
-                val currentFiles = files.value
+                val currentFiles = _files.value
                 if (currentFiles.isEmpty()) {
-                    stopHighlighting()
-                    break
+                    // Try to load more before quitting?
+                    loadMoreFiles()
+                    if (_files.value.isEmpty()) {
+                        stopHighlighting()
+                        break
+                    }
                 }
                 
                 // Highlight the first item (since list shrinks)
@@ -128,9 +144,14 @@ class MainViewModel(
                 kotlinx.coroutines.delay(500)
                 
                 // Mark current item as viewed
-                val currentFile = currentFiles.firstOrNull()
+                val currentFile = _files.value.firstOrNull()
                 if (currentFile != null) {
                     fileRepository.markAsViewed(currentFile)
+                    _files.value = _files.value.drop(1)
+                    
+                    if (_files.value.size <= 5) {
+                        loadMoreFiles()
+                    }
                 }
             }
         }

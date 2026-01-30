@@ -13,6 +13,10 @@ class FileRepository(
         entities.map { it.uri }
     }
 
+    suspend fun getUnviewedBatch(limit: Int, offset: Int): List<String> {
+        return fileDao.getBatch(limit, offset).map { it.uri }
+    }
+
     data class ScanMetrics(val sambaDuration: Long, val dbDuration: Long)
 
     suspend fun scanAndSave(): ScanMetrics {
