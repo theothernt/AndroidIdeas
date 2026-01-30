@@ -37,7 +37,8 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             .background(Color(0xFF121212))
     ) {
         ControlsSection(
-            onLoadFiles = { viewModel.loadFiles() },
+            onLoadFromSamba = { viewModel.loadFromSamba() },
+            onLoadFromDb = { viewModel.loadFromDb() },
             onClearDb = { viewModel.clearDb() },
             isScanning = isScanning,
             scanDuration = scanDuration,

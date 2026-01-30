@@ -28,7 +28,8 @@ import androidx.tv.material3.Text
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ControlsSection(
-    onLoadFiles: () -> Unit,
+    onLoadFromSamba: () -> Unit,
+    onLoadFromDb: () -> Unit,
     onClearDb: () -> Unit,
     isScanning: Boolean,
     scanDuration: Long?,
@@ -44,12 +45,21 @@ fun ControlsSection(
         verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.Start
     ) {
-        // Media Sources Button Style
+        // Load from Samba button
         TvButton(
-            text = "Load Files",
+            text = "Load from Samba",
             icon = Icons.Default.Refresh,
-            onClick = onLoadFiles,
+            onClick = onLoadFromSamba,
             modifier = Modifier.focusRequester(focusRequester)
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Load from DB button
+        TvButton(
+            text = "Load from DB",
+            icon = Icons.Default.Refresh,
+            onClick = onLoadFromDb
         )
 
         Spacer(modifier = Modifier.height(12.dp))
