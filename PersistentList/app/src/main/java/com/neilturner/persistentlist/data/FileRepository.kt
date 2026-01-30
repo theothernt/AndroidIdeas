@@ -13,10 +13,26 @@ class FileRepository(
         entities.map { it.uri }
     }
 
-    suspend fun scanAndSave() {
+    data class ScanMetrics(val sambaDuration: Long, val dbDuration: Long)
+
+    suspend fun scanAndSave(): ScanMetrics {
+        val sambaStart = System.currentTimeMillis()
         val uris = smbRepository.listFiles()
+        val sambaEnd = System.currentTimeMillis()
+
+        val dbStart = System.currentTimeMillis()
+        fileDao.deleteAll()
         val entities = uris.map { FileEntity(it.toString(), it.lastPathSegment ?: "unknown") }
         fileDao.insertAll(entities)
+        val dbEnd = System.currentTimeMillis()
+        
+        return ScanMetrics(sambaEnd - sambaStart, dbEnd - dbStart)
+    }
+
+    val viewedCount: Flow<Int> = fileDao.getViewedCount()
+
+    suspend fun markAsViewed(uri: String) {
+        fileDao.updateViewedStatus(uri, true)
     }
 
     suspend fun scanIfEmpty() {

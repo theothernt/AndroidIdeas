@@ -3,20 +3,17 @@ package com.neilturner.persistentlist.ui.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neilturner.persistentlist.data.FileRepository
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.isActive
-import com.neilturner.persistentlist.data.UserPreferencesRepository
-
 class MainViewModel(
-    private val fileRepository: FileRepository,
-    private val userPreferencesRepository: UserPreferencesRepository
+    private val fileRepository: FileRepository
 ) : ViewModel() {
 
     private var highlightingJob: Job? = null
@@ -30,8 +27,11 @@ class MainViewModel(
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
 
-    private val _scanDurationMillis = MutableStateFlow<Long?>(null)
-    val scanDurationMillis: StateFlow<Long?> = _scanDurationMillis.asStateFlow()
+    private val _sambaDurationMillis = MutableStateFlow<Long?>(null)
+    val sambaDurationMillis: StateFlow<Long?> = _sambaDurationMillis.asStateFlow()
+
+    private val _dbDurationMillis = MutableStateFlow<Long?>(null)
+    val dbDurationMillis: StateFlow<Long?> = _dbDurationMillis.asStateFlow()
 
     private val _scanSource = MutableStateFlow<String?>(null)
     val scanSource: StateFlow<String?> = _scanSource.asStateFlow()
@@ -45,27 +45,45 @@ class MainViewModel(
     val files: StateFlow<List<String>> = fileRepository.allFiles
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val viewedCount: StateFlow<Int> = fileRepository.viewedCount
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
+
+    init {
+        viewModelScope.launch {
+            files.collect {
+                if (it.isNotEmpty()) {
+                    _hasLoadedFiles.value = true
+                    if (_scanSource.value == null) {
+                        _scanSource.value = "Database"
+                    }
+                }
+            }
+        }
+    }
+
     fun loadFromSamba() {
         viewModelScope.launch {
             // Clear list visually
             _hasLoadedFiles.value = false
             _error.value = null
             _scanSource.value = null
-            _scanDurationMillis.value = null
+            _sambaDurationMillis.value = null
+            _dbDurationMillis.value = null
+            stopHighlighting()
+            _highlightedIndex.value = null
             
             // Wait 1 second
             kotlinx.coroutines.delay(1000)
             
             // Start scanning
             _isScanning.value = true
-            val startTime = System.currentTimeMillis()
             
             try {
-                fileRepository.scanAndSave()
+                val metrics = fileRepository.scanAndSave()
                 _scanSource.value = "Samba"
                 
-                val duration = System.currentTimeMillis() - startTime
-                _scanDurationMillis.value = duration
+                _sambaDurationMillis.value = metrics.sambaDuration
+                _dbDurationMillis.value = metrics.dbDuration
                 
                 // Show files
                 _hasLoadedFiles.value = true
@@ -77,42 +95,11 @@ class MainViewModel(
         }
     }
     
-    fun loadFromDb() {
-        viewModelScope.launch {
-            // Clear list visually
-            _hasLoadedFiles.value = false
-            _error.value = null
-            _scanSource.value = null
-            _scanDurationMillis.value = null
-            
-            // Wait 1 second
-            kotlinx.coroutines.delay(1000)
-            
-            // Start loading
-            _isScanning.value = true
-            val startTime = System.currentTimeMillis()
-            
-            try {
-                // Just load from DB (files flow will update automatically)
-                _scanSource.value = "Database"
-                
-                val duration = System.currentTimeMillis() - startTime
-                _scanDurationMillis.value = duration
-                
-                // Show files
-                _hasLoadedFiles.value = true
-            } catch (e: Exception) {
-                _error.value = e.message ?: "Unknown error"
-            } finally {
-                _isScanning.value = false
-            }
-        }
-    }
-
     fun clearDb() {
         viewModelScope.launch {
             fileRepository.clearAll()
-            _scanDurationMillis.value = null
+            _sambaDurationMillis.value = null
+            _dbDurationMillis.value = null
             _scanSource.value = null
             _hasLoadedFiles.value = false
             stopHighlighting()
@@ -126,25 +113,24 @@ class MainViewModel(
         highlightingJob = viewModelScope.launch {
             _isHighlighting.value = true
             
-            // Resume from saved index or start at 0
-            var currentIndex = userPreferencesRepository.getHighlightedIndex()
-            if (currentIndex < 0) currentIndex = 0
-            
-            // If we are already past the end (e.g. file list changed), reset to 0
-            val currentFiles = files.value
-            if (currentFiles.isNotEmpty() && currentIndex >= currentFiles.size) {
-                 currentIndex = 0
-            }
-
-            while (isActive && currentFiles.isNotEmpty()) {
-                _highlightedIndex.value = currentIndex
-                userPreferencesRepository.saveHighlightedIndex(currentIndex)
+            // Loop while active and files exist
+            while (isActive) {
+                val currentFiles = files.value
+                if (currentFiles.isEmpty()) {
+                    stopHighlighting()
+                    break
+                }
                 
+                // Highlight the first item (since list shrinks)
+                _highlightedIndex.value = 0
+                
+                // Wait delay (simulating viewing/processing)
                 kotlinx.coroutines.delay(500)
                 
-                currentIndex++
-                if (currentIndex >= currentFiles.size) {
-                    currentIndex = 0
+                // Mark current item as viewed
+                val currentFile = currentFiles.firstOrNull()
+                if (currentFile != null) {
+                    fileRepository.markAsViewed(currentFile)
                 }
             }
         }
@@ -153,5 +139,6 @@ class MainViewModel(
     fun stopHighlighting() {
         highlightingJob?.cancel()
         _isHighlighting.value = false
+        _highlightedIndex.value = null
     }
 }

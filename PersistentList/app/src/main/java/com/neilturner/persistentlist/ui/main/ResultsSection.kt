@@ -25,6 +25,7 @@ fun ResultsSection(
     hasLoadedFiles: Boolean,
     isScanning: Boolean,
     highlightedIndex: Int?,
+    viewedCount: Int,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -55,9 +56,9 @@ fun ResultsSection(
                 state = listState,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                itemsIndexed(files) { index, file ->
+                itemsIndexed(files, key = { _, file -> file }) { index, file ->
                     TvFileItem(
-                        fileNumber = index + 1,
+                        fileNumber = index + 1 + viewedCount,
                         fileName = file,
                         isHighlighted = index == highlightedIndex,
                         onClick = { /* Handle click if needed */ }

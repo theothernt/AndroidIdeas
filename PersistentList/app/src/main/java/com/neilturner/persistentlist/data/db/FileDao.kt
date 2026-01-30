@@ -8,15 +8,21 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FileDao {
-    @Query("SELECT * FROM files")
+    @Query("SELECT * FROM files WHERE viewed = 0")
     fun getAllFiles(): Flow<List<FileEntity>>
 
     @Query("SELECT COUNT(*) FROM files")
     suspend fun getCount(): Int
+
+    @Query("SELECT COUNT(*) FROM files WHERE viewed = 1")
+    fun getViewedCount(): Flow<Int>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(files: List<FileEntity>)
 
     @Query("DELETE FROM files")
     suspend fun deleteAll()
+
+    @Query("UPDATE files SET viewed = :viewed WHERE uri = :uri")
+    suspend fun updateViewedStatus(uri: String, viewed: Boolean)
 }

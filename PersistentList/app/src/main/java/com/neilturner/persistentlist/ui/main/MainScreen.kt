@@ -19,13 +19,15 @@ import org.koin.androidx.compose.koinViewModel
 fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
     val files by viewModel.files.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
-    val scanDuration by viewModel.scanDurationMillis.collectAsState()
+    val sambaDuration by viewModel.sambaDurationMillis.collectAsState()
+    val dbDuration by viewModel.dbDurationMillis.collectAsState()
     val scanSource by viewModel.scanSource.collectAsState()
     val error by viewModel.error.collectAsState()
     val hasLoadedFiles by viewModel.hasLoadedFiles.collectAsState()
     
     val highlightedIndex by viewModel.highlightedIndex.collectAsState()
     val isHighlighting by viewModel.isHighlighting.collectAsState()
+    val viewedCount by viewModel.viewedCount.collectAsState()
     
     val firstButtonFocusRequester = remember { FocusRequester() }
     
@@ -41,13 +43,13 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
     ) {
         ControlsSection(
             onLoadFromSamba = { viewModel.loadFromSamba() },
-            onLoadFromDb = { viewModel.loadFromDb() },
             onClearDb = { viewModel.clearDb() },
             onStartHighlighting = { viewModel.startHighlighting() },
             onStopHighlighting = { viewModel.stopHighlighting() },
             isScanning = isScanning,
             isHighlighting = isHighlighting,
-            scanDuration = scanDuration,
+            sambaDuration = sambaDuration,
+            dbDuration = dbDuration,
             scanSource = scanSource,
             fileCount = files.size,
             focusRequester = firstButtonFocusRequester,
@@ -60,6 +62,7 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             hasLoadedFiles = hasLoadedFiles,
             isScanning = isScanning,
             highlightedIndex = highlightedIndex,
+            viewedCount = viewedCount,
             modifier = Modifier.weight(0.7f)
         )
     }

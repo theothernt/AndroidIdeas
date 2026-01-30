@@ -32,13 +32,13 @@ import androidx.tv.material3.Text
 @Composable
 fun ControlsSection(
     onLoadFromSamba: () -> Unit,
-    onLoadFromDb: () -> Unit,
     onClearDb: () -> Unit,
     onStartHighlighting: () -> Unit,
     onStopHighlighting: () -> Unit,
     isScanning: Boolean,
     isHighlighting: Boolean,
-    scanDuration: Long?,
+    sambaDuration: Long?,
+    dbDuration: Long?,
     scanSource: String?,
     fileCount: Int,
     focusRequester: FocusRequester,
@@ -70,9 +70,9 @@ fun ControlsSection(
 	    )
 
 	    Spacer(modifier = Modifier.height(24.dp))
-        // Load from Samba button
+        // Reload image list button
         TvButton(
-            text = "Load from Samba",
+            text = "Reload image list",
             icon = Icons.Default.Refresh,
             onClick = onLoadFromSamba,
             modifier = Modifier.focusRequester(focusRequester)
@@ -80,17 +80,8 @@ fun ControlsSection(
 
         Spacer(modifier = Modifier.height(12.dp))
         
-        // Load from DB button
         TvButton(
-            text = "Load from DB",
-            icon = Icons.Default.Refresh,
-            onClick = onLoadFromDb
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        TvButton(
-            text = "Clear DB",
+            text = "Clear list",
             icon = Icons.Default.Delete,
             onClick = onClearDb
         )
@@ -114,13 +105,23 @@ fun ControlsSection(
                     fontSize = 14.sp
                 )
             }
-        } else if (scanDuration != null) {
-            Text(
-                text = "Last scan: $scanDuration ms",
-                color = Color.White,
-                fontSize = 14.sp,
-                modifier = Modifier.padding(vertical = 2.dp)
-            )
+        } else {
+            if (sambaDuration != null) {
+                Text(
+                    text = "Samba scan: ${sambaDuration}ms",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(vertical = 2.dp)
+                )
+            }
+            if (dbDuration != null) {
+                Text(
+                    text = "DB write/load: ${dbDuration}ms",
+                    color = Color.Gray,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(vertical = 2.dp)
+                )
+            }
             if (scanSource != null) {
                 Text(
                     text = "Source: $scanSource",
