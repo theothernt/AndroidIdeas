@@ -6,37 +6,54 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
+import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.LoadControl
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import androidx.media3.exoplayer.upstream.DefaultAllocator
 import androidx.media3.ui.compose.PlayerSurface
 import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
 import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
+import com.neilturner.fadeloop.data.cache.VideoCacheManager
 import com.neilturner.fadeloop.data.model.Video
+import com.neilturner.fadeloop.ui.common.LocationOverlay
+import com.neilturner.fadeloop.ui.common.MemoryMonitor
+import com.neilturner.fadeloop.ui.common.TimeRemainingOverlay
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.min
+import org.koin.compose.koinInject
 
 private const val CROSS_FADE_DURATION_MS = 2000
 private const val PRELOAD_BUFFER_MS = 5000L // Prepare next video 5s before current ends
@@ -56,14 +73,49 @@ fun VideoPlayer(
     if (videos.isEmpty()) return
 
     val context = LocalContext.current
+    val cacheManager: VideoCacheManager = koinInject()
     
     LaunchedEffect(Unit) {
         Log.d(TAG, "Initializing VideoPlayer with ${videos.size} videos. useSurfaceView=$useSurfaceView, PRELOAD_AT_END=$PRELOAD_AT_END, USE_MINIMAL_BUFFER=$USE_MINIMAL_BUFFER")
     }
 
+    // Technical Overlays visibility state
+    var showTechnicalOverlays by remember { mutableStateOf(false) }
+
+    // Cache Data Source Factory
+    val cacheDataSourceFactory = remember {
+        CacheDataSource.Factory()
+            .setCache(cacheManager.simpleCache)
+            .setUpstreamDataSourceFactory(DefaultHttpDataSource.Factory())
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
+            .setEventListener(object : CacheDataSource.EventListener {
+                private var lastLogTime = 0L
+                override fun onCachedBytesRead(cacheSizeBytes: Long, cachedBytesRead: Long) {
+                    val now = System.currentTimeMillis()
+                    val totalMetaBytes = cachedBytesRead / (1024 * 1024)
+
+                    if (now - lastLogTime > 5000) { // Log every 5 seconds during playback
+                        Log.d(TAG, "Playing from Cache... (Cache item size: $totalMetaBytes MB)")
+                        lastLogTime = now
+                    }
+                }
+
+                override fun onCacheIgnored(reason: Int) {
+                    Log.w(TAG, "Cache Ignored. Reason: $reason")
+                }
+            })
+    }
+
     // Startup Fade State
     val startupBlackAlpha = remember { Animatable(1f) }
     var hasStartedPlayback by remember { mutableStateOf(false) }
+
+    // Time Remaining State
+    var remainingSeconds by remember { mutableLongStateOf(0L) }
+
+    // Location Overlay State
+    var locationText by remember { mutableStateOf("") }
+    var showLocation by remember { mutableStateOf(false) }
 
     // Helper to create LoadControl
     fun createLoadControl(): LoadControl {
@@ -94,6 +146,7 @@ fun VideoPlayer(
     // Initialize two players for cross-fading
     val player1 = remember {
         ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(cacheDataSourceFactory))
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
             .setLoadControl(createLoadControl())
             .build()
@@ -114,6 +167,7 @@ fun VideoPlayer(
     }
     val player2 = remember {
         ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(cacheDataSourceFactory))
             .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
             .setLoadControl(createLoadControl())
             .build()
@@ -162,7 +216,7 @@ fun VideoPlayer(
 
     // Initial setup
     LaunchedEffect(Unit) {
-        Log.d(TAG, "Initial Setup Launched")
+        Log.d(TAG, "Initial Setup Launched. Current Cache Size: ${cacheManager.getUsedSpace() / (1024 * 1024)} MB")
         // Prepare Player 1 with first video (Immediate)
         preparePlayer(player1, videos[0].url)
         player1.playWhenReady = true
@@ -220,8 +274,33 @@ fun VideoPlayer(
         // So we reset this flag based on our target behavior.
         isNextPlayerPrepared = !PRELOAD_AT_END 
 
+        // Update location for the new video
+        launch {
+            val video = videos[currentVideoIndex]
+            if (video.title.isNotEmpty()) {
+                locationText = video.title
+                // Wait a bit for the new video to be visible before sliding up the text
+                delay(1000) 
+                showLocation = true
+            } else {
+                showLocation = false
+            }
+        }
+
+        var lastCacheLogTime = 0L
+
         while (true) {
             delay(100) // Poll frequency
+            
+            // Log cache size every 10 seconds
+            val now = System.currentTimeMillis()
+            if (now - lastCacheLogTime > 10000) {
+                val cacheSizeMb = cacheManager.getUsedSpace() / (1024 * 1024)
+                val currentUrl = videos[currentVideoIndex].url
+                val cachedPercent = cacheManager.getCachedPercentage(currentUrl)
+                Log.d(TAG, "Current Cache Size: $cacheSizeMb MB. Current Video Cached: $cachedPercent%")
+                lastCacheLogTime = now
+            }
             
             val duration = activePlayer.duration
             val position = activePlayer.currentPosition
@@ -235,6 +314,9 @@ fun VideoPlayer(
                 val logicalEnd = if (videoLimit < duration) videoLimit else duration
                 val remaining = logicalEnd - position
                 
+                // Update Time Remaining State
+                remainingSeconds = remaining / 1000
+
                 // 1. Check for Preload (Only if PRELOAD_AT_END is true)
                 if (PRELOAD_AT_END && !isCrossFading && !isNextPlayerPrepared && remaining <= PRELOAD_BUFFER_MS) {
                     Log.d(TAG, "Preload Triggered (End Mode). Remaining: $remaining")
@@ -249,6 +331,9 @@ fun VideoPlayer(
                 if (!isCrossFading && remaining <= 200) {
                     Log.d(TAG, "Transition Triggered. Remaining: $remaining")
                     isCrossFading = true
+
+                    // Fade out location when transition starts
+                    showLocation = false
                     
                     // Pause the finishing video to hold the last frame
                     activePlayer.pause()
@@ -291,12 +376,11 @@ fun VideoPlayer(
                  if (!PRELOAD_AT_END) {
                      val nextNextIndex = (currentVideoIndex + 2) % videos.size
                      val videoUrl = videos[nextNextIndex].url
-                     val playerToPrepare = activePlayer
                      scope.launch {
                          Log.d(TAG, "Waiting 4s before preparing player for next video (Legacy Mode)...")
                          delay(4000)
-                         preparePlayer(playerToPrepare, videoUrl)
-                         playerToPrepare.playWhenReady = false
+                         preparePlayer(activePlayer, videoUrl)
+                         activePlayer.playWhenReady = false
                      }
                  }
                  
@@ -313,6 +397,16 @@ fun VideoPlayer(
         modifier = modifier
             .fillMaxSize()
             .background(Color.Black)
+            .focusable()
+            .onKeyEvent { keyEvent ->
+                if (keyEvent.type == KeyEventType.KeyUp && 
+                    (keyEvent.key == Key.DirectionCenter || keyEvent.key == Key.Enter)) {
+                    showTechnicalOverlays = !showTechnicalOverlays
+                    true
+                } else {
+                    false
+                }
+            }
     ) {
         // We use zIndex to control layering.
         // TextureView (Fade): The one that is "fading in" (nextPlayer) must be on TOP of the "finishing" (activePlayer).
@@ -371,5 +465,35 @@ fun VideoPlayer(
                     .background(Color.Black)
             )
         }
+
+        // Technical Overlays
+        if (showTechnicalOverlays) {
+            // Time Remaining Overlay
+            TimeRemainingOverlay(
+                remainingSeconds = remainingSeconds,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(16.dp)
+                    .zIndex(200f)
+            )
+
+            // Memory Monitor
+            MemoryMonitor(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .zIndex(200f)
+            )
+        }
+
+        // Location Overlay
+        LocationOverlay(
+            locationText = locationText,
+            isVisible = showLocation,
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(16.dp)
+                .zIndex(200f)
+        )
     }
 }

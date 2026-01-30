@@ -1,0 +1,4 @@
+<resources>
+
+    <style name="Theme.VideoThumbnails" parent="Theme.AppCompat.DayNight.NoActionBar" />
+</resources>

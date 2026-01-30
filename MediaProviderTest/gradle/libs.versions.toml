@@ -3,13 +3,13 @@ agp = "9.0.0"
 kotlin = "2.3.0"
 coreKtx = "1.17.0"
 appcompat = "1.7.1"
-composeBom = "2026.01.00"
+composeBom = "2026.01.01"
 tvFoundation = "1.0.0-alpha12"
 tvMaterial = "1.0.1"
 lifecycleRuntimeKtx = "2.10.0"
-activityCompose = "1.12.2"
+activityCompose = "1.12.3"
 coil = "3.3.0"
-media3 = "1.9.0"
+media3 = "1.9.1"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }

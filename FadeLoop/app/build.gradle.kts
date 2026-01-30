@@ -54,6 +54,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.activity.compose)
     implementation(libs.media3.exoplayer)
+    implementation(libs.media3.database)
+    implementation(libs.media3.datasource)
     implementation(libs.media3.ui)
     implementation(libs.media3.ui.compose)
     implementation(libs.media3.ui.compose.material3)
