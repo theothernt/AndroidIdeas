@@ -56,24 +56,6 @@ class MainViewModel(private val fileRepository: FileRepository) : ViewModel() {
         }
     }
 
-    fun scanFiles() {
-        viewModelScope.launch {
-            _isScanning.value = true
-            _error.value = null
-            _scanSource.value = null 
-            val startTime = System.currentTimeMillis()
-            try {
-                fileRepository.scanAndSave()
-                _scanSource.value = "Samba"
-                _scanDurationMillis.value = System.currentTimeMillis() - startTime
-            } catch (e: Exception) {
-                _error.value = e.message ?: "Unknown error"
-            } finally {
-                _isScanning.value = false
-            }
-        }
-    }
-
     fun clearDb() {
         viewModelScope.launch {
             fileRepository.clearAll()
