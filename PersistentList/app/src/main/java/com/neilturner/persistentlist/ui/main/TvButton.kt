@@ -32,12 +32,14 @@ fun TvButton(
 	text: String,
 	icon: ImageVector,
 	onClick: () -> Unit,
+	enabled: Boolean = true,
 	modifier: Modifier = Modifier
 ) {
     var isFocused by remember { mutableStateOf(false) }
     
     Surface(
         onClick = onClick,
+        enabled = enabled,
         modifier = modifier
             .fillMaxWidth()
             .onFocusChanged { isFocused = it.isFocused },
@@ -45,10 +47,11 @@ fun TvButton(
             shape = RoundedCornerShape(8.dp)
         ),
         colors = ClickableSurfaceDefaults.colors(
-	        containerColor = Color(0xFF1E1E1E),
+	        containerColor = if (enabled) Color(0xFF1E1E1E) else Color(0xFF1E1E1E).copy(alpha = 0.5f),
 	        focusedContainerColor = Color.White,
-	        contentColor = Color.White,
-	        focusedContentColor = Color.Black),
+	        contentColor = if (enabled) Color.White else Color.Gray,
+	        focusedContentColor = Color.Black
+        ),
         scale = ClickableSurfaceDefaults.scale(
             focusedScale = 1.0f
         )

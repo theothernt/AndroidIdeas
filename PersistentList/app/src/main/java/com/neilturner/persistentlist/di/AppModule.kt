@@ -4,6 +4,7 @@ import androidx.room.Room
 import com.neilturner.persistentlist.data.FileRepository
 import com.neilturner.persistentlist.data.SmbRepository
 import com.neilturner.persistentlist.data.SmbRepositoryImpl
+import com.neilturner.persistentlist.data.UserPreferencesRepository
 import com.neilturner.persistentlist.data.db.AppDatabase
 import com.neilturner.persistentlist.ui.main.MainViewModel
 import org.koin.android.ext.koin.androidContext
@@ -21,5 +22,6 @@ val appModule = module {
     single { get<AppDatabase>().fileDao() }
     single<SmbRepository> { SmbRepositoryImpl() }
     single { FileRepository(get(), get()) }
-    viewModel { MainViewModel(get()) }
+    single { UserPreferencesRepository(androidContext()) }
+    viewModel { MainViewModel(get(), get()) }
 }

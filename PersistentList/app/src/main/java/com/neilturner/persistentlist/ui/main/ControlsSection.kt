@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
@@ -25,13 +27,17 @@ import androidx.compose.ui.unit.sp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
 
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun ControlsSection(
     onLoadFromSamba: () -> Unit,
     onLoadFromDb: () -> Unit,
     onClearDb: () -> Unit,
+    onStartHighlighting: () -> Unit,
+    onStopHighlighting: () -> Unit,
     isScanning: Boolean,
+    isHighlighting: Boolean,
     scanDuration: Long?,
     scanSource: String?,
     fileCount: Int,
@@ -40,11 +46,30 @@ fun ControlsSection(
 ) {
     Column(
         modifier = modifier
-            .fillMaxHeight()
-            .padding(16.dp),
+	        .fillMaxHeight()
+	        .padding(16.dp),
         verticalArrangement = Arrangement.Top,
         horizontalAlignment = Alignment.Start
     ) {
+	    TvButton(
+		    text = "Start",
+		    icon = Icons.Default.PlayArrow,
+		    onClick = onStartHighlighting,
+		    enabled = !isScanning && !isHighlighting,
+		    modifier = Modifier.focusRequester(focusRequester)
+	    )
+
+	    Spacer(modifier = Modifier.height(12.dp))
+
+	    // Stop button
+	    TvButton(
+		    text = "Stop",
+		    icon = Icons.Default.Close,
+		    onClick = onStopHighlighting,
+		    enabled = isScanning || isHighlighting
+	    )
+
+	    Spacer(modifier = Modifier.height(24.dp))
         // Load from Samba button
         TvButton(
             text = "Load from Samba",

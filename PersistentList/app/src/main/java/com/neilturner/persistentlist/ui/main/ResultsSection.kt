@@ -24,6 +24,7 @@ fun ResultsSection(
     files: List<String>,
     hasLoadedFiles: Boolean,
     isScanning: Boolean,
+    highlightedIndex: Int?,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -41,6 +42,14 @@ fun ResultsSection(
             }
         } else {
             val listState = rememberLazyListState()
+            
+            // Auto-scroll to highlighted item
+            if (highlightedIndex != null) {
+                androidx.compose.runtime.LaunchedEffect(highlightedIndex) {
+                    listState.animateScrollToItem(highlightedIndex)
+                }
+            }
+            
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 state = listState,
@@ -50,6 +59,7 @@ fun ResultsSection(
                     TvFileItem(
                         fileNumber = index + 1,
                         fileName = file,
+                        isHighlighted = index == highlightedIndex,
                         onClick = { /* Handle click if needed */ }
                     )
                 }

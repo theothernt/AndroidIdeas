@@ -20,6 +20,7 @@ import androidx.tv.material3.Text
 fun TvFileItem(
     fileNumber: Int,
     fileName: String,
+    isHighlighted: Boolean = false,
     onClick: () -> Unit
 ) {
     Surface(
@@ -29,7 +30,7 @@ fun TvFileItem(
             shape = RoundedCornerShape(6.dp)
         ),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Color(0xFF1E1E1E),
+            containerColor = if (isHighlighted) Color(0xFF009688) else Color(0xFF1E1E1E),
             focusedContainerColor = Color.White,
             contentColor = Color.White,
             focusedContentColor = Color.Black

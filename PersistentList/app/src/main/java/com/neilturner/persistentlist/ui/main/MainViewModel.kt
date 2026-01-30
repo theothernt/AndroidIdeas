@@ -10,7 +10,22 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class MainViewModel(private val fileRepository: FileRepository) : ViewModel() {
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
+import com.neilturner.persistentlist.data.UserPreferencesRepository
+
+class MainViewModel(
+    private val fileRepository: FileRepository,
+    private val userPreferencesRepository: UserPreferencesRepository
+) : ViewModel() {
+
+    private var highlightingJob: Job? = null
+
+    private val _highlightedIndex = MutableStateFlow<Int?>(null)
+    val highlightedIndex: StateFlow<Int?> = _highlightedIndex.asStateFlow()
+
+    private val _isHighlighting = MutableStateFlow(false)
+    val isHighlighting: StateFlow<Boolean> = _isHighlighting.asStateFlow()
 
     private val _isScanning = MutableStateFlow(false)
     val isScanning: StateFlow<Boolean> = _isScanning.asStateFlow()
@@ -100,6 +115,43 @@ class MainViewModel(private val fileRepository: FileRepository) : ViewModel() {
             _scanDurationMillis.value = null
             _scanSource.value = null
             _hasLoadedFiles.value = false
+            stopHighlighting()
+            _highlightedIndex.value = null
         }
+    }
+
+    fun startHighlighting() {
+        if (_isHighlighting.value) return
+
+        highlightingJob = viewModelScope.launch {
+            _isHighlighting.value = true
+            
+            // Resume from saved index or start at 0
+            var currentIndex = userPreferencesRepository.getHighlightedIndex()
+            if (currentIndex < 0) currentIndex = 0
+            
+            // If we are already past the end (e.g. file list changed), reset to 0
+            val currentFiles = files.value
+            if (currentFiles.isNotEmpty() && currentIndex >= currentFiles.size) {
+                 currentIndex = 0
+            }
+
+            while (isActive && currentFiles.isNotEmpty()) {
+                _highlightedIndex.value = currentIndex
+                userPreferencesRepository.saveHighlightedIndex(currentIndex)
+                
+                kotlinx.coroutines.delay(500)
+                
+                currentIndex++
+                if (currentIndex >= currentFiles.size) {
+                    currentIndex = 0
+                }
+            }
+        }
+    }
+
+    fun stopHighlighting() {
+        highlightingJob?.cancel()
+        _isHighlighting.value = false
     }
 }

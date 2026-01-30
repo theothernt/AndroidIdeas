@@ -24,6 +24,9 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
     val error by viewModel.error.collectAsState()
     val hasLoadedFiles by viewModel.hasLoadedFiles.collectAsState()
     
+    val highlightedIndex by viewModel.highlightedIndex.collectAsState()
+    val isHighlighting by viewModel.isHighlighting.collectAsState()
+    
     val firstButtonFocusRequester = remember { FocusRequester() }
     
     // Request focus on first button when screen loads
@@ -40,7 +43,10 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             onLoadFromSamba = { viewModel.loadFromSamba() },
             onLoadFromDb = { viewModel.loadFromDb() },
             onClearDb = { viewModel.clearDb() },
+            onStartHighlighting = { viewModel.startHighlighting() },
+            onStopHighlighting = { viewModel.stopHighlighting() },
             isScanning = isScanning,
+            isHighlighting = isHighlighting,
             scanDuration = scanDuration,
             scanSource = scanSource,
             fileCount = files.size,
@@ -53,6 +59,7 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
             files = files,
             hasLoadedFiles = hasLoadedFiles,
             isScanning = isScanning,
+            highlightedIndex = highlightedIndex,
             modifier = Modifier.weight(0.7f)
         )
     }
