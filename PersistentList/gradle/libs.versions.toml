@@ -11,6 +11,8 @@ activityCompose = "1.12.3"
 smbj = "0.13.0"
 koin = "4.1.1"
 slf4j = "2.0.17"
+room = "2.8.4"
+ksp = "2.3.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -28,6 +30,10 @@ androidx-tv-material = { group = "androidx.tv", name = "tv-material", version.re
 androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+
 smbj = { group = "com.hierynomus", name = "smbj", version.ref = "smbj" }
 slf4j-simple = { group = "org.slf4j", name = "slf4j-simple", version.ref = "slf4j" }
 koin-android = { group = "io.insert-koin", name = "koin-android", version.ref = "koin" }
@@ -35,5 +41,7 @@ koin-androidx-compose = { group = "io.insert-koin", name = "koin-androidx-compos
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 
