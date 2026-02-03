@@ -156,27 +156,21 @@ class MainViewModel(
         }
     }
 
-    private suspend fun resolveLocationOrModel(exif: ExifMetadata?): String? {
+    internal suspend fun resolveLocationOrModel(exif: ExifMetadata?): String? {
         if (exif == null) return null
         
         val resolveStartTime = System.currentTimeMillis()
-        var locationLabel = if (exif.latitude != null && exif.longitude != null) {
-            val address = locationHelper.getAddressFromLocation(exif.latitude, exif.longitude)
-            val coords = "(${String.format("%.4f", exif.latitude)}, ${String.format("%.4f", exif.longitude)})"
-            if (address != null) "$address $coords" else coords
+        val locationLabel = if (exif.latitude != null && exif.longitude != null) {
+            locationHelper.getAddressFromLocation(exif.latitude, exif.longitude)
         } else null
         
         if (locationLabel != null) {
             Log.d("MainViewModel", "Reverse geocoding took ${System.currentTimeMillis() - resolveStartTime}ms")
         }
 
-        if (!imageRepository.isExifEnabled()) {
-            return locationLabel
-        }
-
-        if (locationLabel != null) return locationLabel
-
         val parts = mutableListOf<String>()
+        locationLabel?.let { parts.add(it) }
+
         exif.date?.let { rawDate ->
             // EXIF date is usually "YYYY:MM:DD HH:MM:SS"
             val formattedDate = try {
@@ -186,7 +180,16 @@ class MainViewModel(
                     val month = components[1].toInt()
                     val day = components[2].toInt()
                     val monthNames = arrayOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
-                    "$day ${monthNames[month - 1]} $year"
+                    val dateOnly = "$day ${monthNames[month - 1]} $year"
+                    
+                    // Add time and offset if available
+                    val timePart = rawDate.split(" ").getOrNull(1)
+                    if (timePart != null) {
+                        val timeAndOffset = if (exif.offset != null) "$timePart (${exif.offset})" else timePart
+                        "$dateOnly $timeAndOffset"
+                    } else {
+                        dateOnly
+                    }
                 } else rawDate
             } catch (e: Exception) {
                 rawDate

@@ -15,7 +15,7 @@ class ImageRepositoryImpl(
     private val sambaProvider: SambaImageProvider
 ) : ImageRepository {
     private var useSamba = true // Default to SMB
-    private var exifEnabled = false // Default to disabled
+    private var exifEnabled = true // Default to enabled
 
     override suspend fun getImages(): List<Uri> {
         return if (useSamba) sambaProvider.getImages() else localProvider.getImages()

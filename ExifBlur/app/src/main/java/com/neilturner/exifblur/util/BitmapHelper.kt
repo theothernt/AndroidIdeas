@@ -100,8 +100,15 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
         val metadataStartTime = System.currentTimeMillis()
         return ByteArrayInputStream(headerBytes).use { stream ->
             val exifInterface = ExifInterface(stream)
+            val date = exifInterface.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
+                ?: exifInterface.getAttribute(ExifInterface.TAG_DATETIME)
+            val offset = exifInterface.getAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL)
+                ?: exifInterface.getAttribute(ExifInterface.TAG_OFFSET_TIME)
+                ?: exifInterface.getAttribute(ExifInterface.TAG_OFFSET_TIME_DIGITIZED)
+
             val meta = ExifMetadata(
-                date = exifInterface.getAttribute(ExifInterface.TAG_DATETIME),
+                date = date,
+                offset = offset,
                 latitude = exifInterface.latLong?.get(0),
                 longitude = exifInterface.latLong?.get(1)
             )

@@ -39,11 +39,16 @@ class LocalImageProvider(private val context: Context) : ImageProvider {
         try {
             context.contentResolver.openInputStream(uri)?.use { inputStream ->
                 val exifInterface = ExifInterface(inputStream)
-                val date = exifInterface.getAttribute(ExifInterface.TAG_DATETIME)
+                val date = exifInterface.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
+                    ?: exifInterface.getAttribute(ExifInterface.TAG_DATETIME)
+                val offset = exifInterface.getAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL)
+                    ?: exifInterface.getAttribute(ExifInterface.TAG_OFFSET_TIME)
+                    ?: exifInterface.getAttribute(ExifInterface.TAG_OFFSET_TIME_DIGITIZED)
                 val latLng = exifInterface.latLong
 
                 ExifMetadata(
                     date = date,
+                    offset = offset,
                     latitude = latLng?.get(0),
                     longitude = latLng?.get(1)
                 )
