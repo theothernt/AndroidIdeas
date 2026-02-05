@@ -2,7 +2,7 @@
 agp = "9.0.0"
 coreKtx = "1.17.0"
 appcompat = "1.7.1"
-kotlin = "2.3.0"
+kotlin = "2.3.10"
 composeBom = "2026.01.01"
 tvFoundation = "1.0.0-alpha12"
 tvMaterial = "1.0.1"
@@ -13,6 +13,7 @@ koin = "4.1.1"
 slf4j = "2.0.17"
 room = "2.8.4"
 ksp = "2.3.5"
+leakcanary = "3.0-alpha-8"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -38,6 +39,8 @@ smbj = { group = "com.hierynomus", name = "smbj", version.ref = "smbj" }
 slf4j-simple = { group = "org.slf4j", name = "slf4j-simple", version.ref = "slf4j" }
 koin-android = { group = "io.insert-koin", name = "koin-android", version.ref = "koin" }
 koin-androidx-compose = { group = "io.insert-koin", name = "koin-androidx-compose", version.ref = "koin" }
+
+leakcanary = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
