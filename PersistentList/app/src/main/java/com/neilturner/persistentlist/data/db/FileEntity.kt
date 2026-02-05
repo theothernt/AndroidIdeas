@@ -7,5 +7,6 @@ import androidx.room.PrimaryKey
 data class FileEntity(
     @PrimaryKey val uri: String,
     val fileName: String,
-    val viewed: Boolean = false
+    val viewed: Boolean = false,
+    val randomOrder: Double = Math.random()
 )

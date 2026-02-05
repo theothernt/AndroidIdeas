@@ -12,11 +12,11 @@ import org.koin.dsl.module
 
 val appModule = module {
     single {
-        Room.databaseBuilder(
-            androidContext(),
-            AppDatabase::class.java,
-            "persistent-list-db"
-        ).fallbackToDestructiveMigration()
+	    Room.databaseBuilder(
+		    androidContext(),
+		    AppDatabase::class.java,
+		    "persistent-list-db"
+	    ).fallbackToDestructiveMigration(false)
          .build()
     }
     single { get<AppDatabase>().fileDao() }

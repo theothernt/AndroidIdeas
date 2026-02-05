@@ -8,10 +8,7 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface FileDao {
-    @Query("SELECT * FROM files WHERE viewed = 0 ORDER BY uri")
-    fun getAllFiles(): Flow<List<FileEntity>>
-
-    @Query("SELECT * FROM files WHERE viewed = 0 ORDER BY uri LIMIT :limit OFFSET :offset")
+    @Query("SELECT * FROM files WHERE viewed = 0 ORDER BY randomOrder LIMIT :limit OFFSET :offset")
     suspend fun getBatch(limit: Int, offset: Int): List<FileEntity>
 
     @Query("SELECT COUNT(*) FROM files")
