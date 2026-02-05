@@ -2,7 +2,7 @@
 agp = "9.0.0"
 coreKtx = "1.17.0"
 appcompat = "1.7.1"
-kotlin = "2.3.0"
+kotlin = "2.3.10"
 composeBom = "2026.01.01"
 tvFoundation = "1.0.0-alpha12"
 tvMaterial = "1.0.1"
@@ -16,6 +16,7 @@ navigationCompose = "2.9.7"
 smbj = "0.13.0"
 junit = "4.13.2"
 mockk = "1.14.9"
+leakcanary = "3.0-alpha-8"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -45,6 +46,8 @@ coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp"
 smbj = { group = "com.hierynomus", name = "smbj", version.ref = "smbj" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
+
+leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
