@@ -14,21 +14,21 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
 // Reusable modifier for the technical background style
-@OptIn(ExperimentalTvMaterial3Api::class)
-fun Modifier.technicalBackground(): Modifier = composed {
-    this
-        .background(
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.6f),
-            RoundedCornerShape(4.dp)
-        )
-        .padding(horizontal = 8.dp, vertical = 4.dp)
-}
+@Composable
+fun Modifier.technicalBackground() = this
+	.alpha(0.8F)
+	.background(
+		color = Color.Black,
+		shape = RoundedCornerShape(8.dp)
+	)
+    .padding(vertical = 8.dp, horizontal = 12.dp)
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable

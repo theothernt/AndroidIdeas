@@ -6,22 +6,22 @@ class VideoRepository {
     fun getVideos(): List<Video> {
         return listOf(
             Video(
-                url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-sdr/video_inspire_florida_miami_brickell_sunset_00036.1080-sdr.mov",
+                url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-h264/video_inspire_florida_miami_brickell_sunset_00036.1080-h264.mov",
                 title = "Miami, FL - Brickell Sunset",
                 durationMs = 30000L
             ),
             Video(
-                url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-sdr/video_inspire_nevada_lasvegas_northstrip_021.1080-sdr.mov",
+                url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-h264/video_inspire_nevada_lasvegas_northstrip_021.1080-h264.mov",
                 title = "Las Vegas, NV - North Strip",
                 durationMs = 30000L
             ),
             Video(
-                url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-sdr/video_inspire_oregon_lone-ranch-beach_00015.1080-sdr.mov",
+                url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-h264/video_inspire_oregon_lone-ranch-beach_00015.1080-h264.mov",
                 title = "Lone Ranch Beach, OR",
                 durationMs = 30000L
             ),
             Video(
-                url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-sdr/video_inspire_oregon_lone-ranch-beach_00001.1080-sdr.mov",
+                url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-h264/video_inspire_oregon_lone-ranch-beach_00001.1080-h264.mov",
                 title = "Lone Ranch Beach, OR",
                 durationMs = 30000L
             ), /*
