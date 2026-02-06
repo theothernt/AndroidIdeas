@@ -1,7 +1,9 @@
-package com.neilturner.fourlayers.player
+package com.neilturner.fourlayers.ui.player
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -40,9 +42,9 @@ import com.neilturner.fourlayers.model.RendererType
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun MediaPlaylistPlayer(
-    viewModel: MediaPlaylistViewModel,
-    modifier: Modifier = Modifier
+fun MediaPlayer(
+	viewModel: MediaPlayerViewModel,
+	modifier: Modifier = Modifier
 ) {
     val state by viewModel.state.collectAsState()
     
@@ -123,8 +125,8 @@ fun MediaPlaylistPlayer(
         // Startup Loading Overlay
         androidx.compose.animation.AnimatedVisibility(
             visible = state.isLoading,
-            enter = androidx.compose.animation.fadeIn(),
-            exit = androidx.compose.animation.fadeOut(animationSpec = tween(500)),
+            enter = fadeIn(),
+            exit = fadeOut(animationSpec = tween(500)),
             modifier = Modifier.zIndex(200f) // Top-most
         ) {
             StartupOverlay()
@@ -220,7 +222,7 @@ private fun StartupOverlay() {
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        androidx.tv.material3.Text(
+        Text(
             text = "Loading...",
             color = Color.White,
             style = MaterialTheme.typography.titleMedium

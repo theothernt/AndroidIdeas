@@ -1,4 +1,4 @@
-package com.neilturner.fourlayers.player
+package com.neilturner.fourlayers.ui.player
 
 import android.content.Context
 import androidx.annotation.OptIn
@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel managing the media playlist playback with dual permanent renderers (A/B).
  */
-class MediaPlaylistViewModel(
+class MediaPlayerViewModel(
     private val context: Context
 ) : ViewModel() {
 

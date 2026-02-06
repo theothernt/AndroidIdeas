@@ -39,11 +39,5 @@ object MediaProvider {
 		    url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-h264/video_inspire_oregon_lone-ranch-beach_00015.1080-h264.mov",
 		    duration = 12_000L
 	    ),
-	    MediaItem.Video(
-		    url = "https://github.com/glouel/AerialCommunity/releases/download/mw2-1080p-h264/video_inspire_oregon_lone-ranch-beach_00001.1080-h264.mov",
-		    duration = 12_000L
-	    )
-
-
     )
 }
