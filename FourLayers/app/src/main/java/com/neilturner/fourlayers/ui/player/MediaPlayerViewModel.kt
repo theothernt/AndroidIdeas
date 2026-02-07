@@ -36,13 +36,18 @@ class MediaPlayerViewModel(
 
     // Timing constants
     private val transitionDuration = 2000L // ms for fade
+    private val minimumLoadingDuration = 2000L // ms for startup overlay
+
+    private var playbackStartTime = 0L
 
     // Jobs for cancellation
+    private var loadingDismissalJob: Job? = null
     private var imageTimerJob: Job? = null
     private var videoMonitorJob: Job? = null
     private var ramMonitorJob: Job? = null
 
     fun loadPlaylist(items: List<MediaItem>) {
+        playbackStartTime = System.currentTimeMillis()
         _state.update { it.copy(playlist = items) }
         if (items.isNotEmpty()) {
             startPlayback()
@@ -55,8 +60,13 @@ class MediaPlayerViewModel(
     }
 
     fun onMediaReady() {
-        if (_state.value.isLoading) {
-             _state.update { it.copy(isLoading = false) }
+        if (_state.value.isLoading && loadingDismissalJob == null) {
+            loadingDismissalJob = viewModelScope.launch {
+                val elapsedTime = System.currentTimeMillis() - playbackStartTime
+                val remainingTime = maxOf(0, minimumLoadingDuration - elapsedTime)
+                delay(remainingTime)
+                _state.update { it.copy(isLoading = false) }
+            }
         }
     }
 
@@ -314,6 +324,7 @@ class MediaPlayerViewModel(
     }
 
     private fun cleanup() {
+        loadingDismissalJob?.cancel()
         imageTimerJob?.cancel()
         videoMonitorJob?.cancel()
         ramMonitorJob?.cancel()

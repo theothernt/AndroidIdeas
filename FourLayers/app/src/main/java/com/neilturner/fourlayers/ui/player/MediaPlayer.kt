@@ -1,5 +1,6 @@
 package com.neilturner.fourlayers.ui.player
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -7,9 +8,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -104,7 +109,7 @@ fun MediaPlayer(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(32.dp)
+                .padding(8.dp)
                 .zIndex(100f), // Always on top
             contentAlignment = Alignment.TopEnd
         ) {
@@ -123,10 +128,10 @@ fun MediaPlayer(
         }
         
         // Startup Loading Overlay
-        androidx.compose.animation.AnimatedVisibility(
+        AnimatedVisibility(
             visible = state.isLoading,
             enter = fadeIn(),
-            exit = fadeOut(animationSpec = tween(500)),
+            exit = fadeOut(animationSpec = tween(1000)),
             modifier = Modifier.zIndex(200f) // Top-most
         ) {
             StartupOverlay()
@@ -214,6 +219,7 @@ private fun VideoLayer(
 /**
  * Startup loading overlay.
  */
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun StartupOverlay() {
     Box(
@@ -222,10 +228,18 @@ private fun StartupOverlay() {
             .background(Color.Black),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = "Loading...",
-            color = Color.White,
-            style = MaterialTheme.typography.titleMedium
-        )
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Loading...",
+                color = Color.White,
+                style = MaterialTheme.typography.titleMedium
+            )
+        }
     }
 }
