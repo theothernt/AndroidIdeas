@@ -1,5 +1,6 @@
 package com.neilturner.twopane.ui.theme
 
+import androidx.compose.material3.Typography as Material3Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -34,3 +35,5 @@ val Typography = Typography(
     )
     */
 )
+
+val MobileTypography = Material3Typography()
