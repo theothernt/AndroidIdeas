@@ -1,5 +1,6 @@
 package com.neilturner.twopane.ui.mainmenu
 
+import android.content.res.Configuration
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -7,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.safeDrawingPadding
@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.neilturner.twopane.data.MainMenuItem
@@ -35,8 +36,11 @@ fun MobileMainMenu(
     modifier: Modifier = Modifier,
     onItemClick: (MainMenuItem) -> Unit,
 ) {
+    val configuration = LocalConfiguration.current
+    val columnCount = if (configuration.orientation == Configuration.ORIENTATION_LANDSCAPE) 2 else 1
+
     LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
+        columns = GridCells.Fixed(columnCount),
         modifier = modifier
             .fillMaxSize()
             .safeDrawingPadding()
@@ -60,7 +64,6 @@ private fun MobileMenuTile(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHighest),
         modifier = Modifier
             .fillMaxWidth()
-            .height(96.dp)
             .clickable(onClick = onClick)
     ) {
         Row(
@@ -80,7 +83,7 @@ private fun MobileMenuTile(
                 Text(
                     text = item.title,
                     style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (item.subtitle.isNotBlank()) {
@@ -88,7 +91,7 @@ private fun MobileMenuTile(
                         text = item.subtitle,
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
+                        maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
                 }
