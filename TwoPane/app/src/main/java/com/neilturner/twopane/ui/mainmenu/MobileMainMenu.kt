@@ -16,6 +16,9 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PermMedia
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -26,8 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.neilturner.twopane.data.MainMenuItem
+import com.neilturner.twopane.ui.theme.TwoPaneTheme
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -103,5 +108,35 @@ private fun MobileMenuTile(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+fun MobileMainMenuPreview() {
+    TwoPaneTheme {
+        MobileMainMenu(
+            items = listOf(
+                MainMenuItem(
+                    id = "media",
+                    title = "Media",
+                    subtitle = "Browse and manage media",
+                    icon = Icons.Default.PermMedia
+                ),
+                MainMenuItem(
+                    id = "settings",
+                    title = "Settings",
+                    subtitle = "App preferences",
+                    icon = Icons.Default.Settings
+                ),
+                MainMenuItem(
+                    id = "about",
+                    title = "About",
+                    subtitle = "Version and information",
+                    icon = Icons.Default.Info
+                )
+            ),
+            onItemClick = {}
+        )
     }
 }

@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PermMedia
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,6 +24,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -29,6 +33,7 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.neilturner.twopane.data.MainMenuItem
+import com.neilturner.twopane.ui.theme.TwoPaneTheme
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -126,5 +131,35 @@ private fun TvMenuRow(
                 tint = if (isFocused) MaterialTheme.colorScheme.inverseOnSurface else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+    }
+}
+
+@Preview(device = "id:tv_1080p")
+@Composable
+fun TvMainMenuPreview() {
+    TwoPaneTheme {
+        TvMainMenu(
+            items = listOf(
+                MainMenuItem(
+                    id = "media",
+                    title = "Media",
+                    subtitle = "Browse and manage media",
+                    icon = Icons.Default.PermMedia
+                ),
+                MainMenuItem(
+                    id = "settings",
+                    title = "Settings",
+                    subtitle = "App preferences",
+                    icon = Icons.Default.Settings
+                ),
+                MainMenuItem(
+                    id = "about",
+                    title = "About",
+                    subtitle = "Version and information",
+                    icon = Icons.Default.Info
+                )
+            ),
+            onItemClick = {}
+        )
     }
 }
