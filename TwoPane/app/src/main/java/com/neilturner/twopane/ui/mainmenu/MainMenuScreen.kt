@@ -12,6 +12,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 fun MainMenuScreen(
     viewModel: MainMenuViewModel = viewModel(),
+    onNavigateToMedia: () -> Unit,
 ) {
     val context = LocalContext.current
     val isTv = context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
@@ -23,7 +24,7 @@ fun MainMenuScreen(
             items = items,
             modifier = Modifier.fillMaxSize(),
             onItemClick = { item ->
-                // Handle item click
+                if (item.id == "media") onNavigateToMedia()
             }
         )
     } else {
@@ -31,7 +32,7 @@ fun MainMenuScreen(
             items = items,
             modifier = Modifier.fillMaxSize(),
             onItemClick = { item ->
-                // Handle item click
+                if (item.id == "media") onNavigateToMedia()
             }
         )
     }
