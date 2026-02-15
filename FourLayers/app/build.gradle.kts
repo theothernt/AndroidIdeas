@@ -1,6 +1,7 @@
 plugins {
 	alias(libs.plugins.android.application)
 	alias(libs.plugins.kotlin.compose)
+	alias(libs.plugins.kotlinter)
 }
 
 android {
@@ -66,6 +67,7 @@ dependencies {
 	implementation(libs.coil.network.okhttp)
 	implementation(libs.koin.android)
 	implementation(libs.koin.compose)
+	debugImplementation(libs.leakcanary)
 
 	androidTestImplementation(platform(libs.androidx.compose.bom))
 	androidTestImplementation(libs.androidx.compose.ui.test.junit4)

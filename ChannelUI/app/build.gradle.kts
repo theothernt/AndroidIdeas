@@ -1,6 +1,7 @@
 plugins {
 	alias(libs.plugins.android.application)
 	alias(libs.plugins.kotlin.compose)
+	alias(libs.plugins.kotlinter)
 }
 
 android {
@@ -65,4 +66,5 @@ dependencies {
 	implementation(libs.koin.core)
 	implementation(libs.koin.android)
 	implementation(libs.koin.androidx.compose)
+	debugImplementation(libs.leakcanary)
 }

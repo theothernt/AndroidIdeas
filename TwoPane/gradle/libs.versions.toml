@@ -11,8 +11,8 @@ lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.12.4"
 navigation3 = "1.1.0-alpha04"
 kotlinxSerialization = "1.10.0"
-leakcanary = "2.14"
-ktlint = "14.0.1"
+leakcanary = "3.0-alpha-8"
+kotlinter = "5.4.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -40,5 +40,5 @@ leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-and
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
-ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
+kotlinter = { id = "org.jmailen.kotlinter", version.ref = "kotlinter" }
 

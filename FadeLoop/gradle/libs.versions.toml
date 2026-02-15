@@ -1,16 +1,17 @@
 [versions]
-agp = "9.0.0"
+agp = "9.0.1"
 coreKtx = "1.17.0"
 appcompat = "1.7.1"
 kotlin = "2.3.10"
-composeBom = "2026.01.01"
+composeBom = "2026.02.00"
 tvFoundation = "1.0.0-alpha12"
 tvMaterial = "1.0.1"
 lifecycleRuntimeKtx = "2.10.0"
-activityCompose = "1.12.3"
-media3 = "1.9.1"
+activityCompose = "1.12.4"
+media3 = "1.9.2"
 koin = "4.1.1"
 leakcanary = "3.0-alpha-8"
+kotlinter = "5.4.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,3 +47,4 @@ leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-and
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlinter = { id = "org.jmailen.kotlinter", version.ref = "kotlinter" }
