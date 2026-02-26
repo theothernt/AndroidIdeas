@@ -1,4 +1,4 @@
-package com.neilturner.twopane.ui.media
+package com.neilturner.twopane.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -34,7 +34,7 @@ import com.neilturner.twopane.ui.theme.TwoPaneTheme
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MobileMediaScreen(
+fun MobileSettingsScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit
 ) {
@@ -44,7 +44,7 @@ fun MobileMediaScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Media") },
+                title = { Text("Settings") },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -58,11 +58,11 @@ fun MobileMediaScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .padding(16.dp),
+                .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Mobile Media Options",
+                text = "Options",
                 style = MaterialTheme.typography.headlineSmall,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
@@ -108,8 +108,8 @@ fun MobileMediaScreen(
 
 @Preview(showBackground = true)
 @Composable
-fun MobileMediaScreenPreview() {
+fun MobileSettingsScreenPreview() {
     TwoPaneTheme {
-        MobileMediaScreen(onBack = {})
+        MobileSettingsScreen(onBack = {})
     }
 }

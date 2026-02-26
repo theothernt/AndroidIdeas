@@ -1,27 +1,44 @@
 package com.neilturner.twopane.ui.media
 
-import android.content.pm.PackageManager
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MediaScreen(
     onBack: () -> Unit
 ) {
-    val context = LocalContext.current
-    val isTv = context.packageManager.hasSystemFeature(PackageManager.FEATURE_LEANBACK)
-
-    if (isTv) {
-        TvMediaScreen(
-            modifier = Modifier.fillMaxSize(),
-            onBack = onBack
-        )
-    } else {
-        MobileMediaScreen(
-            modifier = Modifier.fillMaxSize(),
-            onBack = onBack
-        )
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("Media") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                }
+            )
+        }
+    ) { paddingValues ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Media content will appear here.")
+        }
     }
 }

@@ -11,6 +11,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 class MainMenuViewModel : ViewModel() {
+    private val _selectedItemId = MutableStateFlow<String?>("media")
+    val selectedItemId: StateFlow<String?> = _selectedItemId.asStateFlow()
+
+    fun setSelectedItem(id: String) {
+        _selectedItemId.value = id
+    }
 
     private val _items = MutableStateFlow(
         listOf(

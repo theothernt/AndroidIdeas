@@ -1,4 +1,4 @@
-package com.neilturner.twopane.ui.media
+package com.neilturner.twopane.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -28,7 +28,7 @@ import com.neilturner.twopane.ui.theme.TwoPaneTheme
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun TvMediaScreen(
+fun TvSettingsScreen(
     modifier: Modifier = Modifier,
     onBack: () -> Unit
 ) {
@@ -40,10 +40,10 @@ fun TvMediaScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(48.dp),
+            .padding(horizontal = 48.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
-        Text("TV Media Options", style = MaterialTheme.typography.headlineMedium)
+        Text("Settings", style = MaterialTheme.typography.headlineMedium)
 
         Surface(
             onClick = { checkboxChecked = !checkboxChecked },
@@ -108,8 +108,8 @@ fun TvMediaScreen(
 
 @Preview(device = "id:tv_1080p")
 @Composable
-fun TvMediaScreenPreview() {
+fun TvSettingsScreenPreview() {
     TwoPaneTheme {
-        TvMediaScreen(onBack = {})
+        TvSettingsScreen(onBack = {})
     }
 }

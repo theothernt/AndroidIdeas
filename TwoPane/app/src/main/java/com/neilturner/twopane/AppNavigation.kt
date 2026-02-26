@@ -9,4 +9,6 @@ sealed interface AppNavKey : NavKey {
     data object MainMenu : AppNavKey
     @Serializable
     data object Media : AppNavKey
+    @Serializable
+    data object Settings : AppNavKey
 }

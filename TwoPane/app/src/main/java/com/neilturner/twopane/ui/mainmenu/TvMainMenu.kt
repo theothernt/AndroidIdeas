@@ -39,13 +39,15 @@ import com.neilturner.twopane.ui.theme.TwoPaneTheme
 @Composable
 fun TvMainMenu(
     items: List<MainMenuItem>,
+    selectedItemId: String?,
     modifier: Modifier = Modifier,
     onItemClick: (MainMenuItem) -> Unit,
 ) {
-    val firstItemFocusRequester = remember { FocusRequester() }
+    val focusRequesters = remember(items) { items.associate { it.id to FocusRequester() } }
 
     LaunchedEffect(Unit) {
-        firstItemFocusRequester.requestFocus()
+        val requesterToFocus = selectedItemId?.let { focusRequesters[it] } ?: focusRequesters.values.firstOrNull()
+        requesterToFocus?.requestFocus()
     }
 
     Column(
@@ -54,16 +56,16 @@ fun TvMainMenu(
             .padding(32.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        items.chunked(2).forEachIndexed { rowIndex, rowItems ->
+        items.chunked(2).forEach { rowItems ->
             Row(
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                rowItems.forEachIndexed { colIndex, item ->
-                    val index = rowIndex * 2 + colIndex
+                rowItems.forEach { item ->
                     TvMenuRow(
                         item = item,
-                        modifier = (if (index == 0) Modifier.focusRequester(firstItemFocusRequester) else Modifier)
-                            .weight(1f),
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequesters[item.id] ?: FocusRequester()),
                         onClick = { onItemClick(item) }
                     )
                 }
@@ -159,6 +161,7 @@ fun TvMainMenuPreview() {
                     icon = Icons.Default.Info
                 )
             ),
+            selectedItemId = "media",
             onItemClick = {}
         )
     }
