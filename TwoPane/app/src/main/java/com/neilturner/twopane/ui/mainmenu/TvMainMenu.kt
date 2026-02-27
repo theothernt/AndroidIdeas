@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Info
@@ -23,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -94,7 +96,11 @@ private fun TvMenuRow(
             contentColor = MaterialTheme.colorScheme.onSurface
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = 1.02f),
-        modifier = modifier.onFocusChanged { isFocused = it.isFocused }
+        modifier = modifier
+            .onFocusChanged { isFocused = it.isFocused }
+            .pointerInput(onClick) {
+                detectTapGestures(onTap = { onClick() })
+            }
     ) {
         Row(
             modifier = Modifier.padding(20.dp),
