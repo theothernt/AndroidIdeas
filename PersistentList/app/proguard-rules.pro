@@ -19,3 +19,7 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Suppress warnings for missing optional dependencies in SMBJ
+-dontwarn org.ietf.jgss.**
+-dontwarn javax.el.**
