@@ -3,15 +3,15 @@ agp = "9.0.1"
 coreKtx = "1.17.0"
 appcompat = "1.7.1"
 kotlin = "2.3.10"
-composeBom = "2026.02.00"
+composeBom = "2026.02.01"
 tvFoundation = "1.0.0-alpha12"
 tvMaterial = "1.0.1"
 lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.12.4"
 koin = "4.1.1"
-coil = "3.3.0"
+coil = "3.4.0"
 leakcanary = "3.0-alpha-8"
-kotlinter = "5.4.0"
+kotlinter = "5.4.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
