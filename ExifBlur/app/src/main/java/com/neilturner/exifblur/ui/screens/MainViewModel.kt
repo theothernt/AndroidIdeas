@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.neilturner.exifblur.data.ExifMetadata
 import com.neilturner.exifblur.data.ImageRepository
 import com.neilturner.exifblur.util.BitmapHelper
+import com.neilturner.exifblur.util.BitmapResult
 import com.neilturner.exifblur.util.LocationHelper
 import com.neilturner.exifblur.util.RamMonitor
 import com.neilturner.exifblur.util.RamInfo
@@ -32,10 +33,15 @@ class MainViewModel(
     private var slideshowJob: Job? = null
     private var ramMonitoringJob: Job? = null
     private var loadImagesJob: Job? = null
+    private var preloadJob: Job? = null
+
+    // Cache for preloaded bitmaps: index -> BitmapResult
+    private val preloadedBitmaps = mutableMapOf<Int, BitmapResult>()
 
     companion object {
         const val TRANSITION_DURATION = 2000 // Image crossfade duration (ms)
-        const val DISPLAY_DURATION = 6000L // How long to show image before transitioning
+        const val DISPLAY_DURATION = 10000L // How long to show image before transitioning
+        const val PRELOAD_TRIGGER_TIME = 3000L // Start preloading this many ms before next image
         const val RAM_UPDATE_INTERVAL = 500L // Update RAM usage every second
     }
 
@@ -50,6 +56,8 @@ class MainViewModel(
         if (!granted) {
             loadImagesJob?.cancel()
             slideshowJob?.cancel()
+            preloadJob?.cancel()
+            preloadedBitmaps.clear()
             ramMonitoringJob?.cancel()
             return
         }
@@ -123,34 +131,55 @@ class MainViewModel(
 
     private fun startSlideshow() {
         slideshowJob?.cancel()
+        preloadJob?.cancel()
         slideshowJob = viewModelScope.launch {
             while (isActive) {
-                // 1. Wait while displaying the current image
-                delay(DISPLAY_DURATION)
-
                 val currentState = _uiState.value
                 if (currentState.images.isNotEmpty()) {
-                    // 2. Prepare next image
+                    // Calculate next index
                     val nextIndex = (currentState.currentImageIndex + 1) % currentState.images.size
                     val nextImage = currentState.images[nextIndex]
-                    
-                    // Load the next bitmap (this will also load EXIF data)
-                    val result = bitmapHelper.loadResizedBitmap(nextImage.uri)
-                    
+
+                    // 1. Wait until preload trigger time (DISPLAY_DURATION - PRELOAD_TRIGGER_TIME)
+                    val preloadWaitTime = DISPLAY_DURATION - PRELOAD_TRIGGER_TIME
+                    delay(preloadWaitTime)
+
+                    // 2. Start preloading next image in background
+                    preloadJob?.cancel()
+                    preloadJob = launch {
+                        Log.d("MainViewModel", "Starting preload for image at index $nextIndex")
+                        val result = bitmapHelper.loadResizedBitmap(nextImage.uri)
+                        if (result != null) {
+                            preloadedBitmaps[nextIndex] = result
+                            Log.d("MainViewModel", "Preload complete for index $nextIndex")
+                        }
+                    }
+
+                    // 3. Wait remaining time until image switch
+                    delay(PRELOAD_TRIGGER_TIME)
+
+                    // 4. Use preloaded bitmap if available, otherwise load synchronously as fallback
+                    val result = preloadedBitmaps.remove(nextIndex) ?: run {
+                        Log.w("MainViewModel", "Preload not ready for index $nextIndex, loading synchronously")
+                        bitmapHelper.loadResizedBitmap(nextImage.uri)
+                    }
+
                     val resolveStartTime = System.currentTimeMillis()
                     val metadataLabel = result?.metadata?.let { resolveLocationOrModel(it) }
                     // Log.d("MainViewModel", "Metadata resolution took ${System.currentTimeMillis() - resolveStartTime}ms for index $nextIndex")
-                    
-                    // 3. Switch image (starts crossfade)
-                    _uiState.update { 
+
+                    // 5. Switch image (starts crossfade)
+                    _uiState.update {
                         it.copy(
                             currentImageIndex = nextIndex,
                             currentDisplayImage = result?.let { res -> DisplayImage(res.bitmap, metadataLabel, res.rotation) }
-                        ) 
+                        )
                     }
-                    
-                    // 4. Wait for image transition to complete
+
+                    // 6. Wait for image transition to complete
                     delay(TRANSITION_DURATION.toLong())
+                } else {
+                    delay(DISPLAY_DURATION)
                 }
             }
         }
@@ -212,6 +241,12 @@ class MainViewModel(
 
     fun toggleOverlays() {
         _uiState.update { it.copy(areOverlaysVisible = !it.areOverlaysVisible) }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        preloadJob?.cancel()
+        preloadedBitmaps.clear()
     }
 }
 
