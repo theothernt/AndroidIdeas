@@ -1,6 +1,8 @@
 package com.neilturner.exifblur.ui.navigation
 
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -16,7 +18,8 @@ fun ExifBlurNavGraph() {
 
     NavHost(
         navController = navController,
-        startDestination = Screen.Main.route
+        startDestination = Screen.Main.route,
+        modifier = Modifier.fillMaxSize()
     ) {
         composable(Screen.Main.route) {
             MainScreen()

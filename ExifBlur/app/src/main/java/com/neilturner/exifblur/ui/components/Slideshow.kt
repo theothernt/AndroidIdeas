@@ -82,7 +82,7 @@ fun Slideshow(
 					AsyncImage(
 						model = image.bitmap,
 						contentDescription = "Foreground Image",
-						contentScale = ContentScale.Fit,
+						contentScale = ContentScale.None,
 						modifier = Modifier
 							.fillMaxSize()
 							.rotate(image.rotation)
