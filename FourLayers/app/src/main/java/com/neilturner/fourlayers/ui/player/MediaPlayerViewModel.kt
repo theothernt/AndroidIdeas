@@ -304,6 +304,7 @@ class MediaPlayerViewModel(
                 // ExoPlayer manages its own volume/audio focus
                 repeatMode = Player.REPEAT_MODE_OFF 
                 volume = 0f // Mute video
+                videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
                 val mediaItem = androidx.media3.common.MediaItem.fromUri(item.url)
                 setMediaItem(mediaItem)
                 prepare()

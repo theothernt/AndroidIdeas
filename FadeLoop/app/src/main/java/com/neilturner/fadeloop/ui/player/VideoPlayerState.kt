@@ -98,10 +98,10 @@ class VideoPlayerState(
     ): ExoPlayer {
         return ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(cacheDataSourceFactory))
-            .setVideoScalingMode(C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING)
             .setLoadControl(createLoadControl())
             .build()
             .apply {
+                videoScalingMode = C.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
                 volume = initialVolume
                 addListener(object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
