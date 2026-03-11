@@ -8,17 +8,17 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -27,9 +27,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.media3.common.C
@@ -208,7 +212,7 @@ private fun ImageLayer(
 
 /**
  * Video layer using ExoPlayer with TextureView for fade/alpha support.
- * Uses Crop scaling similar to images to fill the screen while maintaining aspect ratio.
+ * Scales video to fill the screen while maintaining aspect ratio (crop behavior).
  */
 @Composable
 private fun VideoLayer(
@@ -245,16 +249,44 @@ private fun VideoLayer(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .alpha(alpha),
+            .alpha(alpha)
+            .clipToBounds(),
         contentAlignment = Alignment.Center
     ) {
-        PlayerSurface(
-            player = player,
-            surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
-            modifier = Modifier
-                .fillMaxSize()
-                .aspectRatio(videoAspectRatio)
-        )
+        // Custom layout for crop behavior - video fills container, excess is clipped
+        Layout(
+            content = {
+                PlayerSurface(
+                    player = player,
+                    surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
+                    modifier = Modifier.fillMaxSize()
+                )
+            },
+            modifier = Modifier.fillMaxSize()
+        ) { measurables, constraints ->
+            val containerWidth = constraints.maxWidth.toFloat()
+            val containerHeight = constraints.maxHeight.toFloat()
+            val containerAR = containerWidth / containerHeight
+            
+            // Calculate size for crop: fill the smaller dimension, overflow the larger
+            val (videoWidth, videoHeight) = if (videoAspectRatio > containerAR) {
+                // Video is wider: fill height
+                (containerHeight * videoAspectRatio).toInt() to containerHeight.toInt()
+            } else {
+                // Video is taller: fill width
+                containerWidth.toInt() to (containerWidth / videoAspectRatio).toInt()
+            }
+            
+            val placeable = measurables[0].measure(
+                androidx.compose.ui.unit.Constraints.fixed(videoWidth, videoHeight)
+            )
+            layout(constraints.maxWidth, constraints.maxHeight) {
+                placeable.place(
+                    (constraints.maxWidth - videoWidth) / 2,
+                    (constraints.maxHeight - videoHeight) / 2
+                )
+            }
+        }
     }
 }
 
