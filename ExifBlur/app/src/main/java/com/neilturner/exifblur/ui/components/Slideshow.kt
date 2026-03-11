@@ -24,6 +24,7 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.size.Size
 import coil3.transform.Transformation
+import com.neilturner.exifblur.utils.FastBlurCompat
 
 data class SlideshowData(
 	val bitmap: Bitmap,
@@ -31,115 +32,13 @@ data class SlideshowData(
 )
 
 /**
- * Software-based stack blur for Android 11 and below.
+ * Software-based blur for Android 11 and below.
  * Compose's blur modifier requires Android 12+ for hardware rendering.
- * This is a fast approximation that looks similar to Gaussian blur.
+ * Uses FastBlurCompat for a high-quality box blur approximation.
  */
 private fun blurBitmap(bitmap: Bitmap, radius: Int = 25): Bitmap {
-	// Convert HARDWARE bitmap to SOFTWARE for pixel access
-	val softwareBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
-		bitmap.copy(Bitmap.Config.ARGB_8888, false)
-	} else {
-		bitmap
-	}
-
-	val width = softwareBitmap.width
-	val height = softwareBitmap.height
-	val pixels = IntArray(width * height)
-	softwareBitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-	
-	val stackSize = radius * 2 + 1
-	
-	// Horizontal pass
-	val horizontallyBlurred = IntArray(width * height)
-	for (y in 0 until height) {
-		var r = 0
-		var g = 0
-		var b = 0
-		var a = 0
-		
-		// Initialize stack with first pixel
-		for (i in 0 until radius) {
-			val pixel = pixels[y * width + 0]
-			a += pixel ushr 24 and 0xFF
-			r += pixel ushr 16 and 0xFF
-			g += pixel ushr 8 and 0xFF
-			b += pixel and 0xFF
-		}
-		
-		for (x in 0 until width) {
-			// Add rightmost pixel to stack
-			val addIndex = minOf(x + radius, width - 1)
-			val addPixel = pixels[y * width + addIndex]
-			a += addPixel ushr 24 and 0xFF
-			r += addPixel ushr 16 and 0xFF
-			g += addPixel ushr 8 and 0xFF
-			b += addPixel and 0xFF
-			
-			// Remove leftmost pixel from stack
-			if (x > radius) {
-				val removeIndex = x - radius - 1
-				val removePixel = pixels[y * width + removeIndex]
-				a -= removePixel ushr 24 and 0xFF
-				r -= removePixel ushr 16 and 0xFF
-				g -= removePixel ushr 8 and 0xFF
-				b -= removePixel and 0xFF
-			}
-			
-			val stackCount = minOf(x + radius + 1, width, stackSize)
-			horizontallyBlurred[y * width + x] = 
-				(a / stackCount and 0xFF shl 24) or
-				(r / stackCount and 0xFF shl 16) or
-				(g / stackCount and 0xFF shl 8) or
-				(b / stackCount and 0xFF)
-		}
-	}
-	
-	// Vertical pass
-	val result = IntArray(width * height)
-	for (x in 0 until width) {
-		var r = 0
-		var g = 0
-		var b = 0
-		var a = 0
-		
-		for (i in 0 until radius) {
-			val pixel = horizontallyBlurred[0 * width + x]
-			a += pixel ushr 24 and 0xFF
-			r += pixel ushr 16 and 0xFF
-			g += pixel ushr 8 and 0xFF
-			b += pixel and 0xFF
-		}
-		
-		for (y in 0 until height) {
-			val addIndex = minOf(y + radius, height - 1)
-			val addPixel = horizontallyBlurred[addIndex * width + x]
-			a += addPixel ushr 24 and 0xFF
-			r += addPixel ushr 16 and 0xFF
-			g += addPixel ushr 8 and 0xFF
-			b += addPixel and 0xFF
-			
-			if (y > radius) {
-				val removeIndex = y - radius - 1
-				val removePixel = horizontallyBlurred[removeIndex * width + x]
-				a -= removePixel ushr 24 and 0xFF
-				r -= removePixel ushr 16 and 0xFF
-				g -= removePixel ushr 8 and 0xFF
-				b -= removePixel and 0xFF
-			}
-			
-			val stackCount = minOf(y + radius + 1, height, stackSize)
-			result[y * width + x] = 
-				(a / stackCount and 0xFF shl 24) or
-				(r / stackCount and 0xFF shl 16) or
-				(g / stackCount and 0xFF shl 8) or
-				(b / stackCount and 0xFF)
-		}
-	}
-	
-	val outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
-	outputBitmap.setPixels(result, 0, width, 0, 0, width, height)
-	return outputBitmap
+	// FastBlurCompat handles HARDWARE bitmaps by creating a mutable copy
+	return FastBlurCompat.applyBlur(bitmap, radius)
 }
 
 @Composable
