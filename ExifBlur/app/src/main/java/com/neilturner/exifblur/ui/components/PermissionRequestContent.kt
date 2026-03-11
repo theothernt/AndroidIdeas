@@ -1,5 +1,6 @@
 package com.neilturner.exifblur.ui.components
 
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -20,6 +21,7 @@ fun PermissionRequestContent(
         onClick = onRequestPermission,
         modifier = modifier
             .focusRequester(focusRequester)
+            .clickable(onClick = onRequestPermission)
     ) {
         Text(text = "Ask for permission to access images")
     }
