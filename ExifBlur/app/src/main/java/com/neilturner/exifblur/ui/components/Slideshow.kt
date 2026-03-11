@@ -36,10 +36,17 @@ data class SlideshowData(
  * This is a fast approximation that looks similar to Gaussian blur.
  */
 private fun blurBitmap(bitmap: Bitmap, radius: Int = 25): Bitmap {
-	val width = bitmap.width
-	val height = bitmap.height
+	// Convert HARDWARE bitmap to SOFTWARE for pixel access
+	val softwareBitmap = if (bitmap.config == Bitmap.Config.HARDWARE) {
+		bitmap.copy(Bitmap.Config.ARGB_8888, false)
+	} else {
+		bitmap
+	}
+
+	val width = softwareBitmap.width
+	val height = softwareBitmap.height
 	val pixels = IntArray(width * height)
-	bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+	softwareBitmap.getPixels(pixels, 0, width, 0, 0, width, height)
 	
 	val stackSize = radius * 2 + 1
 	
