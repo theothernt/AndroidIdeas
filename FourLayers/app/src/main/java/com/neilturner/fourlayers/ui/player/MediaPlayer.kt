@@ -10,14 +10,20 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -26,6 +32,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
+import androidx.media3.common.C
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.compose.PlayerSurface
 import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
@@ -200,6 +208,7 @@ private fun ImageLayer(
 
 /**
  * Video layer using ExoPlayer with TextureView for fade/alpha support.
+ * Uses Crop scaling similar to images to fill the screen while maintaining aspect ratio.
  */
 @Composable
 private fun VideoLayer(
@@ -207,13 +216,46 @@ private fun VideoLayer(
     alpha: Float,
     modifier: Modifier = Modifier
 ) {
-    PlayerSurface(
-        player = player,
-        surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
+    var videoAspectRatio by remember { mutableFloatStateOf(16f / 9f) }
+
+    // Listen for video format changes to update aspect ratio
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (events.contains(Player.EVENT_VIDEO_SIZE_CHANGED)) {
+                    val videoSize = player.videoSize
+                    if (videoSize.width > 0 && videoSize.height > 0) {
+                        videoAspectRatio = videoSize.width.toFloat() / videoSize.height.toFloat()
+                    }
+                }
+            }
+        }
+        player.addListener(listener)
+        // Initialize with current format
+        val videoSize = player.videoSize
+        if (videoSize.width > 0 && videoSize.height > 0) {
+            videoAspectRatio = videoSize.width.toFloat() / videoSize.height.toFloat()
+        }
+
+        onDispose {
+            player.removeListener(listener)
+        }
+    }
+
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .alpha(alpha)
-    )
+            .alpha(alpha),
+        contentAlignment = Alignment.Center
+    ) {
+        PlayerSurface(
+            player = player,
+            surfaceType = SURFACE_TYPE_TEXTURE_VIEW,
+            modifier = Modifier
+                .fillMaxSize()
+                .aspectRatio(videoAspectRatio)
+        )
+    }
 }
 
 /**
