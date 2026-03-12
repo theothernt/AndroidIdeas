@@ -33,7 +33,9 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
             try {
                 val finalUri = prepareUri(uri)
                 val startTime = System.currentTimeMillis()
+                Log.d(TAG, "=========================================")
                 Log.d(TAG, "Starting loadResizedBitmap for URI: $finalUri")
+                Log.d(TAG, "Target dimensions: ${targetWidth}x${targetHeight}")
 
                 // Step 1: Read Header Buffer
                 val headerBytes = readHeaderBytes(finalUri) ?: return@withContext null
@@ -60,8 +62,15 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
                 } else 0
 
                 // Step 5: Return result with rotation
-                Log.d("BitmapHelper", "LOAD COMPLETE: Total duration ${System.currentTimeMillis() - startTime}ms. " +
-                        "Memory reduction: ${reductionPercent}% Final size: ${originalBitmap.width}x${originalBitmap.height}, Rotation: $rotationDegrees")
+                val totalDuration = System.currentTimeMillis() - startTime
+                Log.d(TAG, "=========================================")
+                Log.d(TAG, "LOAD COMPLETE")
+                Log.d(TAG, "  Total duration: ${totalDuration}ms")
+                Log.d(TAG, "  Memory reduction: ${reductionPercent}%")
+                Log.d(TAG, "  Final size: ${originalBitmap.width}x${originalBitmap.height}")
+                Log.d(TAG, "  Original size: ${originalWidth}x${originalHeight}")
+                Log.d(TAG, "  Rotation: $rotationDegrees°")
+                Log.d(TAG, "=========================================")
 
                 BitmapResult(originalBitmap, metadata, rotationDegrees)
             } catch (e: Exception) {
@@ -85,19 +94,22 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
 
     private suspend fun readHeaderBytes(uri: Uri): ByteArray? {
         val headerStartTime = System.currentTimeMillis()
-        Log.d(TAG, "Step 1: Reading 512KB header buffer...")
+        Log.d(TAG, "[Step 1/4] Reading 512KB header buffer...")
         return imageRepository.openInputStream(uri)?.use { stream ->
             val headerBytes = readStreamBytes(stream, HEADER_BUFFER_SIZE)
-            Log.d(TAG, "Step 1 complete: Read ${headerBytes.size} bytes in ${System.currentTimeMillis() - headerStartTime}ms")
+            val duration = System.currentTimeMillis() - headerStartTime
+            Log.d(TAG, "[Step 1/4] Complete: Read ${headerBytes.size} bytes in ${duration}ms")
             headerBytes
         } ?: run {
-            Log.e(TAG, "Step 1 failed: Could not open header stream after ${System.currentTimeMillis() - headerStartTime}ms")
+            val duration = System.currentTimeMillis() - headerStartTime
+            Log.e(TAG, "[Step 1/4] Failed: Could not open header stream after ${duration}ms")
             null
         }
     }
 
     private fun extractMetadata(headerBytes: ByteArray): Pair<ExifMetadata, Int> {
         val metadataStartTime = System.currentTimeMillis()
+        Log.d(TAG, "[Step 2/4] Extracting EXIF metadata and orientation...")
         return ByteArrayInputStream(headerBytes).use { stream ->
             val exifInterface = ExifInterface(stream)
             val date = exifInterface.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
@@ -116,23 +128,30 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
                 ExifInterface.TAG_ORIENTATION,
                 ExifInterface.ORIENTATION_NORMAL
             )
-            Log.d(TAG, "Step 2 complete: Extracted metadata in ${System.currentTimeMillis() - metadataStartTime}ms")
+            val duration = System.currentTimeMillis() - metadataStartTime
+            Log.d(TAG, "[Step 2/4] Complete: Extracted metadata in ${duration}ms")
+            if (meta.date != null) Log.d(TAG, "   - Date: ${meta.date}")
+            if (meta.offset != null) Log.d(TAG, "   - Offset: ${meta.offset}")
+            if (meta.latitude != null && meta.longitude != null) Log.d(TAG, "   - Location: ${meta.latitude}, ${meta.longitude}")
             meta to orient
         }
     }
 
     private fun decodeDimensions(headerBytes: ByteArray): BitmapFactory.Options? {
         val dimensionsStartTime = System.currentTimeMillis()
+        Log.d(TAG, "[Step 3/4] Decoding image dimensions and calculating sample size...")
         val options = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
         }
         BitmapFactory.decodeByteArray(headerBytes, 0, headerBytes.size, options)
-        
+
         if (options.outWidth <= 0 || options.outHeight <= 0) {
-            Log.e(TAG, "Step 3 failed: Could not determine dimensions after ${System.currentTimeMillis() - dimensionsStartTime}ms")
+            val duration = System.currentTimeMillis() - dimensionsStartTime
+            Log.e(TAG, "[Step 3/4] Failed: Could not determine dimensions after ${duration}ms")
             return null
         }
-        Log.d(TAG, "Step 3 complete in ${System.currentTimeMillis() - dimensionsStartTime}ms")
+        val duration = System.currentTimeMillis() - dimensionsStartTime
+        Log.d(TAG, "[Step 3/4] Complete: Original dimensions ${options.outWidth}x${options.outHeight} in ${duration}ms")
         return options
     }
 
@@ -147,9 +166,9 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
 
     private suspend fun decodeBitmap(uri: Uri, options: BitmapFactory.Options, rotationDegrees: Float): Bitmap? {
         val decodeStartTime = System.currentTimeMillis()
-        Log.d(TAG, "Step 4: Opening final stream for decoding...")
+        Log.d(TAG, "[Step 4/4] Opening final stream and decoding bitmap...")
         val isRotationNeeded = rotationDegrees != 0f
-        
+
         // Use HARDWARE config only if we don't need to modify (rotate) the bitmap.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             options.inPreferredConfig = if (isRotationNeeded) {
@@ -162,11 +181,13 @@ class BitmapHelper(private val imageRepository: ImageRepository) {
         val bitmap = imageRepository.openInputStream(uri)?.use { stream ->
             BitmapFactory.decodeStream(stream, null, options)
         } ?: run {
-            Log.e(TAG, "Step 4 failed: Could not open final stream after ${System.currentTimeMillis() - decodeStartTime}ms")
+            val duration = System.currentTimeMillis() - decodeStartTime
+            Log.e(TAG, "[Step 4/4] Failed: Could not open final stream after ${duration}ms")
             return null
         }
 
-        Log.d(TAG, "Step 4 complete: Decoded ${bitmap.width}x${bitmap.height} bitmap in ${System.currentTimeMillis() - decodeStartTime}ms")
+        val duration = System.currentTimeMillis() - decodeStartTime
+        Log.d(TAG, "[Step 4/4] Complete: Decoded ${bitmap.width}x${bitmap.height} bitmap in ${duration}ms")
         return bitmap
     }
 

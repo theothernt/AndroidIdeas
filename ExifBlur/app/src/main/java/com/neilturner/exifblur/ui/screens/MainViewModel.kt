@@ -71,14 +71,15 @@ class MainViewModel(
     private fun loadImages() {
         loadImagesJob?.cancel()
         loadImagesJob = viewModelScope.launch {
+            Log.d("MainViewModel", "=========================================")
             Log.d("MainViewModel", "Starting image loading process...")
             val startTime = System.currentTimeMillis()
             _uiState.value = _uiState.value.copy(isLoading = true)
-            
+
             val fetchUrisStartTime = System.currentTimeMillis()
             val uris = imageRepository.getImages()
             val fetchUrisDuration = System.currentTimeMillis() - fetchUrisStartTime
-            Log.d("MainViewModel", "Fetched ${uris.size} image URIs in ${fetchUrisDuration}ms")
+            Log.d("MainViewModel", "[Phase 1] Fetched ${uris.size} image URIs in ${fetchUrisDuration}ms")
             if (uris.isEmpty()) {
                 Log.w("MainViewModel", "No images found! Check your source settings.")
             }
@@ -90,28 +91,30 @@ class MainViewModel(
                 }
                 LoadedImage(uri = uri, metadataLabel = null)
             }
-            
-            Log.d("MainViewModel", "Created ${loadedImages.size} LoadedImage objects")
+
+            Log.d("MainViewModel", "[Phase 2] Created ${loadedImages.size} LoadedImage objects")
 
             // Load initial bitmap (this will also load EXIF data)
             val bitmapStartTime = System.currentTimeMillis()
             val initialResult = if (loadedImages.isNotEmpty()) {
-                Log.d("MainViewModel", "Attempting to load initial bitmap for: ${loadedImages[0].uri}")
+                Log.d("MainViewModel", "[Phase 3] Loading initial bitmap + EXIF for image 1/${uris.size}")
                 bitmapHelper.loadResizedBitmap(loadedImages[0].uri)
             } else {
                 Log.w("MainViewModel", "Cannot load initial bitmap: loadedImages is empty")
                 null
             }
-            
+
             val initialMetadataLabel = initialResult?.metadata?.let { resolveLocationOrModel(it) }
 
             val bitmapDuration = System.currentTimeMillis() - bitmapStartTime
-//            if (initialResult != null) {
-//                Log.d("MainViewModel", "Loaded initial bitmap with metadata in ${bitmapDuration}ms")
-//            }
+            Log.d("MainViewModel", "[Phase 3] Loaded initial bitmap + EXIF in ${bitmapDuration}ms")
 
             val totalDuration = System.currentTimeMillis() - startTime
-            Log.d("MainViewModel", "Image loading process complete. Total images: ${loadedImages.size}, Total time: ${totalDuration}ms")
+            Log.d("MainViewModel", "=========================================")
+            Log.d("MainViewModel", "Image loading process complete")
+            Log.d("MainViewModel", "  Total images: ${loadedImages.size}")
+            Log.d("MainViewModel", "  Total time: ${totalDuration}ms")
+            Log.d("MainViewModel", "=========================================")
 
             _uiState.value = _uiState.value.copy(
                 imageCount = loadedImages.size,
@@ -147,11 +150,13 @@ class MainViewModel(
                     // 2. Start preloading next image in background
                     preloadJob?.cancel()
                     preloadJob = launch {
-                        Log.d("MainViewModel", "Starting preload for image at index $nextIndex")
+                        val preloadStartTime = System.currentTimeMillis()
+                        Log.d("MainViewModel", "[Preload] Starting for image at index $nextIndex")
                         val result = bitmapHelper.loadResizedBitmap(nextImage.uri)
                         if (result != null) {
                             preloadedBitmaps[nextIndex] = result
-                            Log.d("MainViewModel", "Preload complete for index $nextIndex")
+                            val preloadDuration = System.currentTimeMillis() - preloadStartTime
+                            Log.d("MainViewModel", "[Preload] Complete for index $nextIndex in ${preloadDuration}ms")
                         }
                     }
 
@@ -160,13 +165,17 @@ class MainViewModel(
 
                     // 4. Use preloaded bitmap if available, otherwise load synchronously as fallback
                     val result = preloadedBitmaps.remove(nextIndex) ?: run {
-                        Log.w("MainViewModel", "Preload not ready for index $nextIndex, loading synchronously")
-                        bitmapHelper.loadResizedBitmap(nextImage.uri)
+                        val syncLoadStartTime = System.currentTimeMillis()
+                        Log.w("MainViewModel", "[Fallback] Preload not ready for index $nextIndex, loading synchronously")
+                        val result = bitmapHelper.loadResizedBitmap(nextImage.uri)
+                        Log.w("MainViewModel", "[Fallback] Synchronous load took ${System.currentTimeMillis() - syncLoadStartTime}ms")
+                        result
                     }
 
                     val resolveStartTime = System.currentTimeMillis()
                     val metadataLabel = result?.metadata?.let { resolveLocationOrModel(it) }
-                    // Log.d("MainViewModel", "Metadata resolution took ${System.currentTimeMillis() - resolveStartTime}ms for index $nextIndex")
+                    val resolveDuration = System.currentTimeMillis() - resolveStartTime
+                    Log.d("MainViewModel", "[Metadata] Resolution took ${resolveDuration}ms for index $nextIndex")
 
                     // 5. Switch image (starts crossfade)
                     _uiState.update {
