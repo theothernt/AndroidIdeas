@@ -1,11 +1,13 @@
 package com.neilturner.exifblur.di
 
+import android.os.Build
 import com.neilturner.exifblur.data.ImageRepository
 import com.neilturner.exifblur.data.ImageRepositoryImpl
 import com.neilturner.exifblur.data.LocalImageProvider
 import com.neilturner.exifblur.data.SambaImageProvider
 import com.neilturner.exifblur.ui.screens.MainViewModel
 import com.neilturner.exifblur.util.BitmapHelper
+import com.neilturner.exifblur.util.BitmapHelperV28
 import com.neilturner.exifblur.util.LocationHelper
 import com.neilturner.exifblur.util.RamMonitor
 import org.koin.android.ext.koin.androidContext
@@ -19,7 +21,16 @@ val appModule = module {
     single { SambaImageProvider() }
     single { LocationHelper(androidContext()) }
     single { RamMonitor(androidContext()) }
-    single { BitmapHelper(get()) }
+    
+    // Use ImageDecoder-based helper for API 28+, BitmapFactory for older
+    single {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            BitmapHelperV28(get())
+        } else {
+            BitmapHelper(get())
+        }
+    }
+    
     singleOf(::ImageRepositoryImpl) { bind<ImageRepository>() }
     viewModel { MainViewModel(get(), get(), get(), get()) }
 }

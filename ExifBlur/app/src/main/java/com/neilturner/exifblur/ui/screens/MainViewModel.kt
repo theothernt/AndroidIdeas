@@ -7,7 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neilturner.exifblur.data.ExifMetadata
 import com.neilturner.exifblur.data.ImageRepository
-import com.neilturner.exifblur.util.BitmapHelper
+import com.neilturner.exifblur.util.BitmapLoader
 import com.neilturner.exifblur.util.BitmapResult
 import com.neilturner.exifblur.util.LocationHelper
 import com.neilturner.exifblur.util.RamMonitor
@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 class MainViewModel(
     private val imageRepository: ImageRepository,
     private val locationHelper: LocationHelper,
-    private val bitmapHelper: BitmapHelper,
+    private val bitmapLoader: BitmapLoader,
     private val ramMonitor: RamMonitor
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(MainUiState())
@@ -43,6 +43,8 @@ class MainViewModel(
         const val DISPLAY_DURATION = 10000L // How long to show image before transitioning
         const val PRELOAD_TRIGGER_TIME = 3000L // Start preloading this many ms before next image
         const val RAM_UPDATE_INTERVAL = 500L // Update RAM usage every second
+        const val DEFAULT_TARGET_WIDTH = 1920
+        const val DEFAULT_TARGET_HEIGHT = 1080
     }
 
     fun updatePermissionStatus(granted: Boolean) {
@@ -98,7 +100,7 @@ class MainViewModel(
             val bitmapStartTime = System.currentTimeMillis()
             val initialResult = if (loadedImages.isNotEmpty()) {
                 Log.d("MainViewModel", "[Phase 3] Loading initial bitmap + EXIF for image 1/${uris.size}")
-                bitmapHelper.loadResizedBitmap(loadedImages[0].uri)
+                bitmapLoader.loadResizedBitmap(loadedImages[0].uri, DEFAULT_TARGET_WIDTH, DEFAULT_TARGET_HEIGHT)
             } else {
                 Log.w("MainViewModel", "Cannot load initial bitmap: loadedImages is empty")
                 null
@@ -152,7 +154,7 @@ class MainViewModel(
                     preloadJob = launch {
                         val preloadStartTime = System.currentTimeMillis()
                         Log.d("MainViewModel", "[Preload] Starting for image at index $nextIndex")
-                        val result = bitmapHelper.loadResizedBitmap(nextImage.uri)
+                        val result = bitmapLoader.loadResizedBitmap(nextImage.uri, DEFAULT_TARGET_WIDTH, DEFAULT_TARGET_HEIGHT)
                         if (result != null) {
                             preloadedBitmaps[nextIndex] = result
                             val preloadDuration = System.currentTimeMillis() - preloadStartTime
@@ -167,7 +169,7 @@ class MainViewModel(
                     val result = preloadedBitmaps.remove(nextIndex) ?: run {
                         val syncLoadStartTime = System.currentTimeMillis()
                         Log.w("MainViewModel", "[Fallback] Preload not ready for index $nextIndex, loading synchronously")
-                        val result = bitmapHelper.loadResizedBitmap(nextImage.uri)
+                        val result = bitmapLoader.loadResizedBitmap(nextImage.uri, DEFAULT_TARGET_WIDTH, DEFAULT_TARGET_HEIGHT)
                         Log.w("MainViewModel", "[Fallback] Synchronous load took ${System.currentTimeMillis() - syncLoadStartTime}ms")
                         result
                     }

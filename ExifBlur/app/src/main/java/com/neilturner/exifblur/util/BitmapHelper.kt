@@ -21,14 +21,26 @@ data class BitmapResult(
     val rotation: Float
 )
 
-class BitmapHelper(private val imageRepository: ImageRepository) {
+interface BitmapLoader {
+    suspend fun loadResizedBitmap(
+        uri: Uri,
+        targetWidth: Int,
+        targetHeight: Int
+    ): BitmapResult?
+}
+
+class BitmapHelper(private val imageRepository: ImageRepository) : BitmapLoader {
 
     companion object {
         private const val TAG = "BitmapHelper"
         private const val HEADER_BUFFER_SIZE = 512 * 1024 // 512KB
     }
 
-    suspend fun loadResizedBitmap(uri: Uri, targetWidth: Int = 1920, targetHeight: Int = 1080): BitmapResult? {
+    override suspend fun loadResizedBitmap(
+        uri: Uri,
+        targetWidth: Int,
+        targetHeight: Int
+    ): BitmapResult? {
         return withContext(Dispatchers.IO) {
             try {
                 val finalUri = prepareUri(uri)
