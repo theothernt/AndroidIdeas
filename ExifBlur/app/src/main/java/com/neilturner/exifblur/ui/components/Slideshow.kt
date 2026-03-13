@@ -81,7 +81,7 @@ fun Slideshow(
 									.scale(2f)
 									.rotate(image.rotation)
 									.blur(radius = 25.dp)
-									.alpha(0.2f)
+									.alpha(0.5f)
 							)
 						} else {
 							// Android 11 and below: Use software stack blur
@@ -101,7 +101,7 @@ fun Slideshow(
 								modifier = Modifier
 									.fillMaxSize()
 									.scale(2f)
-									.alpha(0.2f)
+									.alpha(0.5f)
 							)
 						}
 					}

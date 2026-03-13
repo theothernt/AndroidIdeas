@@ -35,7 +35,8 @@ class SambaImageProvider : ImageProvider {
         } catch (e: Exception) {
             e.printStackTrace()
         }
-        images.shuffled()
+        // Sort deterministically by URI string for consistent ordering across devices
+        images.sortedBy { it.toString() }
     }
 
     private fun listImagesRecursive(share: DiskShare, relativePath: String, images: MutableList<Uri>, shareName: String) {
