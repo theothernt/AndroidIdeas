@@ -2,7 +2,7 @@
 agp = "9.1.0"
 coreKtx = "1.18.0"
 appcompat = "1.7.1"
-kotlin = "2.3.10"
+kotlin = "2.3.20"
 composeBom = "2026.03.00"
 tvFoundation = "1.0.0-beta01"
 tvMaterial = "1.0.1"
