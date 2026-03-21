@@ -1,5 +1,8 @@
 package com.neilturner.perfview.ui.dashboard
 
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -8,6 +11,8 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,23 +28,33 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.core.content.ContextCompat
 import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.perfview.data.cpu.TopProcessUsage
+import com.neilturner.perfview.overlay.CpuOverlayService
 import com.neilturner.perfview.ui.theme.PerfViewTheme
+import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -47,14 +62,38 @@ fun PerfViewRoute(
     viewModel: PerfViewViewModel = koinViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val overlayPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) {
+        viewModel.accept(PerfViewIntent.OverlayPermissionResult)
+    }
 
     LaunchedEffect(Unit) {
         viewModel.accept(PerfViewIntent.Load)
     }
 
+    LaunchedEffect(viewModel) {
+        viewModel.commands.collectLatest { command ->
+            when (command) {
+                is PerfViewCommand.OpenOverlayPermissionSettings ->
+                    overlayPermissionLauncher.launch(command.intent)
+
+                PerfViewCommand.StartBackgroundOverlay -> {
+                    ContextCompat.startForegroundService(
+                        context,
+                        CpuOverlayService.createStartIntent(context),
+                    )
+                    (context as? Activity)?.finish()
+                }
+            }
+        }
+    }
+
     PerfViewScreen(
         uiState = uiState,
         onRequestAdbAccess = { viewModel.accept(PerfViewIntent.RequestAdbAccess) },
+        onRunInBackground = { viewModel.accept(PerfViewIntent.RunInBackgroundClicked) },
     )
 }
 
@@ -62,6 +101,7 @@ fun PerfViewRoute(
 fun PerfViewScreen(
     uiState: PerfViewViewState,
     onRequestAdbAccess: () -> Unit = {},
+    onRunInBackground: () -> Unit = {},
 ) {
     Box(
         modifier = Modifier
@@ -100,7 +140,72 @@ fun PerfViewScreen(
                         ErrorCard(message = uiState.statusMessage)
                     }
                 }
+                BackgroundAction(
+                    message = uiState.backgroundActionMessage,
+                    onRunInBackground = onRunInBackground,
+                    modifier = Modifier.align(Alignment.BottomEnd),
+                )
             }
+        }
+    }
+}
+
+@Composable
+private fun BackgroundAction(
+    message: String?,
+    onRunInBackground: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val isPressed by interactionSource.collectIsPressedAsState()
+    var isFocused by remember { mutableStateOf(false) }
+    val frameBorderColor = when {
+        isPressed -> Color(0xFFF7F7FA)
+        isFocused -> Color(0xCCFFFFFF)
+        else -> Color(0x00000000)
+    }
+    val buttonScale = when {
+        isPressed -> 0.985f
+        isFocused -> 1.03f
+        else -> 1f
+    }
+
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        if (!message.isNullOrBlank()) {
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color(0xFFD2E6E9),
+                textAlign = TextAlign.End,
+            )
+        }
+        Button(
+            onClick = onRunInBackground,
+            interactionSource = interactionSource,
+            modifier = Modifier
+                .onFocusChanged { isFocused = it.isFocused }
+                .scale(buttonScale)
+                .border(
+                    width = if (isFocused || isPressed) 2.dp else 0.dp,
+                    color = frameBorderColor,
+                    shape = RoundedCornerShape(18.dp),
+                )
+                .padding(2.dp),
+            colors = ButtonDefaults.colors(
+                containerColor = Color(0xFFF2F2F4),
+                focusedContainerColor = Color(0xFFFFFFFF),
+                pressedContainerColor = Color(0xFFE7E7EC),
+                contentColor = Color(0xFF171A20),
+                focusedContentColor = Color(0xFF171A20),
+                pressedContentColor = Color(0xFF171A20),
+            ),
+            shape = ButtonDefaults.shape(RoundedCornerShape(16.dp)),
+        ) {
+            Text(text = "Run in the background")
         }
     }
 }
@@ -301,7 +406,6 @@ private fun ProcessListCard(
                         rank = index + 1,
                         name = process.name,
                         cpuPercent = process.cpuPercent,
-                        pid = process.pid,
                     )
                 }
             }
@@ -316,9 +420,8 @@ private fun ProcessHeaderRow() {
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         HeaderCell(text = "#", width = 34.dp)
-        HeaderCell(text = "Process", width = 420.dp)
-        HeaderCell(text = "CPU", width = 60.dp, alignEnd = true)
-        HeaderCell(text = "PID", width = 64.dp, alignEnd = true)
+        HeaderCell(text = "Process", width = 620.dp)
+        HeaderCell(text = "CPU", width = 72.dp, alignEnd = true)
     }
 }
 
@@ -327,7 +430,6 @@ private fun ProcessRow(
     rank: Int,
     name: String,
     cpuPercent: Float,
-    pid: Int,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -335,9 +437,8 @@ private fun ProcessRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CellText(text = rank.toString(), width = 34.dp, color = Color(0xFF8BE8FF))
-        CellText(text = name, width = 420.dp, color = Color.White)
-        CellText(text = String.format("%.1f%%", cpuPercent), width = 60.dp, color = Color(0xFF52E3B0), alignEnd = true)
-        CellText(text = pid.toString(), width = 64.dp, color = Color(0xFFB1CDD2), alignEnd = true)
+        CellText(text = name, width = 620.dp, color = Color.White)
+        CellText(text = String.format("%.1f%%", cpuPercent), width = 72.dp, color = Color(0xFF52E3B0), alignEnd = true)
     }
 }
 
@@ -411,7 +512,7 @@ private fun ErrorCard(
                 color = Color(0xFFFFE2E2),
             )
             Text(
-                text = "Perf View will retry automatically every 3 seconds.",
+                text = "Restore ADB access to resume live process updates.",
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color(0xFFFFE2E2),
             )

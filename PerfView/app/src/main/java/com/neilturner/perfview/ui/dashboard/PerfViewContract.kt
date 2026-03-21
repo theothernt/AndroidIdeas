@@ -1,10 +1,21 @@
 package com.neilturner.perfview.ui.dashboard
 
+import android.content.Intent
 import com.neilturner.perfview.data.cpu.TopProcessUsage
 
 sealed interface PerfViewIntent {
     data object Load : PerfViewIntent
     data object RequestAdbAccess : PerfViewIntent
+    data object RunInBackgroundClicked : PerfViewIntent
+    data object OverlayPermissionResult : PerfViewIntent
+}
+
+sealed interface PerfViewCommand {
+    data class OpenOverlayPermissionSettings(
+        val intent: Intent,
+    ) : PerfViewCommand
+
+    data object StartBackgroundOverlay : PerfViewCommand
 }
 
 enum class PerfViewScreen {
@@ -26,4 +37,5 @@ data class PerfViewViewState(
     val permissionMessage: String =
         "Perf View uses Android's loopback ADB access to read live process CPU usage on this device.",
     val permissionButtonLabel: String = "Grant ADB access",
+    val backgroundActionMessage: String? = null,
 )

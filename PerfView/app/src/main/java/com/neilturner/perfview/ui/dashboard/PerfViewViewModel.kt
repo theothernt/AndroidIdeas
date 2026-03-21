@@ -7,25 +7,37 @@ import com.neilturner.perfview.data.adb.AdbAccessManager
 import com.neilturner.perfview.data.cpu.CpuDataSource
 import com.neilturner.perfview.domain.cpu.CpuUsageResult
 import com.neilturner.perfview.domain.cpu.ObserveCpuUsageUseCase
+import com.neilturner.perfview.overlay.OverlayPermissionManager
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class PerfViewViewModel(
     private val adbAccessManager: AdbAccessManager,
+    private val overlayPermissionManager: OverlayPermissionManager,
     private val observeCpuUsage: ObserveCpuUsageUseCase,
 ) : ViewModel() {
     private val timeFormatter = DateFormat.getTimeInstance(DateFormat.MEDIUM)
 
     private val _uiState = MutableStateFlow(PerfViewViewState())
     val uiState: StateFlow<PerfViewViewState> = _uiState.asStateFlow()
+    private val _commands = MutableSharedFlow<PerfViewCommand>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val commands = _commands.asSharedFlow()
 
     private var observeJob: Job? = null
+    private var overlayPermissionPollJob: Job? = null
 
     fun accept(intent: PerfViewIntent) {
         when (intent) {
@@ -37,6 +49,8 @@ class PerfViewViewModel(
                 }
             }
             PerfViewIntent.RequestAdbAccess -> requestAdbAccess()
+            PerfViewIntent.RunInBackgroundClicked -> runInBackground()
+            PerfViewIntent.OverlayPermissionResult -> handleOverlayPermissionResult()
         }
     }
 
@@ -93,6 +107,67 @@ class PerfViewViewModel(
         }
     }
 
+    private fun runInBackground() {
+        if (overlayPermissionManager.canDrawOverlays()) {
+            overlayPermissionPollJob?.cancel()
+            _uiState.update { it.copy(backgroundActionMessage = null) }
+            _commands.tryEmit(PerfViewCommand.StartBackgroundOverlay)
+            return
+        }
+
+        _uiState.update {
+            it.copy(
+                backgroundActionMessage =
+                    "Allow Perf View to display over other apps so it can keep the top CPU list visible after this screen closes."
+            )
+        }
+        _commands.tryEmit(
+            PerfViewCommand.OpenOverlayPermissionSettings(
+                intent = overlayPermissionManager.createPermissionIntent()
+            )
+        )
+        startOverlayPermissionPolling()
+    }
+
+    private fun handleOverlayPermissionResult() {
+        if (overlayPermissionManager.canDrawOverlays()) {
+            overlayPermissionPollJob?.cancel()
+            _uiState.update { it.copy(backgroundActionMessage = null) }
+            _commands.tryEmit(PerfViewCommand.StartBackgroundOverlay)
+        } else {
+            _uiState.update {
+                it.copy(
+                    backgroundActionMessage =
+                        "Overlay permission was not granted. Perf View needs that permission to stay visible in the background."
+                )
+            }
+        }
+    }
+
+    private fun startOverlayPermissionPolling() {
+        overlayPermissionPollJob?.cancel()
+        overlayPermissionPollJob = viewModelScope.launch {
+            repeat(OVERLAY_PERMISSION_POLL_ATTEMPTS) { attempt ->
+                delay(OVERLAY_PERMISSION_POLL_INTERVAL_MILLIS)
+                if (overlayPermissionManager.canDrawOverlays()) {
+                    Log.d(TAG, "Overlay permission granted while polling")
+                    _uiState.update { it.copy(backgroundActionMessage = null) }
+                    _commands.emit(PerfViewCommand.StartBackgroundOverlay)
+                    return@launch
+                }
+
+                if (attempt == OVERLAY_PERMISSION_POLL_ATTEMPTS - 1) {
+                    _uiState.update {
+                        it.copy(
+                            backgroundActionMessage =
+                                "Overlay permission was not granted within 20 seconds. You can try again when ready."
+                        )
+                    }
+                }
+            }
+        }
+    }
+
     private fun startObserving() {
         observeJob?.cancel()
         Log.d(TAG, "Starting process observation")
@@ -117,22 +192,41 @@ class PerfViewViewModel(
                             statusMessage = buildStatusMessage(observation.dataSource),
                             lastUpdatedLabel = timeFormatter.format(Date(observation.collectedAtMillis)),
                             sourceLabel = buildSourceLabel(observation.dataSource),
+                            backgroundActionMessage = current.backgroundActionMessage,
                         )
                     }
 
                     is CpuUsageResult.Unsupported -> _uiState.update {
                         Log.w(TAG, "Observation failed: ${result.message}")
-                        it.copy(
-                            isLoading = false,
-                            isSupported = false,
-                            statusMessage = result.message,
-                            topProcesses = emptyList(),
-                            sourceLabel = "Unavailable",
-                        )
+                        if (shouldReturnToPermissionGate(result.message)) {
+                            PerfViewViewState(
+                                screen = PerfViewScreen.AuthorizationFailed,
+                                isLoading = false,
+                                isSupported = false,
+                                statusMessage = result.message,
+                                sourceLabel = "ADB access failed",
+                                permissionTitle = "ADB access needs approval",
+                                permissionMessage = result.message + " Press the button to reconnect.",
+                                permissionButtonLabel = "Retry ADB access",
+                            )
+                        } else {
+                            it.copy(
+                                isLoading = false,
+                                isSupported = false,
+                                statusMessage = result.message,
+                                topProcesses = emptyList(),
+                                sourceLabel = "Unavailable",
+                            )
+                        }
                     }
                 }
             }
         }
+    }
+
+    private fun shouldReturnToPermissionGate(message: String): Boolean {
+        val normalized = message.lowercase()
+        return "adb" in normalized || "debugging" in normalized || "authoriz" in normalized
     }
 
     private fun buildStatusMessage(dataSource: CpuDataSource): String =
@@ -144,6 +238,8 @@ class PerfViewViewModel(
 
     private companion object {
         private const val ADB_REQUEST_TIMEOUT_MILLIS = 30_000L
+        private const val OVERLAY_PERMISSION_POLL_INTERVAL_MILLIS = 1_000L
+        private const val OVERLAY_PERMISSION_POLL_ATTEMPTS = 20
         private const val AUTHORIZATION_FAILED_MESSAGE =
             "Perf View could not get ADB access within 30 seconds."
         private const val TAG = "PerfViewVm"
