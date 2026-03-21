@@ -3,13 +3,13 @@ package com.neilturner.perfview.ui.dashboard
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
+import com.neilturner.perfview.data.adb.AdbAccessManager
 import com.neilturner.perfview.data.cpu.CpuDataSource
 import com.neilturner.perfview.domain.cpu.CpuUsageResult
 import com.neilturner.perfview.domain.cpu.ObserveCpuUsageUseCase
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class PerfViewViewModel(
+    private val adbAccessManager: AdbAccessManager,
     private val observeCpuUsage: ObserveCpuUsageUseCase,
 ) : ViewModel() {
     private val timeFormatter = DateFormat.getTimeInstance(DateFormat.MEDIUM)
@@ -25,23 +26,78 @@ class PerfViewViewModel(
     val uiState: StateFlow<PerfViewViewState> = _uiState.asStateFlow()
 
     private var observeJob: Job? = null
-    private var autoRetryJob: Job? = null
-    private var autoRetryCount = 0
 
     fun accept(intent: PerfViewIntent) {
         when (intent) {
             PerfViewIntent.Load -> {
-                autoRetryCount = 0
+                if (adbAccessManager.hasGrantedAccess()) {
+                    startObserving()
+                } else {
+                    showPermissionRationale()
+                }
+            }
+            PerfViewIntent.RequestAdbAccess -> requestAdbAccess()
+        }
+    }
+
+    private fun showPermissionRationale() {
+        observeJob?.cancel()
+        _uiState.value = PerfViewViewState(
+            screen = PerfViewScreen.PermissionRationale,
+            isLoading = false,
+            sourceLabel = "ADB access required",
+            statusMessage = "Waiting for authorization",
+            permissionTitle = "Allow loopback ADB access",
+            permissionMessage = "Perf View uses Android's local ADB loopback connection to read process CPU usage from this device. Press the button below, then approve the system debugging prompt.",
+            permissionButtonLabel = "Grant ADB access",
+        )
+    }
+
+    private fun requestAdbAccess() {
+        observeJob?.cancel()
+        _uiState.update {
+            it.copy(
+                screen = PerfViewScreen.Authorizing,
+                isLoading = true,
+                statusMessage = "Waiting for ADB authorization. This can take up to 30 seconds.",
+                sourceLabel = "Requesting ADB access",
+                permissionTitle = "Waiting for approval",
+                permissionMessage = "Approve the debugging prompt on the device to continue.",
+                permissionButtonLabel = "Try again",
+            )
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                adbAccessManager.requestAccess(timeoutMillis = ADB_REQUEST_TIMEOUT_MILLIS)
+            }.onSuccess {
+                Log.d(TAG, "ADB authorization succeeded")
                 startObserving()
+            }.onFailure { error ->
+                Log.w(TAG, "ADB authorization failed", error)
+                _uiState.update {
+                    it.copy(
+                        screen = PerfViewScreen.AuthorizationFailed,
+                        isLoading = false,
+                        isSupported = false,
+                        sourceLabel = "ADB access failed",
+                        statusMessage = error.message ?: AUTHORIZATION_FAILED_MESSAGE,
+                        permissionTitle = "ADB access was not granted",
+                        permissionMessage = (error.message ?: AUTHORIZATION_FAILED_MESSAGE) +
+                            " Press the button to try again.",
+                        permissionButtonLabel = "Retry ADB access",
+                        topProcesses = emptyList(),
+                    )
+                }
             }
         }
     }
 
     private fun startObserving() {
         observeJob?.cancel()
-        autoRetryJob?.cancel()
         Log.d(TAG, "Starting process observation")
         _uiState.value = PerfViewViewState(
+            screen = PerfViewScreen.Content,
             isLoading = true,
             sourceLabel = "ADB shell",
             statusMessage = "Connecting to ADB and reading top process usage",
@@ -51,11 +107,10 @@ class PerfViewViewModel(
             observeCpuUsage().collect { result ->
                 when (result) {
                     is CpuUsageResult.Success -> _uiState.update { current ->
-                        autoRetryJob?.cancel()
-                        autoRetryCount = 0
                         val observation = result.observation
                         Log.d(TAG, "Observation success with ${observation.topProcesses.size} processes")
                         current.copy(
+                            screen = PerfViewScreen.Content,
                             isLoading = false,
                             topProcesses = observation.topProcesses,
                             isSupported = true,
@@ -74,29 +129,9 @@ class PerfViewViewModel(
                             topProcesses = emptyList(),
                             sourceLabel = "Unavailable",
                         )
-                    }.also {
-                        scheduleAutoRetryIfNeeded()
                     }
                 }
             }
-        }
-    }
-
-    private fun scheduleAutoRetryIfNeeded() {
-        if (autoRetryCount >= MAX_AUTO_RETRIES) return
-
-        autoRetryJob?.cancel()
-        autoRetryJob = viewModelScope.launch {
-            autoRetryCount += 1
-            Log.d(TAG, "Scheduling auto retry #$autoRetryCount")
-            _uiState.update {
-                it.copy(
-                    statusMessage = "Waiting for ADB authorization, retrying automatically",
-                    sourceLabel = "ADB shell",
-                )
-            }
-            delay(AUTO_RETRY_DELAY_MILLIS)
-            startObserving()
         }
     }
 
@@ -108,8 +143,9 @@ class PerfViewViewModel(
     }
 
     private companion object {
-        private const val MAX_AUTO_RETRIES = Int.MAX_VALUE
-        private const val AUTO_RETRY_DELAY_MILLIS = 3_000L
+        private const val ADB_REQUEST_TIMEOUT_MILLIS = 30_000L
+        private const val AUTHORIZATION_FAILED_MESSAGE =
+            "Perf View could not get ADB access within 30 seconds."
         private const val TAG = "PerfViewVm"
     }
 }

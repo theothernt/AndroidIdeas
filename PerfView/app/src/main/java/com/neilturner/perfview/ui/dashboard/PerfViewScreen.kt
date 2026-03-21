@@ -8,6 +8,7 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -27,11 +29,13 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.perfview.data.cpu.TopProcessUsage
@@ -48,12 +52,16 @@ fun PerfViewRoute(
         viewModel.accept(PerfViewIntent.Load)
     }
 
-    PerfViewScreen(uiState = uiState)
+    PerfViewScreen(
+        uiState = uiState,
+        onRequestAdbAccess = { viewModel.accept(PerfViewIntent.RequestAdbAccess) },
+    )
 }
 
 @Composable
 fun PerfViewScreen(
     uiState: PerfViewViewState,
+    onRequestAdbAccess: () -> Unit = {},
 ) {
     Box(
         modifier = Modifier
@@ -69,18 +77,90 @@ fun PerfViewScreen(
             )
             .padding(horizontal = 32.dp, vertical = 24.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(18.dp)
-        ) {
-            Header(uiState = uiState)
-            ProcessListCard(
-                processes = uiState.topProcesses,
-                isSupported = uiState.isSupported,
-                statusMessage = uiState.statusMessage,
+        when (uiState.screen) {
+            PerfViewScreen.PermissionRationale,
+            PerfViewScreen.Authorizing,
+            PerfViewScreen.AuthorizationFailed -> PermissionGate(
+                uiState = uiState,
+                onRequestAdbAccess = onRequestAdbAccess,
             )
-            if (!uiState.isSupported) {
-                ErrorCard(message = uiState.statusMessage)
+
+            PerfViewScreen.Content -> {
+                Column(
+                    modifier = Modifier.fillMaxSize(),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+                    Header(uiState = uiState)
+                    ProcessListCard(
+                        processes = uiState.topProcesses,
+                        isSupported = uiState.isSupported,
+                        statusMessage = uiState.statusMessage,
+                    )
+                    if (!uiState.isSupported) {
+                        ErrorCard(message = uiState.statusMessage)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionGate(
+    uiState: PerfViewViewState,
+    onRequestAdbAccess: () -> Unit,
+) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    color = Color(0x33224452),
+                    shape = RoundedCornerShape(28.dp)
+                )
+                .border(
+                    width = 1.dp,
+                    color = Color(0x30D2E6E9),
+                    shape = RoundedCornerShape(28.dp)
+                )
+                .padding(horizontal = 40.dp, vertical = 36.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            if (uiState.screen == PerfViewScreen.Authorizing) {
+                WaitingIndicator()
+            }
+
+            Text(
+                text = uiState.permissionTitle,
+                style = MaterialTheme.typography.displayLarge.copy(
+                    fontSize = 34.sp,
+                    fontWeight = FontWeight.Bold,
+                ),
+                color = Color.White,
+                textAlign = TextAlign.Center,
+            )
+            Text(
+                text = uiState.permissionMessage,
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color(0xFFD2E6E9),
+                textAlign = TextAlign.Center,
+            )
+            if (uiState.screen == PerfViewScreen.Authorizing) {
+                Text(
+                    text = uiState.statusMessage,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color(0xFF8BE8FF),
+                    textAlign = TextAlign.Center,
+                )
+            } else {
+                Spacer(modifier = Modifier.height(4.dp))
+                Button(onClick = onRequestAdbAccess) {
+                    Text(text = uiState.permissionButtonLabel)
+                }
             }
         }
     }
@@ -141,6 +221,43 @@ private fun PollingIndicator() {
                 sweepAngle = 250f,
                 useCenter = false,
                 style = Stroke(width = 2.dp.toPx()),
+            )
+        }
+    }
+}
+
+@Composable
+private fun WaitingIndicator() {
+    val transition = rememberInfiniteTransition(label = "authorization")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 900, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "authorizationRotation",
+    )
+
+    Box(
+        modifier = Modifier
+            .size(72.dp)
+            .rotate(rotation),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.size(72.dp)) {
+            drawArc(
+                brush = Brush.sweepGradient(
+                    colors = listOf(
+                        Color(0xFF52E3B0),
+                        Color(0xFF8BE8FF),
+                        Color(0xFF52E3B0),
+                    )
+                ),
+                startAngle = 0f,
+                sweepAngle = 300f,
+                useCenter = false,
+                style = Stroke(width = 6.dp.toPx()),
             )
         }
     }
@@ -308,6 +425,7 @@ private fun PerfViewScreenPreview() {
     PerfViewTheme {
         PerfViewScreen(
             uiState = PerfViewViewState(
+                screen = PerfViewScreen.Content,
                 isLoading = false,
                 topProcesses = listOf(
                     TopProcessUsage(1234, "com.android.systemui", 12.5f, "root", "S"),
