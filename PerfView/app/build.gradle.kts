@@ -17,12 +17,17 @@ android {
 		targetSdk = 36
 		versionCode = 1
 		versionName = "1.0"
+		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
 	}
 
 	buildTypes {
+		debug {
+			buildConfigField("String", "CPU_BRIDGE_URL", "\"http://10.0.2.2:8765/cpu\"")
+		}
 		release {
 			isMinifyEnabled = false
+			buildConfigField("String", "CPU_BRIDGE_URL", "\"\"")
 			proguardFiles(
 				getDefaultProguardFile("proguard-android-optimize.txt"),
 				"proguard-rules.pro"
@@ -35,6 +40,7 @@ android {
 	}
 	buildFeatures {
 		compose = true
+		buildConfig = true
 	}
 }
 
@@ -48,7 +54,13 @@ dependencies {
 	implementation(libs.androidx.tv.foundation)
 	implementation(libs.androidx.tv.material)
 	implementation(libs.androidx.lifecycle.runtime.ktx)
+	implementation(libs.androidx.lifecycle.runtime.compose)
+	implementation(libs.androidx.lifecycle.viewmodel.ktx)
 	implementation(libs.androidx.activity.compose)
+	implementation(libs.koin.android)
+	implementation(libs.koin.androidx.compose)
+	implementation(libs.libadb.android)
+	implementation(libs.sun.security.android)
 	androidTestImplementation(platform(libs.androidx.compose.bom))
 	androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 	debugImplementation(libs.androidx.compose.ui.tooling)
