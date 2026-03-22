@@ -6,9 +6,7 @@ plugins {
 android {
 	namespace = "com.neilturner.perfview"
 	compileSdk {
-		version = release(36) {
-			minorApiLevel = 1
-		}
+		version = release(36)
 	}
 
 	defaultConfig {
@@ -18,25 +16,23 @@ android {
 		versionCode = 1
 		versionName = "1.0"
 		testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
 	}
 
 	buildTypes {
 		debug {
-			buildConfigField("String", "CPU_BRIDGE_URL", "\"http://10.0.2.2:8765/cpu\"")
 		}
 		release {
-			isMinifyEnabled = false
-			buildConfigField("String", "CPU_BRIDGE_URL", "\"\"")
+			isMinifyEnabled = true
 			proguardFiles(
 				getDefaultProguardFile("proguard-android-optimize.txt"),
 				"proguard-rules.pro"
 			)
+			signingConfig = signingConfigs.getByName("debug")
 		}
 	}
 	compileOptions {
-		sourceCompatibility = JavaVersion.VERSION_11
-		targetCompatibility = JavaVersion.VERSION_11
+		sourceCompatibility = JavaVersion.VERSION_21
+		targetCompatibility = JavaVersion.VERSION_21
 	}
 	buildFeatures {
 		compose = true
