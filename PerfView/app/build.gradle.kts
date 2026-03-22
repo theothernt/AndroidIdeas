@@ -56,6 +56,7 @@ dependencies {
 	implementation(libs.koin.android)
 	implementation(libs.koin.androidx.compose)
 	implementation(libs.libadb.android)
+	implementation("org.conscrypt:conscrypt-android:2.5.3")
 	implementation(libs.sun.security.android)
 	androidTestImplementation(platform(libs.androidx.compose.bom))
 	androidTestImplementation(libs.androidx.compose.ui.test.junit4)
