@@ -2,7 +2,8 @@ package com.neilturner.perfview.data.adb
 
 import android.content.Context
 import android.os.Build
-import android.sun.misc.BASE64Encoder
+import android.util.Base64
+import android.util.Log
 import android.sun.security.provider.X509Factory
 import android.sun.security.x509.AlgorithmId
 import android.sun.security.x509.CertificateAlgorithmId
@@ -41,6 +42,7 @@ import java.security.spec.PKCS8EncodedKeySpec
 import java.util.Date
 import java.util.Random
 import javax.net.ssl.SSLContext
+import kotlin.Int.Companion.MAX_VALUE
 
 class PerfViewAdbConnectionManager private constructor(context: Context) :
 	AbsAdbConnectionManager() {
@@ -49,20 +51,24 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
 	private val sslContext: SSLContext
 
 	init {
-		setApi(Build.VERSION.SDK_INT)
+		Log.d(TAG, "Initializing ADB connection manager (API ${Build.VERSION.SDK_INT})")
+		api = Build.VERSION.SDK_INT
 		var storedPrivateKey: PrivateKey? = readPrivateKeyFromFile(context)
 		var storedCertificate: Certificate? = readCertificateFromFile(context)
 
 		if (storedPrivateKey == null || storedCertificate == null) {
+			Log.i(TAG, "Generating new RSA key pair and certificate...")
 			val keyPairGenerator = KeyPairGenerator.getInstance("RSA")
 			keyPairGenerator.initialize(2048, SecureRandom.getInstance("SHA1PRNG"))
 			val generatedKeyPair = keyPairGenerator.generateKeyPair()
 
-			storedPrivateKey = generatedKeyPair.getPrivate()
-			storedCertificate = generateCertificate(generatedKeyPair.getPublic(), storedPrivateKey)
+			storedPrivateKey = generatedKeyPair.private
+			storedCertificate = generateCertificate(generatedKeyPair.public, storedPrivateKey)
 
 			writePrivateKeyToFile(context, storedPrivateKey)
 			writeCertificateToFile(context, storedCertificate)
+		} else {
+			Log.d(TAG, "Loaded existing RSA key and certificate from files")
 		}
 
 		privateKey = storedPrivateKey
@@ -84,18 +90,15 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
 		return "PerfView"
 	}
 
-	fun getSslContext(): SSLContext {
-		return sslContext
-	}
-
 	companion object {
+		private const val TAG = "PerfViewAdbConn"
 		private var INSTANCE: PerfViewAdbConnectionManager? = null
 
 		@Synchronized
 		@Throws(Exception::class)
 		fun getInstance(context: Context): PerfViewAdbConnectionManager {
 			if (INSTANCE == null) {
-				INSTANCE = PerfViewAdbConnectionManager(context.getApplicationContext())
+				INSTANCE = PerfViewAdbConnectionManager(context.applicationContext)
 			}
 			return INSTANCE!!
 		}
@@ -109,7 +112,7 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
 			val certificateExtensions = CertificateExtensions()
 			certificateExtensions.set(
 				"SubjectKeyIdentifier", SubjectKeyIdentifierExtension(
-					KeyIdentifier(publicKey).getIdentifier()
+					KeyIdentifier(publicKey).identifier
 				)
 			)
 			val x500Name = X500Name(subject)
@@ -124,7 +127,7 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
 			x509CertInfo.set("version", CertificateVersion(2))
 			x509CertInfo.set(
 				"serialNumber",
-				CertificateSerialNumber(Random().nextInt() and Int.Companion.MAX_VALUE)
+				CertificateSerialNumber(Random().nextInt() and MAX_VALUE)
 			)
 			x509CertInfo.set("algorithmID", CertificateAlgorithmId(AlgorithmId.get(algorithmName)))
 			x509CertInfo.set("subject", CertificateSubjectName(x500Name))
@@ -139,7 +142,7 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
 
 		@Throws(IOException::class, CertificateException::class)
 		private fun readCertificateFromFile(context: Context): Certificate? {
-			val certFile = File(context.getFilesDir(), "perfview-cert.pem")
+			val certFile = File(context.filesDir, "perfview-cert.pem")
 			if (!certFile.exists()) return null
 			FileInputStream(certFile).use { cert ->
 				return CertificateFactory.getInstance("X.509").generateCertificate(cert)
@@ -148,12 +151,13 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
 
 		@Throws(CertificateEncodingException::class, IOException::class)
 		private fun writeCertificateToFile(context: Context, certificate: Certificate) {
-			val certFile = File(context.getFilesDir(), "perfview-cert.pem")
-			val encoder = BASE64Encoder()
+			val certFile = File(context.filesDir, "perfview-cert.pem")
+			Log.d(TAG, "Writing certificate to ${certFile.absolutePath}")
 			FileOutputStream(certFile).use { os ->
 				os.write(X509Factory.BEGIN_CERT.toByteArray(StandardCharsets.UTF_8))
 				os.write('\n'.code)
-				encoder.encode(certificate.getEncoded(), os)
+				val encoded = Base64.encodeToString(certificate.encoded, Base64.DEFAULT)
+				os.write(encoded.toByteArray(StandardCharsets.UTF_8))
 				os.write('\n'.code)
 				os.write(X509Factory.END_CERT.toByteArray(StandardCharsets.UTF_8))
 			}
@@ -161,7 +165,7 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
 
 		@Throws(IOException::class, NoSuchAlgorithmException::class, InvalidKeySpecException::class)
 		private fun readPrivateKeyFromFile(context: Context): PrivateKey? {
-			val privateKeyFile = File(context.getFilesDir(), "perfview-private.key")
+			val privateKeyFile = File(context.filesDir, "perfview-private.key")
 			if (!privateKeyFile.exists()) return null
 			val privateKeyBytes = ByteArray(privateKeyFile.length().toInt())
 			FileInputStream(privateKeyFile).use { `is` ->
@@ -174,9 +178,9 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
 
 		@Throws(IOException::class)
 		private fun writePrivateKeyToFile(context: Context, privateKey: PrivateKey) {
-			val privateKeyFile = File(context.getFilesDir(), "perfview-private.key")
+			val privateKeyFile = File(context.filesDir, "perfview-private.key")
 			FileOutputStream(privateKeyFile).use { os ->
-				os.write(privateKey.getEncoded())
+				os.write(privateKey.encoded)
 			}
 		}
 	}

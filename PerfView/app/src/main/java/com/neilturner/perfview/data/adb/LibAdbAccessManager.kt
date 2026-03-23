@@ -43,8 +43,7 @@ class LibAdbAccessManager(
         if (manager.isConnected) return
 
         try {
-            val host = getDeviceIpAddress()
-            Log.d(TAG, "Device IP address: $host")
+            val host = "127.0.0.1"
             Log.d(TAG, "Attempting direct ADB connect to $host:$DEFAULT_ADB_PORT")
             val connected = manager.connect(host, DEFAULT_ADB_PORT)
             if (!connected) {
@@ -63,32 +62,6 @@ class LibAdbAccessManager(
             Log.e(TAG, "ADB connection failed", error)
             throw error
         }
-    }
-
-    private fun getDeviceIpAddress(): String {
-        try {
-            val networkInterfaces = NetworkInterface.getNetworkInterfaces()
-            while (networkInterfaces.hasMoreElements()) {
-                val networkInterface = networkInterfaces.nextElement()
-                val addresses = networkInterface.inetAddresses
-                while (addresses.hasMoreElements()) {
-                    val address = addresses.nextElement()
-                    if (!address.isLoopbackAddress && address is Inet4Address) {
-                        val hostAddress = address.hostAddress
-                        if (!hostAddress.isNullOrBlank()) {
-                            Log.d(TAG, "Found IP: $hostAddress on interface ${networkInterface.name}")
-                            return hostAddress
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error getting device IP address", e)
-        }
-
-        throw IllegalStateException(
-            "Could not determine device IP address. Make sure you're connected to Wi-Fi."
-        )
     }
 
     private fun persistGrantedAccess(granted: Boolean) {
