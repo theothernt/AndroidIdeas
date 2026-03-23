@@ -5,7 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Surface
 import com.neilturner.perfview.ui.dashboard.PerfViewRoute
@@ -19,7 +18,6 @@ class MainActivity : ComponentActivity() {
             PerfViewTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    shape = RectangleShape
                 ) {
                     PerfViewRoute()
                 }

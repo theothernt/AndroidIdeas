@@ -11,7 +11,14 @@ class LibAdbShellClient(
 ) : AdbShellClient {
     override suspend fun run(command: String): String = withContext(Dispatchers.IO) {
         Log.d(TAG, "ADB command requested: $command")
-        adbAccessManager.ensureConnected()
+
+        try {
+            adbAccessManager.ensureConnected()
+        } catch (exception: Exception) {
+            Log.e(TAG, "Failed to ensure ADB connection", exception)
+            throw AdbShellException.ConnectionException(command, exception)
+        }
+
         val manager = PerfViewAdbConnectionManager.getInstance(context)
 
         val stream = manager.openStream("shell:$command")
@@ -36,15 +43,24 @@ class LibAdbShellClient(
                 val result = output.toString().trim()
                 if (!receivedAnyData || result.isEmpty()) {
                     Log.w(TAG, "ADB command produced no readable output: $command")
-                    error("ADB command returned no output: $command")
+                    throw AdbShellException.NoOutputException(command)
                 }
 
                 Log.d(TAG, "ADB command completed: $command (${result.lineSequence().count()} lines)")
                 result
             }
+        } catch (exception: AdbShellException) {
+            throw exception
+        } catch (exception: Exception) {
+            Log.e(TAG, "Unexpected error during ADB command execution", exception)
+            throw AdbShellException.UnknownException(
+                command = command,
+                message = exception.message ?: "Unknown error during command execution",
+                cause = exception
+            )
         } finally {
             Log.d(TAG, "Closing ADB stream for command: $command")
-            stream.close()
+            runCatching { stream.close() }
         }
     }
 

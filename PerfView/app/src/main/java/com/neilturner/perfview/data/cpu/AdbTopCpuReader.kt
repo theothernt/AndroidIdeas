@@ -2,14 +2,35 @@ package com.neilturner.perfview.data.cpu
 
 import android.util.Log
 import com.neilturner.perfview.data.adb.AdbShellClient
+import com.neilturner.perfview.data.adb.AdbShellException
 
 class AdbTopCpuReader(
     private val adbShellClient: AdbShellClient,
 ) {
-    suspend fun readSnapshot(limit: Int = COMMAND_LIMIT): CpuUsageSnapshot {
+    /**
+     * Reads a snapshot of CPU usage data.
+     *
+     * @param limit Maximum number of processes to include in the output
+     * @return Result containing the CPU snapshot or an error
+     */
+    suspend fun readSnapshot(limit: Int = COMMAND_LIMIT): Result<CpuUsageSnapshot> {
         val command = "top -n 1 -b -m $limit"
         Log.d(TAG, "Running process snapshot command: $command")
-        val output = adbShellClient.run(command)
+
+        val output = try {
+            adbShellClient.run(command)
+        } catch (exception: AdbShellException) {
+            Log.e(TAG, "ADB shell command failed", exception)
+            return Result.failure(CpuReadException.fromError(
+                CpuReadError.AdbError(exception.message ?: "Unknown ADB error", exception)
+            ))
+        } catch (exception: Exception) {
+            Log.e(TAG, "Unexpected error during ADB shell command", exception)
+            return Result.failure(CpuReadException.fromError(
+                CpuReadError.AdbError(exception.message ?: "Unknown error", exception)
+            ))
+        }
+
         val lines = output.lineSequence()
             .map { it.trimEnd() }
             .filter { it.isNotBlank() }
@@ -17,31 +38,40 @@ class AdbTopCpuReader(
         Log.d(TAG, "Received ${lines.size} non-blank lines from top")
 
         val totalLine = lines.firstOrNull { it.contains("%cpu") }
-            ?: error("top output did not include a CPU summary")
-        val totalCpuPercent = parseTotalCpuPercent(totalLine)
+            ?: return Result.failure(CpuReadException.fromError(CpuReadError.MissingCpuSummary))
+
+        val totalCpuPercentResult = parseTotalCpuPercent(totalLine)
+        val totalCpuPercent = totalCpuPercentResult.getOrElse { error ->
+            return Result.failure(error)
+        }
 
         val processRows = lines
             .dropWhile { !it.contains("ARGS") }
             .drop(1)
-            .mapNotNull(::parseProcessRow)
+            .mapNotNull { line -> parseProcessRow(line) }
             .filter { it.cpuPercent > 0f }
-            .filterNot(::shouldIgnoreProcess)
+            .filterNot { shouldIgnoreProcess(it) }
             .take(DEFAULT_VISIBLE_LIMIT)
         Log.d(TAG, "Parsed ${processRows.size} visible process rows")
 
-        return CpuUsageSnapshot(
-            totalCpuPercent = totalCpuPercent,
-            topProcesses = processRows,
-            timestampMillis = System.currentTimeMillis(),
+        return Result.success(
+            CpuUsageSnapshot(
+                totalCpuPercent = totalCpuPercent,
+                topProcesses = processRows,
+                timestampMillis = System.currentTimeMillis(),
+            )
         )
     }
 
-    private fun parseTotalCpuPercent(line: String): Float {
+    private fun parseTotalCpuPercent(line: String): Result<Float> {
         val totalCapacity = PERCENT_TOKEN.find(line)?.groupValues?.get(1)?.toFloatOrNull()
-            ?: error("top output did not expose total CPU capacity")
+            ?: return Result.failure(CpuReadException.fromError(CpuReadError.MissingTotalCpuCapacity))
+
         val idlePercent = IDLE_TOKEN.find(line)?.groupValues?.get(1)?.toFloatOrNull()
-            ?: error("top output did not expose idle CPU")
-        return ((totalCapacity - idlePercent) / totalCapacity * 100f).coerceIn(0f, 100f)
+            ?: return Result.failure(CpuReadException.fromError(CpuReadError.MissingIdleCpu))
+
+        val cpuPercent = ((totalCapacity - idlePercent) / totalCapacity * 100f).coerceIn(0f, 100f)
+        return Result.success(cpuPercent)
     }
 
     private fun parseProcessRow(line: String): TopProcessUsage? {

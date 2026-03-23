@@ -55,9 +55,11 @@ dependencies {
 	implementation(libs.androidx.activity.compose)
 	implementation(libs.koin.android)
 	implementation(libs.koin.androidx.compose)
-	implementation(libs.libadb.android)
-	implementation("org.conscrypt:conscrypt-android:2.5.3")
-	implementation(libs.sun.security.android)
+	implementation(libs.libadb.android) {
+		exclude(group = "org.bouncycastle", module = "bcprov-jdk15to18")
+	}
+	implementation(libs.bouncy.castle.bcprov)
+	implementation(libs.bouncy.castle.bcpkix)
 	androidTestImplementation(platform(libs.androidx.compose.bom))
 	androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 	debugImplementation(libs.androidx.compose.ui.tooling)

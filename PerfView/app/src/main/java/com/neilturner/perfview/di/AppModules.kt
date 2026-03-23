@@ -20,6 +20,6 @@ val appModule = module {
     single<AdbShellClient> { LibAdbShellClient(get<Context>(), get()) }
     single { AdbTopCpuReader(get()) }
     single<CpuRepository> { CpuRepositoryImpl(get()) }
-    single { ObserveCpuUsageUseCase(get()) }
+    single<ObserveCpuUsageUseCase> { ObserveCpuUsageUseCase(get()) }
     viewModelOf(::PerfViewViewModel)
 }

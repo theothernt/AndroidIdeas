@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
 import com.neilturner.perfview.data.adb.AdbAccessManager
-import com.neilturner.perfview.data.cpu.CpuDataSource
 import com.neilturner.perfview.domain.cpu.CpuUsageResult
 import com.neilturner.perfview.domain.cpu.ObserveCpuUsageUseCase
 import com.neilturner.perfview.overlay.OverlayPermissionManager
@@ -189,9 +188,9 @@ class PerfViewViewModel(
                             isLoading = false,
                             topProcesses = observation.topProcesses,
                             isSupported = true,
-                            statusMessage = buildStatusMessage(observation.dataSource),
+                            statusMessage = "Top process usage via ADB",
                             lastUpdatedLabel = timeFormatter.format(Date(observation.collectedAtMillis)),
-                            sourceLabel = buildSourceLabel(observation.dataSource),
+                            sourceLabel = "ADB shell",
                             backgroundActionMessage = current.backgroundActionMessage,
                         )
                     }
@@ -227,13 +226,6 @@ class PerfViewViewModel(
     private fun shouldReturnToPermissionGate(message: String): Boolean {
         val normalized = message.lowercase()
         return "adb" in normalized || "debugging" in normalized || "authoriz" in normalized
-    }
-
-    private fun buildStatusMessage(dataSource: CpuDataSource): String =
-        if (dataSource == CpuDataSource.ADB_SHELL) "Top process usage via ADB" else "Top process usage"
-
-    private fun buildSourceLabel(dataSource: CpuDataSource): String = when (dataSource) {
-        CpuDataSource.ADB_SHELL -> "ADB shell"
     }
 
     private companion object {

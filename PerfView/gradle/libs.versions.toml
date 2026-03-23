@@ -12,7 +12,7 @@ lifecycleViewModelKtx = "2.10.0"
 activityCompose = "1.13.0"
 koin = "4.2.0"
 libadbAndroid = "3.1.1"
-sunSecurityAndroid = "1.1"
+bouncyCastle = "1.83"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -33,7 +33,8 @@ androidx-activity-compose = { group = "androidx.activity", name = "activity-comp
 koin-android = { group = "io.insert-koin", name = "koin-android", version.ref = "koin" }
 koin-androidx-compose = { group = "io.insert-koin", name = "koin-androidx-compose", version.ref = "koin" }
 libadb-android = { group = "com.github.MuntashirAkon", name = "libadb-android", version.ref = "libadbAndroid" }
-sun-security-android = { group = "com.github.MuntashirAkon", name = "sun-security-android", version.ref = "sunSecurityAndroid" }
+bouncy-castle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncyCastle" }
+bouncy-castle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncyCastle" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

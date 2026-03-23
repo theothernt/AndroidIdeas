@@ -4,184 +4,212 @@ import android.content.Context
 import android.os.Build
 import android.util.Base64
 import android.util.Log
-import android.sun.security.provider.X509Factory
-import android.sun.security.x509.AlgorithmId
-import android.sun.security.x509.CertificateAlgorithmId
-import android.sun.security.x509.CertificateExtensions
-import android.sun.security.x509.CertificateIssuerName
-import android.sun.security.x509.CertificateSerialNumber
-import android.sun.security.x509.CertificateSubjectName
-import android.sun.security.x509.CertificateValidity
-import android.sun.security.x509.CertificateVersion
-import android.sun.security.x509.CertificateX509Key
-import android.sun.security.x509.KeyIdentifier
-import android.sun.security.x509.PrivateKeyUsageExtension
-import android.sun.security.x509.SubjectKeyIdentifierExtension
-import android.sun.security.x509.X500Name
-import android.sun.security.x509.X509CertImpl
-import android.sun.security.x509.X509CertInfo
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
 import java.io.File
 import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.IOException
+import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
-import java.security.NoSuchAlgorithmException
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.security.SecureRandom
 import java.security.cert.Certificate
-import java.security.cert.CertificateEncodingException
-import java.security.cert.CertificateException
 import java.security.cert.CertificateFactory
-import java.security.spec.EncodedKeySpec
-import java.security.spec.InvalidKeySpecException
 import java.security.spec.PKCS8EncodedKeySpec
+import java.security.spec.X509EncodedKeySpec
 import java.util.Date
-import java.util.Random
 import javax.net.ssl.SSLContext
-import kotlin.Int.Companion.MAX_VALUE
+import org.bouncycastle.asn1.x500.X500Name
+import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo
+import org.bouncycastle.cert.X509CertificateHolder
+import org.bouncycastle.cert.X509v3CertificateBuilder
+import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
+import org.bouncycastle.jce.provider.BouncyCastleProvider
+import org.bouncycastle.operator.ContentSigner
+import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 
 class PerfViewAdbConnectionManager private constructor(context: Context) :
-	AbsAdbConnectionManager() {
-	private val privateKey: PrivateKey?
-	private val certificate: Certificate?
-	private val sslContext: SSLContext
+    AbsAdbConnectionManager() {
+    private val privateKey: PrivateKey
+    private val certificate: Certificate
+    private val sslContext: SSLContext
 
-	init {
-		Log.d(TAG, "Initializing ADB connection manager (API ${Build.VERSION.SDK_INT})")
-		api = Build.VERSION.SDK_INT
-		var storedPrivateKey: PrivateKey? = readPrivateKeyFromFile(context)
-		var storedCertificate: Certificate? = readCertificateFromFile(context)
+    init {
+        Log.d(TAG, "Initializing ADB connection manager (API ${Build.VERSION.SDK_INT})")
+        api = Build.VERSION.SDK_INT
 
-		if (storedPrivateKey == null || storedCertificate == null) {
-			Log.i(TAG, "Generating new RSA key pair and certificate...")
-			val keyPairGenerator = KeyPairGenerator.getInstance("RSA")
-			keyPairGenerator.initialize(2048, SecureRandom.getInstance("SHA1PRNG"))
-			val generatedKeyPair = keyPairGenerator.generateKeyPair()
+        val keyPair = loadOrGenerateKeyPair(context)
+        privateKey = keyPair.private
+        certificate = loadOrGenerateCertificate(context, keyPair.public, keyPair.private)
 
-			storedPrivateKey = generatedKeyPair.private
-			storedCertificate = generateCertificate(generatedKeyPair.public, storedPrivateKey)
+        sslContext = SSLContext.getInstance("TLS")
+        sslContext.init(null, null, SecureRandom())
+    }
 
-			writePrivateKeyToFile(context, storedPrivateKey)
-			writeCertificateToFile(context, storedCertificate)
-		} else {
-			Log.d(TAG, "Loaded existing RSA key and certificate from files")
-		}
+    override fun getPrivateKey(): PrivateKey = privateKey
 
-		privateKey = storedPrivateKey
-		certificate = storedCertificate
+    override fun getCertificate(): Certificate = certificate
 
-		sslContext = SSLContext.getInstance("TLS")
-		sslContext.init(null, null, SecureRandom())
-	}
+    override fun getDeviceName(): String = "PerfView"
 
-	override fun getPrivateKey(): PrivateKey {
-		return privateKey!!
-	}
+    companion object {
+        private const val TAG = "PerfViewAdbConn"
+        private const val KEY_ALIAS = "perfview"
+        private const val CERT_FILE_NAME = "perfview-cert.pem"
+        private const val KEY_FILE_NAME = "perfview-private.key"
+        private const val CERT_VALIDITY_DAYS = 365 * 20
 
-	override fun getCertificate(): Certificate {
-		return certificate!!
-	}
+        private var INSTANCE: PerfViewAdbConnectionManager? = null
 
-	override fun getDeviceName(): String {
-		return "PerfView"
-	}
+        @Synchronized
+        @Throws(Exception::class)
+        fun getInstance(context: Context): PerfViewAdbConnectionManager {
+            if (INSTANCE == null) {
+                INSTANCE = PerfViewAdbConnectionManager(context.applicationContext)
+            }
+            return INSTANCE!!
+        }
 
-	companion object {
-		private const val TAG = "PerfViewAdbConn"
-		private var INSTANCE: PerfViewAdbConnectionManager? = null
+        private fun loadOrGenerateKeyPair(context: Context): KeyPairData {
+            val privateKey = readPrivateKeyFromFile(context)
+            val publicKey = readPublicKeyFromFile(context)
 
-		@Synchronized
-		@Throws(Exception::class)
-		fun getInstance(context: Context): PerfViewAdbConnectionManager {
-			if (INSTANCE == null) {
-				INSTANCE = PerfViewAdbConnectionManager(context.applicationContext)
-			}
-			return INSTANCE!!
-		}
+            return if (privateKey != null && publicKey != null) {
+                Log.d(TAG, "Loaded existing RSA key pair from files")
+                KeyPairData(publicKey, privateKey)
+            } else {
+                Log.i(TAG, "Generating new RSA key pair...")
+                val keyPairGenerator = KeyPairGenerator.getInstance("RSA", BouncyCastleProvider())
+                keyPairGenerator.initialize(2048, SecureRandom())
+                val keyPair = keyPairGenerator.generateKeyPair()
 
-		@Throws(Exception::class)
-		private fun generateCertificate(publicKey: PublicKey, privateKey: PrivateKey): Certificate {
-			val subject = "CN=PerfView"
-			val algorithmName = "SHA512withRSA"
-			val now = System.currentTimeMillis()
-			val expiryDate = now + 630720000000L
-			val certificateExtensions = CertificateExtensions()
-			certificateExtensions.set(
-				"SubjectKeyIdentifier", SubjectKeyIdentifierExtension(
-					KeyIdentifier(publicKey).identifier
-				)
-			)
-			val x500Name = X500Name(subject)
-			val notBefore = Date(now - 86400000L)
-			val notAfter = Date(expiryDate)
-			certificateExtensions.set(
-				"PrivateKeyUsage",
-				PrivateKeyUsageExtension(notBefore, notAfter)
-			)
-			val certificateValidity = CertificateValidity(notBefore, notAfter)
-			val x509CertInfo = X509CertInfo()
-			x509CertInfo.set("version", CertificateVersion(2))
-			x509CertInfo.set(
-				"serialNumber",
-				CertificateSerialNumber(Random().nextInt() and MAX_VALUE)
-			)
-			x509CertInfo.set("algorithmID", CertificateAlgorithmId(AlgorithmId.get(algorithmName)))
-			x509CertInfo.set("subject", CertificateSubjectName(x500Name))
-			x509CertInfo.set("key", CertificateX509Key(publicKey))
-			x509CertInfo.set("validity", certificateValidity)
-			x509CertInfo.set("issuer", CertificateIssuerName(x500Name))
-			x509CertInfo.set("extensions", certificateExtensions)
-			val x509CertImpl = X509CertImpl(x509CertInfo)
-			x509CertImpl.sign(privateKey, algorithmName)
-			return x509CertImpl
-		}
+                writePrivateKeyToFile(context, keyPair.private)
+                writePublicKeyToFile(context, keyPair.public)
 
-		@Throws(IOException::class, CertificateException::class)
-		private fun readCertificateFromFile(context: Context): Certificate? {
-			val certFile = File(context.filesDir, "perfview-cert.pem")
-			if (!certFile.exists()) return null
-			FileInputStream(certFile).use { cert ->
-				return CertificateFactory.getInstance("X.509").generateCertificate(cert)
-			}
-		}
+                KeyPairData(keyPair.public, keyPair.private)
+            }
+        }
 
-		@Throws(CertificateEncodingException::class, IOException::class)
-		private fun writeCertificateToFile(context: Context, certificate: Certificate) {
-			val certFile = File(context.filesDir, "perfview-cert.pem")
-			Log.d(TAG, "Writing certificate to ${certFile.absolutePath}")
-			FileOutputStream(certFile).use { os ->
-				os.write(X509Factory.BEGIN_CERT.toByteArray(StandardCharsets.UTF_8))
-				os.write('\n'.code)
-				val encoded = Base64.encodeToString(certificate.encoded, Base64.DEFAULT)
-				os.write(encoded.toByteArray(StandardCharsets.UTF_8))
-				os.write('\n'.code)
-				os.write(X509Factory.END_CERT.toByteArray(StandardCharsets.UTF_8))
-			}
-		}
+        private fun loadOrGenerateCertificate(
+            context: Context,
+            publicKey: PublicKey,
+            privateKey: PrivateKey
+        ): Certificate {
+            val storedCert = readCertificateFromFile(context)
 
-		@Throws(IOException::class, NoSuchAlgorithmException::class, InvalidKeySpecException::class)
-		private fun readPrivateKeyFromFile(context: Context): PrivateKey? {
-			val privateKeyFile = File(context.filesDir, "perfview-private.key")
-			if (!privateKeyFile.exists()) return null
-			val privateKeyBytes = ByteArray(privateKeyFile.length().toInt())
-			FileInputStream(privateKeyFile).use { `is` ->
-				`is`.read(privateKeyBytes)
-			}
-			val keyFactory = KeyFactory.getInstance("RSA")
-			val privateKeySpec: EncodedKeySpec = PKCS8EncodedKeySpec(privateKeyBytes)
-			return keyFactory.generatePrivate(privateKeySpec)
-		}
+            return storedCert ?: run {
+                Log.i(TAG, "Generating new certificate...")
+                val certificate = generateCertificate(publicKey, privateKey)
+                writeCertificateToFile(context, certificate)
+                certificate
+            }
+        }
 
-		@Throws(IOException::class)
-		private fun writePrivateKeyToFile(context: Context, privateKey: PrivateKey) {
-			val privateKeyFile = File(context.filesDir, "perfview-private.key")
-			FileOutputStream(privateKeyFile).use { os ->
-				os.write(privateKey.encoded)
-			}
-		}
-	}
+        @Throws(Exception::class)
+        private fun generateCertificate(
+            publicKey: PublicKey,
+            privateKey: PrivateKey
+        ): Certificate {
+            val subject = X500Name("CN=PerfView")
+            val now = Date()
+            val expiryDate = Date(now.time + CERT_VALIDITY_DAYS * 24 * 60 * 60 * 1000L)
+
+            val publicKeyInfo = SubjectPublicKeyInfo.getInstance(publicKey.encoded)
+            
+            val certBuilder = X509v3CertificateBuilder(
+                subject,
+                BigInteger.valueOf(System.currentTimeMillis()),
+                now,
+                expiryDate,
+                subject,
+                publicKeyInfo
+            )
+
+            val signer: ContentSigner = JcaContentSignerBuilder("SHA512withRSA")
+                .setProvider(BouncyCastleProvider())
+                .build(privateKey)
+
+            val certHolder: X509CertificateHolder = certBuilder.build(signer)
+            return JcaX509CertificateConverter()
+                .setProvider(BouncyCastleProvider())
+                .getCertificate(certHolder)
+        }
+
+        @Throws(IOException::class, java.security.cert.CertificateException::class)
+        private fun readCertificateFromFile(context: Context): Certificate? {
+            val certFile = File(context.filesDir, CERT_FILE_NAME)
+            if (!certFile.exists()) return null
+
+            FileInputStream(certFile).use { cert ->
+                return CertificateFactory.getInstance("X.509").generateCertificate(cert)
+            }
+        }
+
+        @Throws(IOException::class)
+        private fun writeCertificateToFile(context: Context, certificate: Certificate) {
+            val certFile = File(context.filesDir, CERT_FILE_NAME)
+            Log.d(TAG, "Writing certificate to ${certFile.absolutePath}")
+
+            FileOutputStream(certFile).use { os ->
+                os.write("-----BEGIN CERTIFICATE-----\n".toByteArray(StandardCharsets.UTF_8))
+                val encoded = Base64.encodeToString(certificate.encoded, Base64.DEFAULT)
+                os.write(encoded.toByteArray(StandardCharsets.UTF_8))
+                os.write("-----END CERTIFICATE-----\n".toByteArray(StandardCharsets.UTF_8))
+            }
+        }
+
+        @Throws(IOException::class)
+        private fun readPrivateKeyFromFile(context: Context): PrivateKey? {
+            val privateKeyFile = File(context.filesDir, KEY_FILE_NAME)
+            if (!privateKeyFile.exists()) return null
+
+            val privateKeyBytes = ByteArray(privateKeyFile.length().toInt())
+            FileInputStream(privateKeyFile).use { `is` ->
+                `is`.read(privateKeyBytes)
+            }
+
+            val keyFactory = KeyFactory.getInstance("RSA")
+            val privateKeySpec = PKCS8EncodedKeySpec(privateKeyBytes)
+            return keyFactory.generatePrivate(privateKeySpec)
+        }
+
+        @Throws(IOException::class)
+        private fun readPublicKeyFromFile(context: Context): PublicKey? {
+            val publicKeyFile = File(context.filesDir, "$KEY_FILE_NAME.pub")
+            if (!publicKeyFile.exists()) return null
+
+            val publicKeyBytes = ByteArray(publicKeyFile.length().toInt())
+            FileInputStream(publicKeyFile).use { `is` ->
+                `is`.read(publicKeyBytes)
+            }
+
+            val keyFactory = KeyFactory.getInstance("RSA")
+            val publicKeySpec = X509EncodedKeySpec(publicKeyBytes)
+            return keyFactory.generatePublic(publicKeySpec)
+        }
+
+        @Throws(IOException::class)
+        private fun writePrivateKeyToFile(context: Context, privateKey: PrivateKey) {
+            val privateKeyFile = File(context.filesDir, KEY_FILE_NAME)
+            FileOutputStream(privateKeyFile).use { os ->
+                os.write(privateKey.encoded)
+            }
+        }
+
+        @Throws(IOException::class)
+        private fun writePublicKeyToFile(context: Context, publicKey: PublicKey) {
+            val publicKeyFile = File(context.filesDir, "$KEY_FILE_NAME.pub")
+            FileOutputStream(publicKeyFile).use { os ->
+                os.write(publicKey.encoded)
+            }
+        }
+
+        private data class KeyPairData(
+            val public: PublicKey,
+            val private: PrivateKey
+        )
+    }
 }

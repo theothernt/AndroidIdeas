@@ -1,6 +1,5 @@
 package com.neilturner.perfview.domain.cpu
 
-import com.neilturner.perfview.data.cpu.CpuDataSource
 import com.neilturner.perfview.data.cpu.CpuRepository
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -24,7 +23,6 @@ class ObserveCpuUsageUseCase(
                             percent = snapshot.totalCpuPercent,
                             topProcesses = snapshot.topProcesses,
                             collectedAtMillis = snapshot.timestampMillis,
-                            dataSource = CpuDataSource.ADB_SHELL,
                         )
                     )
                 )
