@@ -39,7 +39,7 @@ class ObserveCpuUsageUseCase(
 
     private companion object {
         private const val DEFAULT_INTERVAL_MILLIS = 1_000L
-        private const val SNAPSHOT_TIMEOUT_MILLIS = 4_000L
+        private const val SNAPSHOT_TIMEOUT_MILLIS = 10_000L
         private const val DEFAULT_ERROR_MESSAGE =
             "Unable to connect to ADB. Enable wireless debugging or adb tcpip 5555 first."
     }

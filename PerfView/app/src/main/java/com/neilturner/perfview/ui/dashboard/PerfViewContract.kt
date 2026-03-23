@@ -8,6 +8,7 @@ sealed interface PerfViewIntent {
     data object RequestAdbAccess : PerfViewIntent
     data object RunInBackgroundClicked : PerfViewIntent
     data object OverlayPermissionResult : PerfViewIntent
+    data object AppOpenedToForeground : PerfViewIntent
 }
 
 sealed interface PerfViewCommand {
@@ -16,6 +17,7 @@ sealed interface PerfViewCommand {
     ) : PerfViewCommand
 
     data object StartBackgroundOverlay : PerfViewCommand
+    data object StopBackgroundOverlay : PerfViewCommand
 }
 
 enum class PerfViewScreen {

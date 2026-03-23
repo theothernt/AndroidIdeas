@@ -50,7 +50,13 @@ class PerfViewViewModel(
             PerfViewIntent.RequestAdbAccess -> requestAdbAccess()
             PerfViewIntent.RunInBackgroundClicked -> runInBackground()
             PerfViewIntent.OverlayPermissionResult -> handleOverlayPermissionResult()
+            PerfViewIntent.AppOpenedToForeground -> handleAppOpenedToForeground()
         }
+    }
+
+    private fun handleAppOpenedToForeground() {
+        Log.d(TAG, "App opened to foreground, stopping overlay service")
+        _commands.tryEmit(PerfViewCommand.StopBackgroundOverlay)
     }
 
     private fun showPermissionRationale() {

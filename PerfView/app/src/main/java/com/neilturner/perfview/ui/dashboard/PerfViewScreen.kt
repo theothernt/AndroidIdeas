@@ -86,6 +86,10 @@ fun PerfViewRoute(
                     )
                     (context as? Activity)?.finish()
                 }
+
+                PerfViewCommand.StopBackgroundOverlay -> {
+                    context.stopService(CpuOverlayService.createStopIntent(context))
+                }
             }
         }
     }
