@@ -178,7 +178,7 @@ private fun BackgroundAction(
         if (!message.isNullOrBlank()) {
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFFD2E6E9),
                 textAlign = TextAlign.End,
             )
@@ -205,7 +205,7 @@ private fun BackgroundAction(
             ),
             shape = ButtonDefaults.shape(RoundedCornerShape(16.dp)),
         ) {
-            Text(text = "Run in the background")
+            Text(text = "Run in the background", fontSize = 14.sp)
         }
     }
 }
@@ -242,7 +242,7 @@ private fun PermissionGate(
             Text(
                 text = uiState.permissionTitle,
                 style = MaterialTheme.typography.displayLarge.copy(
-                    fontSize = 34.sp,
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.Bold,
                 ),
                 color = Color.White,
@@ -250,21 +250,21 @@ private fun PermissionGate(
             )
             Text(
                 text = uiState.permissionMessage,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFFD2E6E9),
                 textAlign = TextAlign.Center,
             )
             if (uiState.screen == PerfViewScreen.Authorizing) {
                 Text(
                     text = uiState.statusMessage,
-                    style = MaterialTheme.typography.titleMedium,
+                    style = MaterialTheme.typography.titleSmall,
                     color = Color(0xFF8BE8FF),
                     textAlign = TextAlign.Center,
                 )
             } else {
                 Spacer(modifier = Modifier.height(4.dp))
                 Button(onClick = onRequestAdbAccess) {
-                    Text(text = uiState.permissionButtonLabel)
+                    Text(text = uiState.permissionButtonLabel, fontSize = 14.sp)
                 }
             }
         }
@@ -277,7 +277,7 @@ private fun Header(uiState: PerfViewViewState) {
         Text(
             text = "Top CPU Processes",
             style = MaterialTheme.typography.displayLarge.copy(
-                fontSize = 38.sp,
+                fontSize = 26.sp,
                 fontWeight = FontWeight.Bold,
             ),
             color = Color.White,
@@ -292,7 +292,7 @@ private fun Header(uiState: PerfViewViewState) {
                 } else {
                     "${uiState.sourceLabel} • Last updated ${uiState.lastUpdatedLabel}"
                 },
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
                 color = Color(0xFFD2E6E9),
             )
             PollingIndicator()
@@ -315,17 +315,17 @@ private fun PollingIndicator() {
 
     Box(
         modifier = Modifier
-            .size(14.dp)
+            .size(10.dp)
             .rotate(rotation),
         contentAlignment = Alignment.Center,
     ) {
-        androidx.compose.foundation.Canvas(modifier = Modifier.size(14.dp)) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.size(10.dp)) {
             drawArc(
                 color = Color(0xFF52E3B0),
                 startAngle = 0f,
                 sweepAngle = 250f,
                 useCenter = false,
-                style = Stroke(width = 2.dp.toPx()),
+                style = Stroke(width = 1.5.dp.toPx()),
             )
         }
     }
@@ -346,11 +346,11 @@ private fun WaitingIndicator() {
 
     Box(
         modifier = Modifier
-            .size(72.dp)
+            .size(48.dp)
             .rotate(rotation),
         contentAlignment = Alignment.Center,
     ) {
-        androidx.compose.foundation.Canvas(modifier = Modifier.size(72.dp)) {
+        androidx.compose.foundation.Canvas(modifier = Modifier.size(48.dp)) {
             drawArc(
                 brush = Brush.sweepGradient(
                     colors = listOf(
@@ -362,7 +362,7 @@ private fun WaitingIndicator() {
                 startAngle = 0f,
                 sweepAngle = 300f,
                 useCenter = false,
-                style = Stroke(width = 6.dp.toPx()),
+                style = Stroke(width = 4.dp.toPx()),
             )
         }
     }
@@ -396,7 +396,7 @@ private fun ProcessListCard(
             if (processes.isEmpty() || !isSupported) {
                 Text(
                     text = statusMessage,
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = Color(0xFFB1CDD2),
                 )
             } else {
@@ -471,9 +471,10 @@ private fun CellText(
     ) {
         Text(
             text = text,
-            style = MaterialTheme.typography.bodyLarge,
+            style = MaterialTheme.typography.bodyMedium,
             color = color,
             maxLines = 1,
+            fontSize = 12.sp,
         )
     }
 }
@@ -503,17 +504,17 @@ private fun ErrorCard(
         ) {
             Text(
                 text = "ADB connection unavailable",
-                style = MaterialTheme.typography.titleLarge,
+                style = MaterialTheme.typography.titleMedium,
                 color = Color.White,
             )
             Text(
                 text = message,
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFFFFE2E2),
             )
             Text(
                 text = "Restore ADB access to resume live process updates.",
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodyMedium,
                 color = Color(0xFFFFE2E2),
             )
         }
