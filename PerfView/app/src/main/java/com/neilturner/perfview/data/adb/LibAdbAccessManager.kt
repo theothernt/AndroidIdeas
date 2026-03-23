@@ -1,12 +1,13 @@
 package com.neilturner.perfview.data.adb
 
 import android.content.Context
-import android.os.Build
+import android.net.wifi.WifiManager
 import android.util.Log
 import io.github.muntashirakon.adb.AdbPairingRequiredException
-import io.github.muntashirakon.adb.android.AndroidUtils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.net.Inet4Address
+import java.net.NetworkInterface
 
 class LibAdbAccessManager(
     private val context: Context,
@@ -42,23 +43,14 @@ class LibAdbAccessManager(
         if (manager.isConnected) return
 
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                Log.d(TAG, "Attempting ADB autoConnect with timeout=$timeoutMillis")
-                runCatching { manager.autoConnect(context, timeoutMillis) }
-                    .getOrDefault(false)
-                    .also { connected ->
-                        Log.d(TAG, "ADB autoConnect result: $connected")
-                        if (connected) return
-                    }
-            }
-
-            val host = AndroidUtils.getHostIpAddress(context)
+            val host = getDeviceIpAddress()
+            Log.d(TAG, "Device IP address: $host")
             Log.d(TAG, "Attempting direct ADB connect to $host:$DEFAULT_ADB_PORT")
             val connected = manager.connect(host, DEFAULT_ADB_PORT)
             if (!connected) {
                 Log.w(TAG, "Direct ADB connect returned false for $host:$DEFAULT_ADB_PORT")
                 throw IllegalStateException(
-                    "Perf View could not get ADB access. Approve the loopback debugging prompt and try again."
+                    "Perf View could not get ADB access. Make sure wireless debugging is enabled and try again."
                 )
             }
             Log.d(TAG, "Direct ADB connect succeeded")
@@ -71,6 +63,32 @@ class LibAdbAccessManager(
             Log.e(TAG, "ADB connection failed", error)
             throw error
         }
+    }
+
+    private fun getDeviceIpAddress(): String {
+        try {
+            val networkInterfaces = NetworkInterface.getNetworkInterfaces()
+            while (networkInterfaces.hasMoreElements()) {
+                val networkInterface = networkInterfaces.nextElement()
+                val addresses = networkInterface.inetAddresses
+                while (addresses.hasMoreElements()) {
+                    val address = addresses.nextElement()
+                    if (!address.isLoopbackAddress && address is Inet4Address) {
+                        val hostAddress = address.hostAddress
+                        if (!hostAddress.isNullOrBlank()) {
+                            Log.d(TAG, "Found IP: $hostAddress on interface ${networkInterface.name}")
+                            return hostAddress
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting device IP address", e)
+        }
+
+        throw IllegalStateException(
+            "Could not determine device IP address. Make sure you're connected to Wi-Fi."
+        )
     }
 
     private fun persistGrantedAccess(granted: Boolean) {

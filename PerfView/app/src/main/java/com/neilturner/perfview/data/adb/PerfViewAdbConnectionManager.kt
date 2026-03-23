@@ -40,11 +40,13 @@ import java.security.spec.InvalidKeySpecException
 import java.security.spec.PKCS8EncodedKeySpec
 import java.util.Date
 import java.util.Random
+import javax.net.ssl.SSLContext
 
 class PerfViewAdbConnectionManager private constructor(context: Context) :
 	AbsAdbConnectionManager() {
 	private val privateKey: PrivateKey?
 	private val certificate: Certificate?
+	private val sslContext: SSLContext
 
 	init {
 		setApi(Build.VERSION.SDK_INT)
@@ -65,6 +67,9 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
 
 		privateKey = storedPrivateKey
 		certificate = storedCertificate
+
+		sslContext = SSLContext.getInstance("TLS")
+		sslContext.init(null, null, SecureRandom())
 	}
 
 	override fun getPrivateKey(): PrivateKey {
@@ -77,6 +82,10 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
 
 	override fun getDeviceName(): String {
 		return "PerfView"
+	}
+
+	fun getSslContext(): SSLContext {
+		return sslContext
 	}
 
 	companion object {
