@@ -25,8 +25,6 @@
 # ==============================================================================
 -keepclassmembers class * {
     @org.koin.core.annotation.* <methods>;
-}
--keepclassmembers class * {
     @org.koin.core.annotation.* <fields>;
 }
 -keepclassmembers class ** {
@@ -37,8 +35,6 @@
 -keepclassmembers class * implements org.koin.core.component.KoinComponent {
     <fields>;
 }
-
-# Keep Koin metadata for generated code
 -keep class org.koin.** { *; }
 -keepclassmembers class * {
     @org.koin.android.annotation.* <fields>;
@@ -47,12 +43,10 @@
 
 # Keep classes referenced in Koin modules
 -keep class com.neilturner.perfview.di.** { *; }
--keep class com.neilturner.perfview.** { *; }
 
 # ==============================================================================
 # libadb-android (MuntashirAkon)
 # ==============================================================================
--keep class io.github.muntashirakon.adb.** { *; }
 -keep class io.github.muntashirakon.** { *; }
 -dontwarn io.github.muntashirakon.**
 
@@ -60,22 +54,7 @@
 # Bouncy Castle
 # ==============================================================================
 -keep class org.bouncycastle.** { *; }
--keep class org.bouncycastle.jce.provider.BouncyCastleProvider
 -dontwarn org.bouncycastle.**
--keep class * extends org.bouncycastle.jce.provider.BouncyCastleProvider
-
-# Keep Bouncy Castle ASN1 and certificate classes
--keep class org.bouncycastle.asn1.** { *; }
--keep class org.bouncycastle.cert.** { *; }
--keep class org.bouncycastle.operator.** { *; }
--keep class org.bouncycastle.jcajce.** { *; }
--keep class org.bouncycastle.util.** { *; }
-
-# ==============================================================================
-# Conscrypt (if still used elsewhere)
-# ==============================================================================
--keep class org.conscrypt.** { *; }
--dontwarn org.conscrypt.**
 
 # ==============================================================================
 # General Android & Compose
@@ -90,35 +69,6 @@
 -keep class androidx.core.** { *; }
 -keep class androidx.lifecycle.** { *; }
 -keep class androidx.activity.** { *; }
-
-# ==============================================================================
-# Data Classes & Models
-# ==============================================================================
--keep class com.neilturner.perfview.data.** { *; }
--keep class com.neilturner.perfview.domain.** { *; }
--keep class com.neilturner.perfview.ui.** { *; }
--keep class com.neilturner.perfview.overlay.** { *; }
-
-# Keep TopProcessUsage for serialization
--keep class com.neilturner.perfview.data.cpu.TopProcessUsage { *; }
--keep class com.neilturner.perfview.domain.cpu.CpuObservation { *; }
--keep class com.neilturner.perfview.domain.cpu.CpuUsageResult { *; }
--keep class com.neilturner.perfview.domain.cpu.CpuUsageResult$Success { *; }
--keep class com.neilturner.perfview.domain.cpu.CpuUsageResult$Unsupported { *; }
-
-# ==============================================================================
-# ViewModel
-# ==============================================================================
--keep class com.neilturner.perfview.ui.dashboard.PerfViewViewModel { *; }
--keep class com.neilturner.perfview.ui.dashboard.PerfViewViewState { *; }
--keep class com.neilturner.perfview.ui.dashboard.PerfViewIntent { *; }
--keep class com.neilturner.perfview.ui.dashboard.PerfViewCommand { *; }
--keep class com.neilturner.perfview.ui.dashboard.PerfViewScreen { *; }
-
-# ==============================================================================
-# Services
-# ==============================================================================
--keep class com.neilturner.perfview.overlay.CpuOverlayService { *; }
 
 # ==============================================================================
 # Reflection & Serialization
