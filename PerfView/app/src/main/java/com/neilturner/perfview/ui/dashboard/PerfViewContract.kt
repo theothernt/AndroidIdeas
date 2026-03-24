@@ -9,6 +9,8 @@ sealed interface PerfViewIntent {
     data object RunInBackgroundClicked : PerfViewIntent
     data object OverlayPermissionResult : PerfViewIntent
     data object AppOpenedToForeground : PerfViewIntent
+    data object AppBackgrounded : PerfViewIntent
+    data object ResumeObserving : PerfViewIntent
 }
 
 sealed interface PerfViewCommand {

@@ -42,8 +42,11 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
@@ -60,14 +63,21 @@ fun PerfViewRoute(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val overlayPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
         viewModel.accept(PerfViewIntent.OverlayPermissionResult)
     }
 
-    LaunchedEffect(Unit) {
-        viewModel.accept(PerfViewIntent.Load)
+    // Start/stop polling based on lifecycle
+    LaunchedEffect(lifecycleOwner) {
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            // App is visible - start/resume polling
+            viewModel.accept(PerfViewIntent.ResumeObserving)
+        }
+        // App went to background - stop polling
+        viewModel.accept(PerfViewIntent.AppBackgrounded)
     }
 
     LaunchedEffect(viewModel) {
@@ -441,7 +451,7 @@ private fun ProcessRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CellText(text = rank.toString(), width = 28.dp, color = Color(0xFF8BE8FF))
-        CellText(text = String.format("%.1f%%", cpuPercent), width = 56.dp, color = Color(0xFF52E3B0), alignEnd = true)
+        CellText(text = String.format("%.0f%%", cpuPercent), width = 56.dp, color = Color(0xFF52E3B0), alignEnd = true)
         CellText(text = String.format("%.0fMB", ramMb), width = 64.dp, color = Color(0xFFFFB347), alignEnd = true)
         CellText(text = name, width = 620.dp, color = Color.White)
     }

@@ -47,16 +47,27 @@ class PerfViewViewModel(
                     showPermissionRationale()
                 }
             }
+            PerfViewIntent.ResumeObserving -> {
+                // App came back to foreground, resume polling
+                startObserving()
+            }
             PerfViewIntent.RequestAdbAccess -> requestAdbAccess()
             PerfViewIntent.RunInBackgroundClicked -> runInBackground()
             PerfViewIntent.OverlayPermissionResult -> handleOverlayPermissionResult()
             PerfViewIntent.AppOpenedToForeground -> handleAppOpenedToForeground()
+            PerfViewIntent.AppBackgrounded -> handleAppBackgrounded()
         }
     }
 
     private fun handleAppOpenedToForeground() {
         Log.d(TAG, "App opened to foreground, stopping overlay service")
         _commands.tryEmit(PerfViewCommand.StopBackgroundOverlay)
+    }
+
+    private fun handleAppBackgrounded() {
+        Log.d(TAG, "App backgrounded, stopping CPU polling")
+        observeJob?.cancel()
+        observeJob = null
     }
 
     private fun showPermissionRationale() {

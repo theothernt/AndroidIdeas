@@ -225,7 +225,7 @@ class CpuOverlayService : Service() {
             resources.displayMetrics,
         )
 
-    private fun formatCpu(value: Float): String = String.format(Locale.US, "%.1f%%", value)
+    private fun formatCpu(value: Float): String = String.format(Locale.US, "%.0f%%", value)
 
     private fun formatRamMb(value: Float): String = String.format(Locale.US, "%.0fMB", value)
 
