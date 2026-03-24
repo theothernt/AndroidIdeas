@@ -140,11 +140,11 @@ class CpuOverlayService : Service() {
             setPadding(dp(16), dp(12), dp(16), dp(12))
         }
 
-        repeat(4) {
+        repeat(5) {
             val row = TextView(this).apply {
                 setTextColor(0xFFEAF5F7.toInt())
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f)
-                setPadding(0, if (it == 0) 0 else dp(6), 0, 0)
+                setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+                setPadding(0, if (it == 0) 0 else dp(4), 0, 0)
                 maxLines = 1
                 ellipsize = TextUtils.TruncateAt.END
                 text = "--"
@@ -183,9 +183,9 @@ class CpuOverlayService : Service() {
                 when (result) {
                     is CpuUsageResult.Success -> updateRows(
                         result.observation.topProcesses
-                            .take(4)
+                            .take(5)
                             .mapIndexed { index, process ->
-                                "${index + 1}. ${formatCpu(process.cpuPercent)}  ${process.name}"
+                                "${index + 1}. ${formatCpu(process.cpuPercent)}  ${formatRamMb(process.ramMb)}  ${process.name}"
                             }
                     )
 
@@ -226,6 +226,8 @@ class CpuOverlayService : Service() {
         )
 
     private fun formatCpu(value: Float): String = String.format(Locale.US, "%.1f%%", value)
+
+    private fun formatRamMb(value: Float): String = String.format(Locale.US, "%.0fMB", value)
 
     companion object {
         private const val ACTION_START = "com.neilturner.perfview.overlay.START"

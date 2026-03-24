@@ -405,8 +405,9 @@ private fun ProcessListCard(
                 processes.take(10).forEachIndexed { index, process ->
                     ProcessRow(
                         rank = index + 1,
-                        name = process.name,
                         cpuPercent = process.cpuPercent,
+                        ramMb = process.ramMb,
+                        name = process.name,
                     )
                 }
             }
@@ -418,28 +419,31 @@ private fun ProcessListCard(
 private fun ProcessHeaderRow() {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        HeaderCell(text = "#", width = 34.dp)
+        HeaderCell(text = "#", width = 28.dp)
+        HeaderCell(text = "CPU", width = 56.dp, alignEnd = true)
+        HeaderCell(text = "RAM", width = 64.dp, alignEnd = true)
         HeaderCell(text = "Process", width = 620.dp)
-        HeaderCell(text = "CPU", width = 72.dp, alignEnd = true)
     }
 }
 
 @Composable
 private fun ProcessRow(
     rank: Int,
-    name: String,
     cpuPercent: Float,
+    ramMb: Float,
+    name: String,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        CellText(text = rank.toString(), width = 34.dp, color = Color(0xFF8BE8FF))
+        CellText(text = rank.toString(), width = 28.dp, color = Color(0xFF8BE8FF))
+        CellText(text = String.format("%.1f%%", cpuPercent), width = 56.dp, color = Color(0xFF52E3B0), alignEnd = true)
+        CellText(text = String.format("%.0fMB", ramMb), width = 64.dp, color = Color(0xFFFFB347), alignEnd = true)
         CellText(text = name, width = 620.dp, color = Color.White)
-        CellText(text = String.format("%.1f%%", cpuPercent), width = 72.dp, color = Color(0xFF52E3B0), alignEnd = true)
     }
 }
 
@@ -531,11 +535,11 @@ private fun PerfViewScreenPreview() {
                 screen = PerfViewScreen.Content,
                 isLoading = false,
                 topProcesses = listOf(
-                    TopProcessUsage(1234, "com.android.systemui", 12.5f, "root", "S"),
-                    TopProcessUsage(5678, "com.google.android.youtube", 8.2f, "u0_a123", "R"),
-                    TopProcessUsage(9012, "com.neilturner.perfview", 5.1f, "u0_a456", "S"),
-                    TopProcessUsage(3456, "system_server", 4.8f, "system", "S"),
-                    TopProcessUsage(7890, "surfaceflinger", 3.2f, "system", "S"),
+                    TopProcessUsage(1234, "com.android.systemui", 12.5f, 8.2f, 45.0f, "root", "S"),
+                    TopProcessUsage(5678, "com.google.android.youtube", 8.2f, 5.4f, 128.0f, "u0_a123", "R"),
+                    TopProcessUsage(9012, "com.neilturner.perfview", 5.1f, 3.1f, 32.0f, "u0_a456", "S"),
+                    TopProcessUsage(3456, "system_server", 4.8f, 6.5f, 256.0f, "system", "S"),
+                    TopProcessUsage(7890, "surfaceflinger", 3.2f, 2.8f, 64.0f, "system", "S"),
                 ),
                 isSupported = true,
                 statusMessage = "Connected",

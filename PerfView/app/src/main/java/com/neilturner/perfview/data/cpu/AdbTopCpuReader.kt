@@ -49,10 +49,9 @@ class AdbTopCpuReader(
             .dropWhile { !it.contains("ARGS") }
             .drop(1)
             .mapNotNull { line -> parseProcessRow(line) }
-            .filter { it.cpuPercent > 0f }
+            .filter { it.cpuPercent > 0f || it.ramMb > 0f }
             .filterNot { shouldIgnoreProcess(it) }
             .take(DEFAULT_VISIBLE_LIMIT)
-        Log.d(TAG, "Parsed ${processRows.size} visible process rows")
 
         return Result.success(
             CpuUsageSnapshot(
@@ -76,13 +75,30 @@ class AdbTopCpuReader(
 
     private fun parseProcessRow(line: String): TopProcessUsage? {
         val match = PROCESS_ROW.find(line) ?: return null
+        // top output: PID USER PR NI VSZ RSS ? S %CPU %MEM TIME+ ARGS
+        // groupValues: [0]=full, [1]=PID, [2]=USER, [3]=RSS, [4]=State, [5]=%CPU, [6]=%MEM, [7]=ARGS
+        val rssValue = match.groupValues[3]
+        val rssKb = parseMemoryValue(rssValue)
         return TopProcessUsage(
             pid = match.groupValues[1].toInt(),
             user = match.groupValues[2],
-            state = match.groupValues[3],
-            cpuPercent = match.groupValues[4].toFloat(),
-            name = match.groupValues[5].trim(),
+            state = match.groupValues[4],
+            cpuPercent = match.groupValues[5].toFloat(),
+            ramPercent = match.groupValues[6].toFloat(),
+            ramMb = rssKb / 1024f,
+            name = match.groupValues[7].trim(),
         )
+    }
+
+    private fun parseMemoryValue(value: String): Float {
+        // Handle values like "2.7M", "75M", "2.2M", "34M", or plain numbers
+        val numValue = value.removeSuffix("M").removeSuffix("G").toFloatOrNull() ?: 0f
+        val multiplier = when {
+            value.endsWith("G") -> 1024f * 1024f  // GB to KB
+            value.endsWith("M") -> 1024f          // MB to KB
+            else -> 1f                            // Already in KB
+        }
+        return numValue * multiplier
     }
 
     private fun shouldIgnoreProcess(process: TopProcessUsage): Boolean {
@@ -105,8 +121,10 @@ class AdbTopCpuReader(
         )
         private val PERCENT_TOKEN = Regex("""^\s*([0-9.]+)%cpu""")
         private val IDLE_TOKEN = Regex("""([0-9.]+)%idle""")
+        // top output: PID USER PR NI VSZ RSS ? S %CPU %MEM TIME+ ARGS
+        // Example: 3634 shell 20 0 10G 2.7M 2.2M S 0.0 0.1 0:00.09 logcat
         private val PROCESS_ROW = Regex(
-            """^\s*(\d+)\s+(\S+)\s+\S+\s+\S+\s+\S+\s+\S+\s+\S+\s+(\S)\s+([0-9.]+)\s+\S+\s+\S+\s+(.+)$"""
+            """^\s*(\d+)\s+(\S+)\s+\S+\s+\S+\s+\S+\s+(\S+)\s+\S+\s+(\S)\s+([0-9.]+)\s+([0-9.]+)\s+\S+\s+(.+)$"""
         )
     }
 }
