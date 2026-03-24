@@ -18,8 +18,12 @@ class LibAdbAccessManager(
 
     override suspend fun requestAccess(timeoutMillis: Long) = withContext(Dispatchers.IO) {
         val manager = PerfViewAdbConnectionManager.getInstance(context)
-        manager.disconnectIfNeeded()
-        connect(manager = manager, timeoutMillis = timeoutMillis)
+        
+        // Don't disconnect - keep existing connection if present to avoid
+        // triggering ADB authorization dialog for a "new" connection
+        if (!manager.isConnected) {
+            connect(manager = manager, timeoutMillis = timeoutMillis)
+        }
         persistGrantedAccess(true)
     }
 
@@ -31,7 +35,9 @@ class LibAdbAccessManager(
             connect(manager = manager, timeoutMillis = timeoutMillis)
             persistGrantedAccess(true)
         } catch (error: Exception) {
-            persistGrantedAccess(false)
+            // Don't clear access flag on transient errors (ADB server restart,
+            // wireless debugging toggled, etc.). The flag represents user consent,
+            // not connection state. Connection failures are handled by the caller.
             throw error
         }
     }
@@ -59,7 +65,7 @@ class LibAdbAccessManager(
                 "Wireless debugging needs pairing before Perf View can use ADB."
             )
         } catch (error: Exception) {
-            Log.e(TAG, "ADB connection failed", error)
+            Log.e(TAG, "ADB connection failed: ${error.javaClass.simpleName} - ${error.message}", error)
             throw error
         }
     }

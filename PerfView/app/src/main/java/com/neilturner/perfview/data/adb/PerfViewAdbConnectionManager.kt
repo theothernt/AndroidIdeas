@@ -13,6 +13,7 @@ import java.math.BigInteger
 import java.nio.charset.StandardCharsets
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
+import java.security.MessageDigest
 import java.security.PrivateKey
 import java.security.PublicKey
 import java.security.SecureRandom
@@ -79,9 +80,14 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
 
             return if (privateKey != null && publicKey != null) {
                 Log.d(TAG, "Loaded existing RSA key pair from files")
+                Log.d(TAG, "Private key file exists: ${File(context.filesDir, KEY_FILE_NAME).exists()}")
+                Log.d(TAG, "Public key file exists: ${File(context.filesDir, "$KEY_FILE_NAME.pub").exists()}")
+                Log.d(TAG, "Public key fingerprint: ${publicKey.getFingerprint()}")
                 KeyPairData(publicKey, privateKey)
             } else {
                 Log.i(TAG, "Generating new RSA key pair...")
+                Log.d(TAG, "Private key file exists: ${File(context.filesDir, KEY_FILE_NAME).exists()}")
+                Log.d(TAG, "Public key file exists: ${File(context.filesDir, "$KEY_FILE_NAME.pub").exists()}")
                 val keyPairGenerator = KeyPairGenerator.getInstance("RSA", BouncyCastleProvider())
                 keyPairGenerator.initialize(2048, SecureRandom())
                 val keyPair = keyPairGenerator.generateKeyPair()
@@ -89,7 +95,18 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
                 writePrivateKeyToFile(context, keyPair.private)
                 writePublicKeyToFile(context, keyPair.public)
 
+                Log.d(TAG, "New public key fingerprint: ${keyPair.public.getFingerprint()}")
                 KeyPairData(keyPair.public, keyPair.private)
+            }
+        }
+
+        private fun PublicKey.getFingerprint(): String {
+            return try {
+                val md = MessageDigest.getInstance("SHA256")
+                val digest = md.digest(this.encoded)
+                digest.joinToString(":") { "%02x".format(it) }
+            } catch (e: Exception) {
+                "unknown"
             }
         }
 
@@ -100,7 +117,10 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
         ): Certificate {
             val storedCert = readCertificateFromFile(context)
 
-            return storedCert ?: run {
+            return storedCert?.also {
+                Log.d(TAG, "Loaded existing certificate from files")
+                Log.d(TAG, "Certificate file exists: ${File(context.filesDir, CERT_FILE_NAME).exists()}")
+            } ?: run {
                 Log.i(TAG, "Generating new certificate...")
                 val certificate = generateCertificate(publicKey, privateKey)
                 writeCertificateToFile(context, certificate)
@@ -118,10 +138,14 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
             val expiryDate = Date(now.time + CERT_VALIDITY_DAYS * 24 * 60 * 60 * 1000L)
 
             val publicKeyInfo = SubjectPublicKeyInfo.getInstance(publicKey.encoded)
-            
+
+            // Use a fixed serial number based on a hash of the public key
+            // This ensures the same key always produces the same certificate identity
+            val serialNumber = BigInteger.valueOf(publicKey.hashCode().toLong().and(Long.MAX_VALUE))
+
             val certBuilder = X509v3CertificateBuilder(
                 subject,
-                BigInteger.valueOf(System.currentTimeMillis()),
+                serialNumber,
                 now,
                 expiryDate,
                 subject,
@@ -143,9 +167,18 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
             val certFile = File(context.filesDir, CERT_FILE_NAME)
             if (!certFile.exists()) return null
 
-            FileInputStream(certFile).use { cert ->
-                return CertificateFactory.getInstance("X.509").generateCertificate(cert)
-            }
+            // Read PEM format and extract Base64 content between headers
+            val pemContent = certFile.readText()
+            val base64Content = pemContent
+                .replace("-----BEGIN CERTIFICATE-----", "")
+                .replace("-----END CERTIFICATE-----", "")
+                .replace("\\s".toRegex(), "")
+
+            if (base64Content.isBlank()) return null
+
+            val derBytes = Base64.decode(base64Content, Base64.DEFAULT)
+            return CertificateFactory.getInstance("X.509")
+                .generateCertificate(derBytes.inputStream())
         }
 
         @Throws(IOException::class)

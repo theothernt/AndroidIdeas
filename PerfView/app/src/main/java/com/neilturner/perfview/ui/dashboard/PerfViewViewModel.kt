@@ -42,7 +42,7 @@ class PerfViewViewModel(
         when (intent) {
             PerfViewIntent.Load -> {
                 if (adbAccessManager.hasGrantedAccess()) {
-                    startObserving()
+                    ensureConnectedThenObserve()
                 } else {
                     showPermissionRationale()
                 }
@@ -70,6 +70,31 @@ class PerfViewViewModel(
             permissionMessage = "Perf View uses Android's local ADB loopback connection to read process CPU usage from this device. Press the button below, then approve the system debugging prompt.",
             permissionButtonLabel = "Grant ADB access",
         )
+    }
+
+    private fun ensureConnectedThenObserve() {
+        _uiState.update {
+            it.copy(
+                isLoading = true,
+                statusMessage = "Checking ADB connection...",
+                sourceLabel = "Verifying connection",
+            )
+        }
+
+        viewModelScope.launch {
+            runCatching {
+                adbAccessManager.ensureConnected(timeoutMillis = ADB_REQUEST_TIMEOUT_MILLIS)
+            }.onSuccess {
+                Log.d(TAG, "ADB connection verified")
+                startObserving()
+            }.onFailure { error ->
+                Log.w(TAG, "ADB connection check failed", error)
+                // Connection failed but user previously granted access.
+                // Try to start observing anyway - the actual error will be shown
+                // if the ADB commands fail.
+                startObserving()
+            }
+        }
     }
 
     private fun requestAdbAccess() {
