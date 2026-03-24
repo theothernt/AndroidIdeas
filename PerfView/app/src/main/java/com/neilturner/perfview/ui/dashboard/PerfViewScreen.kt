@@ -11,8 +11,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,7 +36,6 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
@@ -47,10 +44,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.core.content.ContextCompat
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
-import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Text
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import com.neilturner.perfview.data.cpu.TopProcessUsage
 import com.neilturner.perfview.overlay.CpuOverlayService
 import com.neilturner.perfview.ui.theme.PerfViewTheme
@@ -160,20 +157,6 @@ private fun BackgroundAction(
     onRunInBackground: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    var isFocused by remember { mutableStateOf(false) }
-    val frameBorderColor = when {
-        isPressed -> Color(0xFFF7F7FA)
-        isFocused -> Color(0xCCFFFFFF)
-        else -> Color(0x00000000)
-    }
-    val buttonScale = when {
-        isPressed -> 0.985f
-        isFocused -> 1.03f
-        else -> 1f
-    }
-
     Column(
         modifier = modifier,
         horizontalAlignment = Alignment.End,
@@ -189,25 +172,21 @@ private fun BackgroundAction(
         }
         Button(
             onClick = onRunInBackground,
-            interactionSource = interactionSource,
             modifier = Modifier
-                .onFocusChanged { isFocused = it.isFocused }
-                .scale(buttonScale)
                 .border(
-                    width = if (isFocused || isPressed) 2.dp else 0.dp,
-                    color = frameBorderColor,
-                    shape = RoundedCornerShape(18.dp),
-                )
-                .padding(2.dp),
-            colors = ButtonDefaults.colors(
+                    width = 1.dp,
+                    color = Color(0x30D2E6E9),
+                    shape = RoundedCornerShape(16.dp),
+                ),
+            colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFFF2F2F4),
-                focusedContainerColor = Color(0xFFFFFFFF),
-                pressedContainerColor = Color(0xFFE7E7EC),
                 contentColor = Color(0xFF171A20),
-                focusedContentColor = Color(0xFF171A20),
-                pressedContentColor = Color(0xFF171A20),
             ),
-            shape = ButtonDefaults.shape(RoundedCornerShape(16.dp)),
+            shape = RoundedCornerShape(16.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                horizontal = 16.dp,
+                vertical = 12.dp,
+            ),
         ) {
             Text(text = "Run in the background", fontSize = 14.sp)
         }
@@ -267,7 +246,25 @@ private fun PermissionGate(
                 )
             } else {
                 Spacer(modifier = Modifier.height(4.dp))
-                Button(onClick = onRequestAdbAccess) {
+                Button(
+                    onClick = onRequestAdbAccess,
+                    modifier = Modifier
+                        .padding(vertical = 8.dp)
+                        .border(
+                            width = 1.dp,
+                            color = Color(0x30D2E6E9),
+                            shape = RoundedCornerShape(18.dp),
+                        ),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFF2F2F4),
+                        contentColor = Color(0xFF171A20),
+                    ),
+                    shape = RoundedCornerShape(18.dp),
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(
+                        horizontal = 20.dp,
+                        vertical = 14.dp,
+                    ),
+                ) {
                     Text(text = uiState.permissionButtonLabel, fontSize = 14.sp)
                 }
             }
