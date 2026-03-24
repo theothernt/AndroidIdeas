@@ -154,7 +154,7 @@ class CpuOverlayService : Service() {
         }
 
         val params = WindowManager.LayoutParams(
-            dp(225),
+            dp(280),
             WindowManager.LayoutParams.WRAP_CONTENT,
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
@@ -168,8 +168,8 @@ class CpuOverlayService : Service() {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.TOP or Gravity.END
-            x = dp(24)
-            y = dp(24)
+            x = dp(12)
+            y = dp(12)
         }
 
         overlayView = container
