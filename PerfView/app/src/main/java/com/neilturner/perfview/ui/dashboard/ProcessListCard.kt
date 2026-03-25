@@ -24,9 +24,7 @@ import com.neilturner.perfview.ui.theme.PerfViewTokens
 
 @Composable
 fun ProcessListCard(
-    processes: List<TopProcessUsage>,
-    isSupported: Boolean,
-    statusMessage: String,
+    contentState: DashboardContentState,
     modifier: Modifier = Modifier,
 ) {
     DashboardCard(
@@ -35,21 +33,32 @@ fun ProcessListCard(
         Column(
             verticalArrangement = Arrangement.spacedBy(PerfViewTokens.cardSpacing),
         ) {
-            if (processes.isEmpty() || !isSupported) {
-                Text(
-                    text = statusMessage,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            } else {
-                ProcessHeaderRow()
-                processes.take(10).forEachIndexed { index, process ->
-                    ProcessRow(
-                        rank = index + 1,
-                        cpuPercent = process.cpuPercent,
-                        ramMb = process.ramMb,
-                        name = process.name,
+            when (contentState) {
+                is DashboardContentState.Loading,
+                is DashboardContentState.Empty,
+                is DashboardContentState.Unsupported -> {
+                    Text(
+                        text = when (contentState) {
+                            is DashboardContentState.Loading -> contentState.message
+                            is DashboardContentState.Empty -> contentState.message
+                            is DashboardContentState.Unsupported -> contentState.message
+                            is DashboardContentState.Data -> error("Unreachable")
+                        },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+
+                is DashboardContentState.Data -> {
+                    ProcessHeaderRow()
+                    contentState.processes.take(10).forEachIndexed { index, process ->
+                        ProcessRow(
+                            rank = index + 1,
+                            cpuPercent = process.cpuPercent,
+                            ramMb = process.ramMb,
+                            name = process.name,
+                        )
+                    }
                 }
             }
         }

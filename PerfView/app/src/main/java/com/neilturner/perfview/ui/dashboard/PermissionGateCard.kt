@@ -17,7 +17,7 @@ import com.neilturner.perfview.ui.theme.PerfViewTokens
 
 @Composable
 fun PermissionGateCard(
-    uiState: PerfViewViewState,
+    permissionState: PermissionUiState,
     onRequestAdbAccess: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -29,35 +29,44 @@ fun PermissionGateCard(
             verticalArrangement = Arrangement.spacedBy(PerfViewTokens.cardSpacing),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            if (uiState.screen == PerfViewScreen.Authorizing) {
+            if (permissionState.phase == PermissionPhase.Authorizing) {
                 WaitingIndicator()
             }
 
             Text(
-                text = uiState.permissionTitle,
+                text = permissionState.title,
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold),
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
             )
             Text(
-                text = uiState.permissionMessage,
+                text = permissionState.message,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
-            if (uiState.screen == PerfViewScreen.Authorizing) {
+            val detailMessage = permissionState.detailMessage
+            if (permissionState.phase == PermissionPhase.Authorizing && detailMessage != null) {
                 Text(
-                    text = uiState.statusMessage,
+                    text = detailMessage,
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.tertiary,
                     textAlign = TextAlign.Center,
                 )
             } else {
+                if (!detailMessage.isNullOrBlank()) {
+                    Text(
+                        text = detailMessage,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center,
+                    )
+                }
                 Button(
                     onClick = onRequestAdbAccess,
                     shape = PerfViewTokens.buttonShape,
                 ) {
-                    Text(text = uiState.permissionButtonLabel)
+                    Text(text = permissionState.buttonLabel)
                 }
             }
         }

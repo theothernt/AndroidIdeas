@@ -73,22 +73,27 @@ class PerfViewViewModel(
     private fun showPermissionRationale() {
         observeJob?.cancel()
         _uiState.value = PerfViewViewState(
-            screen = PerfViewScreen.PermissionRationale,
-            isLoading = false,
-            sourceLabel = "ADB access required",
-            statusMessage = "Waiting for authorization",
-            permissionTitle = "Allow loopback ADB access",
-            permissionMessage = "Perf View uses Android's local ADB loopback connection to read process CPU usage from this device. Press the button below, then approve the system debugging prompt.",
-            permissionButtonLabel = "Grant ADB access",
+            permissionState = PermissionUiState(
+                phase = PermissionPhase.Rationale,
+                title = "Allow loopback ADB access",
+                message = "Perf View uses Android's local ADB loopback connection to read process CPU usage from this device. Press the button below, then approve the system debugging prompt.",
+                buttonLabel = "Grant ADB access",
+                detailMessage = "ADB access required",
+            ),
         )
     }
 
     private fun ensureConnectedThenObserve() {
         _uiState.update {
             it.copy(
-                isLoading = true,
-                statusMessage = "Checking ADB connection...",
-                sourceLabel = "Verifying connection",
+                permissionState = null,
+                dashboardState = DashboardUiState(
+                    sourceLabel = "Verifying connection",
+                    statusLabel = "Checking ADB connection...",
+                    content = DashboardContentState.Loading(
+                        message = "Checking ADB connection...",
+                    ),
+                ),
             )
         }
 
@@ -112,13 +117,14 @@ class PerfViewViewModel(
         observeJob?.cancel()
         _uiState.update {
             it.copy(
-                screen = PerfViewScreen.Authorizing,
-                isLoading = true,
-                statusMessage = "Waiting for ADB authorization. This can take up to 30 seconds.",
-                sourceLabel = "Requesting ADB access",
-                permissionTitle = "Waiting for approval",
-                permissionMessage = "Approve the debugging prompt on the device to continue.",
-                permissionButtonLabel = "Try again",
+                permissionState = PermissionUiState(
+                    phase = PermissionPhase.Authorizing,
+                    title = "Waiting for approval",
+                    message = "Approve the debugging prompt on the device to continue.",
+                    buttonLabel = "Try again",
+                    detailMessage = "Waiting for ADB authorization. This can take up to 30 seconds.",
+                ),
+                dashboardState = null,
             )
         }
 
@@ -132,16 +138,15 @@ class PerfViewViewModel(
                 Log.w(TAG, "ADB authorization failed", error)
                 _uiState.update {
                     it.copy(
-                        screen = PerfViewScreen.AuthorizationFailed,
-                        isLoading = false,
-                        isSupported = false,
-                        sourceLabel = "ADB access failed",
-                        statusMessage = error.message ?: AUTHORIZATION_FAILED_MESSAGE,
-                        permissionTitle = "ADB access was not granted",
-                        permissionMessage = (error.message ?: AUTHORIZATION_FAILED_MESSAGE) +
-                            " Press the button to try again.",
-                        permissionButtonLabel = "Retry ADB access",
-                        topProcesses = emptyList(),
+                        permissionState = PermissionUiState(
+                            phase = PermissionPhase.Failed,
+                            title = "ADB access was not granted",
+                            message = (error.message ?: AUTHORIZATION_FAILED_MESSAGE) +
+                                " Press the button to try again.",
+                            buttonLabel = "Retry ADB access",
+                            detailMessage = error.message ?: AUTHORIZATION_FAILED_MESSAGE,
+                        ),
+                        dashboardState = null,
                     )
                 }
             }
@@ -151,15 +156,19 @@ class PerfViewViewModel(
     private fun runInBackground() {
         if (overlayPermissionManager.canDrawOverlays()) {
             overlayPermissionPollJob?.cancel()
-            _uiState.update { it.copy(backgroundActionMessage = null) }
+            _uiState.update {
+                it.copy(backgroundActionState = BackgroundActionUiState())
+            }
             _commands.tryEmit(PerfViewCommand.StartBackgroundOverlay)
             return
         }
 
         _uiState.update {
             it.copy(
-                backgroundActionMessage =
-                    "Allow Perf View to display over other apps so it can keep the top CPU list visible after this screen closes."
+                backgroundActionState = BackgroundActionUiState(
+                    backgroundActionMessage =
+                        "Allow Perf View to display over other apps so it can keep the top CPU list visible after this screen closes."
+                )
             )
         }
         _commands.tryEmit(
@@ -173,13 +182,17 @@ class PerfViewViewModel(
     private fun handleOverlayPermissionResult() {
         if (overlayPermissionManager.canDrawOverlays()) {
             overlayPermissionPollJob?.cancel()
-            _uiState.update { it.copy(backgroundActionMessage = null) }
+            _uiState.update {
+                it.copy(backgroundActionState = BackgroundActionUiState())
+            }
             _commands.tryEmit(PerfViewCommand.StartBackgroundOverlay)
         } else {
             _uiState.update {
                 it.copy(
-                    backgroundActionMessage =
-                        "Overlay permission was not granted. Perf View needs that permission to stay visible in the background."
+                    backgroundActionState = BackgroundActionUiState(
+                        backgroundActionMessage =
+                            "Overlay permission was not granted. Perf View needs that permission to stay visible in the background."
+                    )
                 )
             }
         }
@@ -192,7 +205,9 @@ class PerfViewViewModel(
                 delay(OVERLAY_PERMISSION_POLL_INTERVAL_MILLIS)
                 if (overlayPermissionManager.canDrawOverlays()) {
                     Log.d(TAG, "Overlay permission granted while polling")
-                    _uiState.update { it.copy(backgroundActionMessage = null) }
+                    _uiState.update {
+                        it.copy(backgroundActionState = BackgroundActionUiState())
+                    }
                     _commands.emit(PerfViewCommand.StartBackgroundOverlay)
                     return@launch
                 }
@@ -200,8 +215,10 @@ class PerfViewViewModel(
                 if (attempt == OVERLAY_PERMISSION_POLL_ATTEMPTS - 1) {
                     _uiState.update {
                         it.copy(
-                            backgroundActionMessage =
-                                "Overlay permission was not granted within 20 seconds. You can try again when ready."
+                            backgroundActionState = BackgroundActionUiState(
+                                backgroundActionMessage =
+                                    "Overlay permission was not granted within 20 seconds. You can try again when ready."
+                            )
                         )
                     }
                 }
@@ -213,10 +230,15 @@ class PerfViewViewModel(
         observeJob?.cancel()
         Log.d(TAG, "Starting process observation")
         _uiState.value = PerfViewViewState(
-            screen = PerfViewScreen.Content,
-            isLoading = true,
-            sourceLabel = "ADB shell",
-            statusMessage = "Connecting to ADB and reading top process usage",
+            permissionState = null,
+            dashboardState = DashboardUiState(
+                sourceLabel = "ADB shell",
+                statusLabel = "Connecting to ADB and reading top process usage",
+                content = DashboardContentState.Loading(
+                    message = "Connecting to ADB and reading top process usage",
+                ),
+            ),
+            backgroundActionState = _uiState.value.backgroundActionState,
         )
 
         observeJob = viewModelScope.launch {
@@ -226,14 +248,21 @@ class PerfViewViewModel(
                         val observation = result.observation
                         Log.d(TAG, "Observation success with ${observation.topProcesses.size} processes")
                         current.copy(
-                            screen = PerfViewScreen.Content,
-                            isLoading = false,
-                            topProcesses = observation.topProcesses,
-                            isSupported = true,
-                            statusMessage = "Top process usage via ADB",
-                            lastUpdatedLabel = timeFormatter.format(Date(observation.collectedAtMillis)),
-                            sourceLabel = "ADB shell",
-                            backgroundActionMessage = current.backgroundActionMessage,
+                            permissionState = null,
+                            dashboardState = DashboardUiState(
+                                sourceLabel = "ADB shell",
+                                statusLabel = "Top process usage via ADB",
+                                lastUpdatedLabel = timeFormatter.format(Date(observation.collectedAtMillis)),
+                                content = if (observation.topProcesses.isEmpty()) {
+                                    DashboardContentState.Empty(
+                                        message = "No active process usage was returned from ADB.",
+                                    )
+                                } else {
+                                    DashboardContentState.Data(
+                                        processes = observation.topProcesses,
+                                    )
+                                },
+                            ),
                         )
                     }
 
@@ -241,22 +270,25 @@ class PerfViewViewModel(
                         Log.w(TAG, "Observation failed: ${result.message}")
                         if (shouldReturnToPermissionGate(result.message)) {
                             PerfViewViewState(
-                                screen = PerfViewScreen.AuthorizationFailed,
-                                isLoading = false,
-                                isSupported = false,
-                                statusMessage = result.message,
-                                sourceLabel = "ADB access failed",
-                                permissionTitle = "ADB access needs approval",
-                                permissionMessage = result.message + " Press the button to reconnect.",
-                                permissionButtonLabel = "Retry ADB access",
+                                permissionState = PermissionUiState(
+                                    phase = PermissionPhase.Failed,
+                                    title = "ADB access needs approval",
+                                    message = result.message + " Press the button to reconnect.",
+                                    buttonLabel = "Retry ADB access",
+                                    detailMessage = result.message,
+                                ),
+                                backgroundActionState = it.backgroundActionState,
                             )
                         } else {
                             it.copy(
-                                isLoading = false,
-                                isSupported = false,
-                                statusMessage = result.message,
-                                topProcesses = emptyList(),
-                                sourceLabel = "Unavailable",
+                                permissionState = null,
+                                dashboardState = DashboardUiState(
+                                    sourceLabel = "Unavailable",
+                                    statusLabel = result.message,
+                                    content = DashboardContentState.Unsupported(
+                                        message = result.message,
+                                    ),
+                                ),
                             )
                         }
                     }

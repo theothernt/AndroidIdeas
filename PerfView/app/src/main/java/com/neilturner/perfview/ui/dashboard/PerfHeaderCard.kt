@@ -19,7 +19,7 @@ import com.neilturner.perfview.ui.theme.PerfViewTokens
 
 @Composable
 fun PerfHeaderCard(
-    uiState: PerfViewViewState,
+    dashboardState: DashboardUiState,
     modifier: Modifier = Modifier,
 ) {
     DashboardCard(
@@ -38,15 +38,17 @@ fun PerfHeaderCard(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = if (uiState.isLoading) {
-                        "${uiState.sourceLabel} • ${uiState.statusMessage}"
+                    text = if (dashboardState.lastUpdatedLabel == null) {
+                        "${dashboardState.sourceLabel} • ${dashboardState.statusLabel}"
                     } else {
-                        "${uiState.sourceLabel} • Last updated ${uiState.lastUpdatedLabel}"
+                        "${dashboardState.sourceLabel} • Last updated ${dashboardState.lastUpdatedLabel}"
                     },
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                PollingIndicator()
+                if (dashboardState.content is DashboardContentState.Loading) {
+                    PollingIndicator()
+                }
             }
         }
     }

@@ -21,6 +21,9 @@ fun PerfViewScreen(
     onRunInBackground: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    val permissionState = uiState.permissionState
+    val dashboardState = uiState.dashboardState
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -30,38 +33,28 @@ fun PerfViewScreen(
                 vertical = PerfViewTokens.screenVerticalPadding,
             )
     ) {
-        when (uiState.screen) {
-            PerfViewScreen.PermissionRationale,
-            PerfViewScreen.Authorizing,
-            PerfViewScreen.AuthorizationFailed -> {
-                PermissionGateCard(
-                    uiState = uiState,
-                    onRequestAdbAccess = onRequestAdbAccess,
-                    modifier = Modifier.align(Alignment.Center),
-                )
-            }
-
-            PerfViewScreen.Content -> {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(PerfViewTokens.sectionSpacing),
-                ) {
-                    PerfHeaderCard(uiState = uiState)
-                    ProcessListCard(
-                        processes = uiState.topProcesses,
-                        isSupported = uiState.isSupported,
-                        statusMessage = uiState.statusMessage,
-                    )
-                    if (!uiState.isSupported) {
-                        ErrorCard(message = uiState.statusMessage)
-                    }
+        if (permissionState != null) {
+            PermissionGateCard(
+                permissionState = permissionState,
+                onRequestAdbAccess = onRequestAdbAccess,
+                modifier = Modifier.align(Alignment.Center),
+            )
+        } else if (dashboardState != null) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.spacedBy(PerfViewTokens.sectionSpacing),
+            ) {
+                PerfHeaderCard(dashboardState = dashboardState)
+                ProcessListCard(contentState = dashboardState.content)
+                if (dashboardState.content is DashboardContentState.Unsupported) {
+                    ErrorCard(message = dashboardState.content.message)
                 }
-                BackgroundActionCard(
-                    message = uiState.backgroundActionMessage,
-                    onRunInBackground = onRunInBackground,
-                    modifier = Modifier.align(Alignment.BottomEnd),
-                )
             }
+            BackgroundActionCard(
+                backgroundActionState = uiState.backgroundActionState,
+                onRunInBackground = onRunInBackground,
+                modifier = Modifier.align(Alignment.BottomEnd),
+            )
         }
     }
 }
@@ -72,16 +65,19 @@ private fun PerfViewScreenContentPreview() {
     PerfViewTheme(dynamicColor = false) {
         PerfViewScreen(
             uiState = PerfViewViewState(
-                screen = PerfViewScreen.Content,
-                isLoading = false,
-                topProcesses = listOf(
-                    TopProcessUsage(pid = 1178, name = "system_server", cpuPercent = 38f, ramPercent = 7.8f, ramMb = 812f, user = "system", state = "R"),
-                    TopProcessUsage(pid = 9842, name = "com.example.app", cpuPercent = 24f, ramPercent = 3.1f, ramMb = 315f, user = "u0_a152", state = "S"),
-                    TopProcessUsage(pid = 602, name = "surfaceflinger", cpuPercent = 12f, ramPercent = 1.6f, ramMb = 164f, user = "system", state = "S"),
+                permissionState = null,
+                dashboardState = DashboardUiState(
+                    sourceLabel = "ADB shell",
+                    statusLabel = "Top process usage via ADB",
+                    lastUpdatedLabel = "22:41:10",
+                    content = DashboardContentState.Data(
+                        processes = listOf(
+                            TopProcessUsage(pid = 1178, name = "system_server", cpuPercent = 38f, ramPercent = 7.8f, ramMb = 812f, user = "system", state = "R"),
+                            TopProcessUsage(pid = 9842, name = "com.example.app", cpuPercent = 24f, ramPercent = 3.1f, ramMb = 315f, user = "u0_a152", state = "S"),
+                            TopProcessUsage(pid = 602, name = "surfaceflinger", cpuPercent = 12f, ramPercent = 1.6f, ramMb = 164f, user = "system", state = "S"),
+                        ),
+                    ),
                 ),
-                lastUpdatedLabel = "22:41:10",
-                sourceLabel = "ADB shell",
-                statusMessage = "Top process usage via ADB",
             )
         )
     }
@@ -93,10 +89,11 @@ private fun PerfViewScreenPermissionPreview() {
     PerfViewTheme(dynamicColor = false) {
         PerfViewScreen(
             uiState = PerfViewViewState(
-                screen = PerfViewScreen.PermissionRationale,
-                isLoading = false,
-                permissionTitle = "Allow loopback ADB access",
-                permissionMessage = "Grant access, then approve the system debugging prompt.",
+                permissionState = PermissionUiState(
+                    phase = PermissionPhase.Rationale,
+                    title = "Allow loopback ADB access",
+                    message = "Grant access, then approve the system debugging prompt.",
+                ),
             )
         )
     }

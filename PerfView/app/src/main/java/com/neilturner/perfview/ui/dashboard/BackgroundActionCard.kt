@@ -13,7 +13,7 @@ import com.neilturner.perfview.ui.theme.PerfViewTokens
 
 @Composable
 fun BackgroundActionCard(
-    message: String?,
+    backgroundActionState: BackgroundActionUiState,
     onRunInBackground: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -22,9 +22,9 @@ fun BackgroundActionCard(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(PerfViewTokens.cardSpacing),
     ) {
-        if (!message.isNullOrBlank()) {
+        if (!backgroundActionState.backgroundActionMessage.isNullOrBlank()) {
             Text(
-                text = message,
+                text = backgroundActionState.backgroundActionMessage,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onBackground,
                 textAlign = TextAlign.End,

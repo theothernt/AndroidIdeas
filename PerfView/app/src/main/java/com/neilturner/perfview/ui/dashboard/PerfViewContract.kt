@@ -22,24 +22,54 @@ sealed interface PerfViewCommand {
     data object StopBackgroundOverlay : PerfViewCommand
 }
 
-enum class PerfViewScreen {
-    PermissionRationale,
+enum class PermissionPhase {
+    Rationale,
     Authorizing,
-    AuthorizationFailed,
-    Content,
+    Failed,
 }
 
 data class PerfViewViewState(
-    val screen: PerfViewScreen = PerfViewScreen.PermissionRationale,
-    val isLoading: Boolean = true,
-    val topProcesses: List<TopProcessUsage> = emptyList(),
-    val isSupported: Boolean = true,
-    val statusMessage: String = "Starting process monitor",
-    val lastUpdatedLabel: String = "--:--:--",
-    val sourceLabel: String = "Starting",
-    val permissionTitle: String = "ADB access is needed",
-    val permissionMessage: String =
+    val permissionState: PermissionUiState? = PermissionUiState(),
+    val dashboardState: DashboardUiState? = null,
+    val backgroundActionState: BackgroundActionUiState = BackgroundActionUiState(),
+)
+
+data class PermissionUiState(
+    val phase: PermissionPhase = PermissionPhase.Rationale,
+    val title: String = "ADB access is needed",
+    val message: String =
         "Perf View uses Android's loopback ADB access to read live process CPU usage on this device.",
-    val permissionButtonLabel: String = "Grant ADB access",
+    val buttonLabel: String = "Grant ADB access",
+    val detailMessage: String? = null,
+)
+
+data class DashboardUiState(
+    val sourceLabel: String = "Starting",
+    val statusLabel: String = "Starting process monitor",
+    val lastUpdatedLabel: String? = null,
+    val content: DashboardContentState = DashboardContentState.Loading(
+        message = "Connecting to ADB and reading top process usage",
+    ),
+)
+
+sealed interface DashboardContentState {
+    data class Loading(
+        val message: String,
+    ) : DashboardContentState
+
+    data class Data(
+        val processes: List<TopProcessUsage>,
+    ) : DashboardContentState
+
+    data class Empty(
+        val message: String,
+    ) : DashboardContentState
+
+    data class Unsupported(
+        val message: String,
+    ) : DashboardContentState
+}
+
+data class BackgroundActionUiState(
     val backgroundActionMessage: String? = null,
 )
