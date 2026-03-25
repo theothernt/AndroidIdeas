@@ -22,8 +22,8 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.neilturner.perfview.MainActivity
 import com.neilturner.perfview.R
+import com.neilturner.perfview.domain.cpu.CpuMonitor
 import com.neilturner.perfview.domain.cpu.CpuUsageResult
-import com.neilturner.perfview.domain.cpu.ObserveCpuUsageUseCase
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +35,7 @@ import kotlinx.coroutines.launch
 import org.koin.android.ext.android.inject
 
 class CpuOverlayService : Service() {
-    private val observeCpuUsage: ObserveCpuUsageUseCase by inject()
+    private val cpuMonitor: CpuMonitor by inject()
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -43,6 +43,7 @@ class CpuOverlayService : Service() {
     private var overlayView: LinearLayout? = null
     private val rowViews = mutableListOf<TextView>()
     private var observeJob: Job? = null
+    private var isMonitoringActive = false
 
     override fun onCreate() {
         super.onCreate()
@@ -71,6 +72,7 @@ class CpuOverlayService : Service() {
 
     override fun onDestroy() {
         observeJob?.cancel()
+        stopMonitoring()
         removeOverlay()
         serviceScope.cancel()
         super.onDestroy()
@@ -178,25 +180,31 @@ class CpuOverlayService : Service() {
 
     private fun startObserving() {
         observeJob?.cancel()
+        startMonitoring()
+        cpuMonitor.results.value?.let(::renderResult)
         observeJob = serviceScope.launch {
-            observeCpuUsage().collectLatest { result ->
-                when (result) {
-                    is CpuUsageResult.Success -> updateRows(
-                        result.observation.topProcesses
-                            .take(5)
-                            .mapIndexed { index, process ->
-                                "${index + 1}. ${formatCpu(process.cpuPercent)}  ${formatRamMb(process.ramMb)}  ${process.name}"
-                            }
-                    )
-
-                    is CpuUsageResult.Unsupported -> updateRows(
-                        listOf(
-                            "ADB unavailable",
-                            result.message,
-                        )
-                    )
-                }
+            cpuMonitor.results.collectLatest { result ->
+                result?.let(::renderResult)
             }
+        }
+    }
+
+    private fun renderResult(result: CpuUsageResult) {
+        when (result) {
+            is CpuUsageResult.Success -> updateRows(
+                result.observation.topProcesses
+                    .take(5)
+                    .mapIndexed { index, process ->
+                        "${index + 1}. ${formatCpu(process.cpuPercent)}  ${formatRamMb(process.ramMb)}  ${process.name}"
+                    }
+            )
+
+            is CpuUsageResult.Unsupported -> updateRows(
+                listOf(
+                    "ADB unavailable",
+                    result.message,
+                )
+            )
         }
     }
 
@@ -204,6 +212,18 @@ class CpuOverlayService : Service() {
         rowViews.forEachIndexed { index, textView ->
             textView.text = lines.getOrNull(index) ?: ""
         }
+    }
+
+    private fun startMonitoring() {
+        if (isMonitoringActive) return
+        cpuMonitor.acquire()
+        isMonitoringActive = true
+    }
+
+    private fun stopMonitoring() {
+        if (!isMonitoringActive) return
+        cpuMonitor.release()
+        isMonitoringActive = false
     }
 
     private fun removeOverlay() {

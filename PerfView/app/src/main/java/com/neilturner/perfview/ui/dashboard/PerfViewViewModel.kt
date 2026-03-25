@@ -4,8 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
 import com.neilturner.perfview.data.adb.AdbAccessManager
+import com.neilturner.perfview.domain.cpu.CpuMonitor
 import com.neilturner.perfview.domain.cpu.CpuUsageResult
-import com.neilturner.perfview.domain.cpu.ObserveCpuUsageUseCase
 import com.neilturner.perfview.overlay.OverlayPermissionManager
 import java.text.DateFormat
 import java.util.Date
@@ -23,7 +23,7 @@ import kotlinx.coroutines.launch
 class PerfViewViewModel(
     private val adbAccessManager: AdbAccessManager,
     private val overlayPermissionManager: OverlayPermissionManager,
-    private val observeCpuUsage: ObserveCpuUsageUseCase,
+    private val cpuMonitor: CpuMonitor,
 ) : ViewModel() {
     private val timeFormatter = DateFormat.getTimeInstance(DateFormat.MEDIUM)
 
@@ -37,6 +37,7 @@ class PerfViewViewModel(
 
     private var observeJob: Job? = null
     private var overlayPermissionPollJob: Job? = null
+    private var isMonitoringActive = false
 
     fun accept(intent: PerfViewIntent) {
         when (intent) {
@@ -66,11 +67,13 @@ class PerfViewViewModel(
 
     private fun handleAppBackgrounded() {
         Log.d(TAG, "App backgrounded, stopping CPU polling")
+        stopMonitoring()
         observeJob?.cancel()
         observeJob = null
     }
 
     private fun showPermissionRationale() {
+        stopMonitoring()
         observeJob?.cancel()
         _uiState.value = PerfViewViewState(
             permissionState = PermissionUiState(
@@ -114,6 +117,7 @@ class PerfViewViewModel(
     }
 
     private fun requestAdbAccess() {
+        stopMonitoring()
         observeJob?.cancel()
         _uiState.update {
             it.copy(
@@ -228,73 +232,97 @@ class PerfViewViewModel(
 
     private fun startObserving() {
         observeJob?.cancel()
+        startMonitoring()
         Log.d(TAG, "Starting process observation")
-        _uiState.value = PerfViewViewState(
-            permissionState = null,
-            dashboardState = DashboardUiState(
-                sourceLabel = "ADB shell",
-                statusLabel = "Connecting to ADB and reading top process usage",
-                content = DashboardContentState.Loading(
-                    message = "Connecting to ADB and reading top process usage",
+        cpuMonitor.results.value?.let(::applyCpuResult) ?: run {
+            _uiState.value = PerfViewViewState(
+                permissionState = null,
+                dashboardState = DashboardUiState(
+                    sourceLabel = "ADB shell",
+                    statusLabel = "Connecting to ADB and reading top process usage",
+                    content = DashboardContentState.Loading(
+                        message = "Connecting to ADB and reading top process usage",
+                    ),
                 ),
-            ),
-            backgroundActionState = _uiState.value.backgroundActionState,
-        )
+                backgroundActionState = _uiState.value.backgroundActionState,
+            )
+        }
 
         observeJob = viewModelScope.launch {
-            observeCpuUsage().collect { result ->
-                when (result) {
-                    is CpuUsageResult.Success -> _uiState.update { current ->
-                        val observation = result.observation
-                        Log.d(TAG, "Observation success with ${observation.topProcesses.size} processes")
-                        current.copy(
-                            permissionState = null,
-                            dashboardState = DashboardUiState(
-                                sourceLabel = "ADB shell",
-                                statusLabel = "Top process usage via ADB",
-                                lastUpdatedLabel = timeFormatter.format(Date(observation.collectedAtMillis)),
-                                content = if (observation.topProcesses.isEmpty()) {
-                                    DashboardContentState.Empty(
-                                        message = "No active process usage was returned from ADB.",
-                                    )
-                                } else {
-                                    DashboardContentState.Data(
-                                        processes = observation.topProcesses,
-                                    )
-                                },
-                            ),
-                        )
-                    }
+            cpuMonitor.results.collect { result ->
+                result?.let(::applyCpuResult)
+            }
+        }
+    }
 
-                    is CpuUsageResult.Unsupported -> _uiState.update {
-                        Log.w(TAG, "Observation failed: ${result.message}")
-                        if (shouldReturnToPermissionGate(result.message)) {
-                            PerfViewViewState(
-                                permissionState = PermissionUiState(
-                                    phase = PermissionPhase.Failed,
-                                    title = "ADB access needs approval",
-                                    message = result.message + " Press the button to reconnect.",
-                                    buttonLabel = "Retry ADB access",
-                                    detailMessage = result.message,
-                                ),
-                                backgroundActionState = it.backgroundActionState,
+    private fun applyCpuResult(result: CpuUsageResult) {
+        when (result) {
+            is CpuUsageResult.Success -> _uiState.update { current ->
+                val observation = result.observation
+                Log.d(TAG, "Observation success with ${observation.topProcesses.size} processes")
+                current.copy(
+                    permissionState = null,
+                    dashboardState = DashboardUiState(
+                        sourceLabel = "ADB shell",
+                        statusLabel = "Top process usage via ADB",
+                        lastUpdatedLabel = timeFormatter.format(Date(observation.collectedAtMillis)),
+                        content = if (observation.topProcesses.isEmpty()) {
+                            DashboardContentState.Empty(
+                                message = "No active process usage was returned from ADB.",
                             )
                         } else {
-                            it.copy(
-                                permissionState = null,
-                                dashboardState = DashboardUiState(
-                                    sourceLabel = "Unavailable",
-                                    statusLabel = result.message,
-                                    content = DashboardContentState.Unsupported(
-                                        message = result.message,
-                                    ),
-                                ),
+                            DashboardContentState.Data(
+                                processes = observation.topProcesses,
                             )
-                        }
-                    }
+                        },
+                    ),
+                )
+            }
+
+            is CpuUsageResult.Unsupported -> _uiState.update {
+                Log.w(TAG, "Observation failed: ${result.message}")
+                if (shouldReturnToPermissionGate(result.message)) {
+                    PerfViewViewState(
+                        permissionState = PermissionUiState(
+                            phase = PermissionPhase.Failed,
+                            title = "ADB access needs approval",
+                            message = result.message + " Press the button to reconnect.",
+                            buttonLabel = "Retry ADB access",
+                            detailMessage = result.message,
+                        ),
+                        backgroundActionState = it.backgroundActionState,
+                    )
+                } else {
+                    it.copy(
+                        permissionState = null,
+                        dashboardState = DashboardUiState(
+                            sourceLabel = "Unavailable",
+                            statusLabel = result.message,
+                            content = DashboardContentState.Unsupported(
+                                message = result.message,
+                            ),
+                        ),
+                    )
                 }
             }
         }
+    }
+
+    private fun startMonitoring() {
+        if (isMonitoringActive) return
+        cpuMonitor.acquire()
+        isMonitoringActive = true
+    }
+
+    private fun stopMonitoring() {
+        if (!isMonitoringActive) return
+        cpuMonitor.release()
+        isMonitoringActive = false
+    }
+
+    override fun onCleared() {
+        stopMonitoring()
+        super.onCleared()
     }
 
     private fun shouldReturnToPermissionGate(message: String): Boolean {

@@ -8,7 +8,7 @@ import com.neilturner.perfview.data.adb.LibAdbShellClient
 import com.neilturner.perfview.data.cpu.AdbTopCpuReader
 import com.neilturner.perfview.data.cpu.CpuRepository
 import com.neilturner.perfview.data.cpu.CpuRepositoryImpl
-import com.neilturner.perfview.domain.cpu.ObserveCpuUsageUseCase
+import com.neilturner.perfview.domain.cpu.CpuMonitor
 import com.neilturner.perfview.overlay.OverlayPermissionManager
 import com.neilturner.perfview.ui.dashboard.PerfViewViewModel
 import org.koin.core.module.dsl.viewModelOf
@@ -20,6 +20,6 @@ val appModule = module {
     single<AdbShellClient> { LibAdbShellClient(get<Context>(), get()) }
     single { AdbTopCpuReader(get()) }
     single<CpuRepository> { CpuRepositoryImpl(get()) }
-    single<ObserveCpuUsageUseCase> { ObserveCpuUsageUseCase(get()) }
+    single { CpuMonitor(get()) }
     viewModelOf(::PerfViewViewModel)
 }
