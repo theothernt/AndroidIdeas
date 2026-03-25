@@ -135,7 +135,7 @@ class CpuOverlayService : Service() {
             background = GradientDrawable().apply {
                 shape = GradientDrawable.RECTANGLE
                 cornerRadius = dpF(18)
-                setColor(0xD9102A36.toInt())
+                setColor(0xF2102A36.toInt())
             }
             setPadding(dp(16), dp(12), dp(16), dp(12))
         }
@@ -207,7 +207,11 @@ class CpuOverlayService : Service() {
     }
 
     private fun removeOverlay() {
-        overlayView?.let(windowManager::removeView)
+        overlayView?.let { view ->
+            if (view.isAttachedToWindow) {
+                windowManager.removeView(view)
+            }
+        }
         overlayView = null
     }
 

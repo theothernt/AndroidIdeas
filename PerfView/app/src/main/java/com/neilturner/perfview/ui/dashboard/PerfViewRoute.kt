@@ -1,16 +1,16 @@
 package com.neilturner.perfview.ui.dashboard
 
 import android.app.Activity
+import androidx.compose.runtime.DisposableEffect
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.repeatOnLifecycle
 import com.neilturner.perfview.overlay.CpuOverlayService
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
@@ -28,12 +28,29 @@ fun PerfViewRoute(
         viewModel.accept(PerfViewIntent.OverlayPermissionResult)
     }
 
-    LaunchedEffect(lifecycleOwner) {
+    LaunchedEffect(viewModel) {
         viewModel.accept(PerfViewIntent.Load)
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
-            viewModel.accept(PerfViewIntent.ResumeObserving)
+    }
+
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                    viewModel.accept(PerfViewIntent.AppOpenedToForeground)
+                    viewModel.accept(PerfViewIntent.ResumeObserving)
+                }
+
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
+                    viewModel.accept(PerfViewIntent.AppBackgrounded)
+                }
+
+                else -> Unit
+            }
         }
-        viewModel.accept(PerfViewIntent.AppBackgrounded)
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     LaunchedEffect(viewModel) {
@@ -47,7 +64,7 @@ fun PerfViewRoute(
                         context,
                         CpuOverlayService.createStartIntent(context),
                     )
-                    (context as? Activity)?.finish()
+                    (context as? Activity)?.moveTaskToBack(true)
                 }
 
                 PerfViewCommand.StopBackgroundOverlay -> {
