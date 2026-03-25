@@ -46,7 +46,7 @@ fun PerfHeaderCard(
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                if (dashboardState.content is DashboardContentState.Loading) {
+                if (dashboardState.isPolling) {
                     PollingIndicator()
                 }
             }

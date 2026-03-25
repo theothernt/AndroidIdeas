@@ -47,6 +47,7 @@ data class DashboardUiState(
     val sourceLabel: String = "Starting",
     val statusLabel: String = "Starting process monitor",
     val lastUpdatedLabel: String? = null,
+    val isPolling: Boolean = false,
     val content: DashboardContentState = DashboardContentState.Loading(
         message = "Connecting to ADB and reading top process usage",
     ),

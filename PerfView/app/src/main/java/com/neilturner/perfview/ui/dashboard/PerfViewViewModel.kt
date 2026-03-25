@@ -93,6 +93,7 @@ class PerfViewViewModel(
                 dashboardState = DashboardUiState(
                     sourceLabel = "Verifying connection",
                     statusLabel = "Checking ADB connection...",
+                    isPolling = true,
                     content = DashboardContentState.Loading(
                         message = "Checking ADB connection...",
                     ),
@@ -240,6 +241,7 @@ class PerfViewViewModel(
                 dashboardState = DashboardUiState(
                     sourceLabel = "ADB shell",
                     statusLabel = "Connecting to ADB and reading top process usage",
+                    isPolling = true,
                     content = DashboardContentState.Loading(
                         message = "Connecting to ADB and reading top process usage",
                     ),
@@ -266,6 +268,7 @@ class PerfViewViewModel(
                         sourceLabel = "ADB shell",
                         statusLabel = "Top process usage via ADB",
                         lastUpdatedLabel = timeFormatter.format(Date(observation.collectedAtMillis)),
+                        isPolling = true,
                         content = if (observation.topProcesses.isEmpty()) {
                             DashboardContentState.Empty(
                                 message = "No active process usage was returned from ADB.",
@@ -298,6 +301,7 @@ class PerfViewViewModel(
                         dashboardState = DashboardUiState(
                             sourceLabel = "Unavailable",
                             statusLabel = result.message,
+                            isPolling = true,
                             content = DashboardContentState.Unsupported(
                                 message = result.message,
                             ),
