@@ -1,9 +1,9 @@
 package com.neilturner.perfview.ui.navigation
 
 import androidx.compose.runtime.Composable
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
+import androidx.navigation3.ui.NavDisplay
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberNavBackStack
 import com.neilturner.perfview.ui.dashboard.PerfViewRoute
 
 /**
@@ -11,15 +11,15 @@ import com.neilturner.perfview.ui.dashboard.PerfViewRoute
  * Uses Navigation 2.8+ type-safe navigation with @Serializable destinations.
  */
 @Composable
-fun PerfViewNavGraph(
-    navController: NavHostController,
-) {
-    NavHost(
-        navController = navController,
-        startDestination = PerfViewDestinations.Dashboard,
-    ) {
-        composable<PerfViewDestinations.Dashboard> {
-            PerfViewRoute()
+fun PerfViewNavGraph() {
+    val backStack = rememberNavBackStack(PerfViewDestinations.Dashboard)
+
+    NavDisplay(
+        backStack = backStack,
+        entryProvider = entryProvider {
+            entry<PerfViewDestinations.Dashboard> {
+                PerfViewRoute()
+            }
         }
-    }
+    )
 }
