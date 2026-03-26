@@ -98,14 +98,15 @@ private fun DrawScope.drawLoadingIndicator(rotation: Float, color: Color) {
 @Composable
 fun VideoPlayer(
     url: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    playWhenReady: Boolean = true
 ) {
     val context = LocalContext.current
     var isLoading by remember { mutableStateOf(true) }
 
     val exoPlayer = remember {
         ExoPlayer.Builder(context).build().apply {
-            playWhenReady = true
+            this.playWhenReady = playWhenReady
             repeatMode = ExoPlayer.REPEAT_MODE_ALL
         }
     }
@@ -116,11 +117,19 @@ fun VideoPlayer(
         }
     }
 
+    // Update playWhenReady when it changes
+    DisposableEffect(playWhenReady) {
+        exoPlayer.playWhenReady = playWhenReady
+        onDispose {
+            // Don't change playWhenReady on dispose, let the parent control it
+        }
+    }
+
     DisposableEffect(url) {
         val mediaItem = MediaItem.fromUri(url)
         exoPlayer.setMediaItem(mediaItem)
         exoPlayer.prepare()
-        
+
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isLoading = when (playbackState) {
@@ -129,14 +138,14 @@ fun VideoPlayer(
                     else -> isLoading
                 }
             }
-            
+
             override fun onIsLoadingChanged(isLoadingNew: Boolean) {
                 isLoading = isLoadingNew
             }
         }
-        
+
         exoPlayer.addListener(listener)
-        
+
         onDispose {
             exoPlayer.removeListener(listener)
         }
@@ -157,7 +166,7 @@ fun VideoPlayer(
             },
             modifier = Modifier.fillMaxSize()
         )
-        
+
         if (isLoading) {
             LoadingIndicator(
                 modifier = Modifier

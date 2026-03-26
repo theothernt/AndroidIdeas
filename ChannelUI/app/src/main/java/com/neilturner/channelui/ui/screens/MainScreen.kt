@@ -11,11 +11,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -28,7 +30,8 @@ import org.koin.androidx.compose.koinViewModel
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun MainScreen(
-    viewModel: ChannelViewModel = koinViewModel()
+    viewModel: ChannelViewModel = koinViewModel(),
+    playWhenReady: Boolean = true
 ) {
     val channels by viewModel.channels.collectAsState()
     val currentStreamUrl by viewModel.currentStreamUrl.collectAsState()
@@ -41,7 +44,8 @@ fun MainScreen(
         currentStreamUrl?.let { url ->
             VideoPlayer(
                 url = url,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                playWhenReady = playWhenReady
             )
         }
 
@@ -71,40 +75,47 @@ fun MainScreen(
 
             val scrollState = rememberScrollState()
 
-            Column(
+            // Clip the container to prevent next row from showing
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(140.dp)
-                    .verticalScroll(scrollState)
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(32.dp)
+                    .height(100.dp)
+                    .clip(RoundedCornerShape(12.dp))
             ) {
-                Spacer(modifier = Modifier.height(24.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .verticalScroll(scrollState)
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                // Create rows manually
-                channels.chunked(5).forEach { rowChannels ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        rowChannels.forEach { channel ->
-                            Box(modifier = Modifier.weight(1f)) {
-                                ChannelItem(
-                                    channel = channel,
-                                    onClick = {
-                                        viewModel.playChannel(channel)
-                                    }
-                                )
+                    // Create rows manually
+                    channels.chunked(5).forEach { rowChannels ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowChannels.forEach { channel ->
+                                Box(modifier = Modifier.weight(1f)) {
+                                    ChannelItem(
+                                        channel = channel,
+                                        onClick = {
+                                            viewModel.playChannel(channel)
+                                        }
+                                    )
+                                }
+                            }
+                            // Fill remaining slots
+                            repeat(5 - rowChannels.size) {
+                                Spacer(modifier = Modifier.weight(1f))
                             }
                         }
-                        // Fill remaining slots
-                        repeat(5 - rowChannels.size) {
-                            Spacer(modifier = Modifier.weight(1f))
-                        }
                     }
-                }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
             }
         }
     }

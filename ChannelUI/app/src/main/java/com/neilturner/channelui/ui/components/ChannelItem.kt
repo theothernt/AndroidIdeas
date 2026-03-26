@@ -30,8 +30,8 @@ fun ChannelItem(
     Surface(
         onClick = onClick,
         modifier = modifier
-            .padding(8.dp)
-            .width(200.dp)
+            .padding(4.dp)
+            .width(240.dp)
             .aspectRatio(16f / 9f),
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(12.dp)),
         border = ClickableSurfaceDefaults.border(
