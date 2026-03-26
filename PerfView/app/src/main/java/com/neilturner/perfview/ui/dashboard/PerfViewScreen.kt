@@ -10,7 +10,18 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.neilturner.perfview.data.cpu.TopProcessUsage
+import com.neilturner.perfview.data.cpu.model.TopProcessUsage
+import com.neilturner.perfview.ui.dashboard.components.BackgroundActionCard
+import com.neilturner.perfview.ui.dashboard.components.DashboardCard
+import com.neilturner.perfview.ui.dashboard.components.ErrorCard
+import com.neilturner.perfview.ui.dashboard.components.PermissionGateCard
+import com.neilturner.perfview.ui.dashboard.components.PerfHeaderCard
+import com.neilturner.perfview.ui.dashboard.components.ProcessListCard
+import com.neilturner.perfview.ui.dashboard.contract.DashboardContentState
+import com.neilturner.perfview.ui.dashboard.contract.DashboardUiState
+import com.neilturner.perfview.ui.dashboard.contract.PermissionPhase
+import com.neilturner.perfview.ui.dashboard.contract.PermissionUiState
+import com.neilturner.perfview.ui.dashboard.contract.PerfViewViewState
 import com.neilturner.perfview.ui.theme.PerfViewTheme
 import com.neilturner.perfview.ui.theme.PerfViewTokens
 

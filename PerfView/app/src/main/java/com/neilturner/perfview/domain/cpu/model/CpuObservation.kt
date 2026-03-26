@@ -1,6 +1,6 @@
-package com.neilturner.perfview.domain.cpu
+package com.neilturner.perfview.domain.cpu.model
 
-import com.neilturner.perfview.data.cpu.TopProcessUsage
+import com.neilturner.perfview.data.cpu.model.TopProcessUsage
 
 data class CpuObservation(
     val percent: Float,

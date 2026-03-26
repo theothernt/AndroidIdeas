@@ -23,7 +23,7 @@ import androidx.core.content.ContextCompat
 import com.neilturner.perfview.MainActivity
 import com.neilturner.perfview.R
 import com.neilturner.perfview.domain.cpu.CpuMonitor
-import com.neilturner.perfview.domain.cpu.CpuUsageResult
+import com.neilturner.perfview.domain.cpu.model.CpuUsageResult
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers

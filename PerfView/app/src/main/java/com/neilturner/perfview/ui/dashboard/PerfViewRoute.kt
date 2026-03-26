@@ -12,6 +12,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.neilturner.perfview.overlay.CpuOverlayService
+import com.neilturner.perfview.ui.dashboard.contract.PerfViewCommand
+import com.neilturner.perfview.ui.dashboard.contract.PerfViewIntent
 import kotlinx.coroutines.flow.collectLatest
 import org.koin.androidx.compose.koinViewModel
 

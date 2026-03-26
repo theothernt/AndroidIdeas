@@ -5,9 +5,7 @@ plugins {
 
 android {
 	namespace = "com.neilturner.perfview"
-	compileSdk {
-		version = release(36)
-	}
+	compileSdk = 36
 
 	defaultConfig {
 		applicationId = "com.neilturner.perfview"
@@ -38,6 +36,11 @@ android {
 		compose = true
 		buildConfig = true
 	}
+	testOptions {
+		unitTests {
+			isIncludeAndroidResources = true
+		}
+	}
 }
 
 dependencies {
@@ -47,6 +50,7 @@ dependencies {
 	implementation(libs.androidx.compose.ui)
 	implementation(libs.androidx.compose.ui.graphics)
 	implementation(libs.androidx.compose.ui.tooling.preview)
+	implementation(libs.androidx.navigation.compose)
 	implementation(libs.androidx.tv.foundation)
 	implementation(libs.androidx.tv.material)
 	implementation(libs.androidx.material3)
@@ -61,8 +65,13 @@ dependencies {
 	}
 	implementation(libs.bouncy.castle.bcprov)
 	implementation(libs.bouncy.castle.bcpkix)
+	
+	// Testing
+	testImplementation(libs.junit)
 	androidTestImplementation(platform(libs.androidx.compose.bom))
 	androidTestImplementation(libs.androidx.compose.ui.test.junit4)
+	androidTestImplementation(libs.androidx.test.ext.junit)
+	androidTestImplementation(libs.androidx.test.rules)
 	debugImplementation(libs.androidx.compose.ui.tooling)
 	debugImplementation(libs.androidx.compose.ui.test.manifest)
 }

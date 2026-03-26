@@ -5,8 +5,16 @@ import androidx.lifecycle.viewModelScope
 import android.util.Log
 import com.neilturner.perfview.data.adb.AdbAccessManager
 import com.neilturner.perfview.domain.cpu.CpuMonitor
-import com.neilturner.perfview.domain.cpu.CpuUsageResult
+import com.neilturner.perfview.domain.cpu.model.CpuUsageResult
 import com.neilturner.perfview.overlay.OverlayPermissionManager
+import com.neilturner.perfview.ui.dashboard.contract.PerfViewCommand
+import com.neilturner.perfview.ui.dashboard.contract.PerfViewIntent
+import com.neilturner.perfview.ui.dashboard.contract.PerfViewViewState
+import com.neilturner.perfview.ui.dashboard.contract.BackgroundActionUiState
+import com.neilturner.perfview.ui.dashboard.contract.DashboardContentState
+import com.neilturner.perfview.ui.dashboard.contract.DashboardUiState
+import com.neilturner.perfview.ui.dashboard.contract.PermissionPhase
+import com.neilturner.perfview.ui.dashboard.contract.PermissionUiState
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.coroutines.Job

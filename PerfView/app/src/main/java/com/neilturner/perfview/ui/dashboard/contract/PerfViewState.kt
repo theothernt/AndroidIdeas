@@ -1,39 +1,16 @@
-package com.neilturner.perfview.ui.dashboard
+package com.neilturner.perfview.ui.dashboard.contract
 
-import android.content.Intent
-import com.neilturner.perfview.data.cpu.TopProcessUsage
+import androidx.compose.runtime.Stable
+import com.neilturner.perfview.data.cpu.model.TopProcessUsage
 
-sealed interface PerfViewIntent {
-    data object Load : PerfViewIntent
-    data object RequestAdbAccess : PerfViewIntent
-    data object RunInBackgroundClicked : PerfViewIntent
-    data object OverlayPermissionResult : PerfViewIntent
-    data object AppOpenedToForeground : PerfViewIntent
-    data object AppBackgrounded : PerfViewIntent
-    data object ResumeObserving : PerfViewIntent
-}
-
-sealed interface PerfViewCommand {
-    data class OpenOverlayPermissionSettings(
-        val intent: Intent,
-    ) : PerfViewCommand
-
-    data object StartBackgroundOverlay : PerfViewCommand
-    data object StopBackgroundOverlay : PerfViewCommand
-}
-
-enum class PermissionPhase {
-    Rationale,
-    Authorizing,
-    Failed,
-}
-
+@Stable
 data class PerfViewViewState(
     val permissionState: PermissionUiState? = PermissionUiState(),
     val dashboardState: DashboardUiState? = null,
     val backgroundActionState: BackgroundActionUiState = BackgroundActionUiState(),
 )
 
+@Stable
 data class PermissionUiState(
     val phase: PermissionPhase = PermissionPhase.Rationale,
     val title: String = "ADB access is needed",
@@ -43,6 +20,13 @@ data class PermissionUiState(
     val detailMessage: String? = null,
 )
 
+enum class PermissionPhase {
+    Rationale,
+    Authorizing,
+    Failed,
+}
+
+@Stable
 data class DashboardUiState(
     val sourceLabel: String = "Starting",
     val statusLabel: String = "Starting process monitor",
@@ -53,24 +37,30 @@ data class DashboardUiState(
     ),
 )
 
+@Stable
 sealed interface DashboardContentState {
+    @Stable
     data class Loading(
         val message: String,
     ) : DashboardContentState
 
+    @Stable
     data class Data(
         val processes: List<TopProcessUsage>,
     ) : DashboardContentState
 
+    @Stable
     data class Empty(
         val message: String,
     ) : DashboardContentState
 
+    @Stable
     data class Unsupported(
         val message: String,
     ) : DashboardContentState
 }
 
+@Stable
 data class BackgroundActionUiState(
     val backgroundActionMessage: String? = null,
 )

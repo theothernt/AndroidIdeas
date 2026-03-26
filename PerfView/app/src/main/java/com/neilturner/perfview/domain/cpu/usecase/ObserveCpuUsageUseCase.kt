@@ -1,6 +1,9 @@
-package com.neilturner.perfview.domain.cpu
+package com.neilturner.perfview.domain.cpu.usecase
 
-import com.neilturner.perfview.data.cpu.CpuRepository
+import com.neilturner.perfview.data.cpu.model.CpuUsageSnapshot
+import com.neilturner.perfview.domain.cpu.model.CpuObservation
+import com.neilturner.perfview.domain.cpu.model.CpuUsageResult
+import com.neilturner.perfview.domain.cpu.repository.CpuRepository
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
@@ -43,14 +46,4 @@ class ObserveCpuUsageUseCase(
         private const val DEFAULT_ERROR_MESSAGE =
             "Unable to connect to ADB. Enable wireless debugging or adb tcpip 5555 first."
     }
-}
-
-sealed interface CpuUsageResult {
-    data class Success(
-        val observation: CpuObservation,
-    ) : CpuUsageResult
-
-    data class Unsupported(
-        val message: String,
-    ) : CpuUsageResult
 }

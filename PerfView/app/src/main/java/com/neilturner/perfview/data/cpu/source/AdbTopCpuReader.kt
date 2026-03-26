@@ -1,8 +1,12 @@
-package com.neilturner.perfview.data.cpu
+package com.neilturner.perfview.data.cpu.source
 
 import android.util.Log
 import com.neilturner.perfview.data.adb.AdbShellClient
 import com.neilturner.perfview.data.adb.AdbShellException
+import com.neilturner.perfview.data.cpu.model.CpuReadError
+import com.neilturner.perfview.data.cpu.model.CpuReadException
+import com.neilturner.perfview.data.cpu.model.CpuUsageSnapshot
+import com.neilturner.perfview.data.cpu.model.TopProcessUsage
 
 class AdbTopCpuReader(
     private val adbShellClient: AdbShellClient,

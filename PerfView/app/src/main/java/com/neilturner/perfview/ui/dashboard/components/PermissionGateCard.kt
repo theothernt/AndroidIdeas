@@ -1,4 +1,4 @@
-package com.neilturner.perfview.ui.dashboard
+package com.neilturner.perfview.ui.dashboard.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.neilturner.perfview.ui.dashboard.contract.PermissionPhase
+import com.neilturner.perfview.ui.dashboard.contract.PermissionUiState
 import com.neilturner.perfview.ui.theme.PerfViewTokens
 
 @Composable

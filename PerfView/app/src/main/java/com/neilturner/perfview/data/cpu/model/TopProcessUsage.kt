@@ -1,4 +1,4 @@
-package com.neilturner.perfview.data.cpu
+package com.neilturner.perfview.data.cpu.model
 
 data class TopProcessUsage(
     val pid: Int,

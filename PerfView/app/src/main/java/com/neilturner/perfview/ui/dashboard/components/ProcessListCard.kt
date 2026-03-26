@@ -1,4 +1,4 @@
-package com.neilturner.perfview.ui.dashboard
+package com.neilturner.perfview.ui.dashboard.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -17,7 +17,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.neilturner.perfview.data.cpu.TopProcessUsage
+import com.neilturner.perfview.data.cpu.model.TopProcessUsage
+import com.neilturner.perfview.ui.dashboard.contract.DashboardContentState
 import com.neilturner.perfview.ui.theme.PerfAmber
 import com.neilturner.perfview.ui.theme.PerfSky
 import com.neilturner.perfview.ui.theme.PerfViewTokens

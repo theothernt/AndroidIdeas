@@ -1,4 +1,4 @@
-package com.neilturner.perfview.ui.dashboard
+package com.neilturner.perfview.ui.dashboard.components
 
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode

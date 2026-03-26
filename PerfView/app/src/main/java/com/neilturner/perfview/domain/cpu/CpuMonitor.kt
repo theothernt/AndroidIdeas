@@ -1,6 +1,9 @@
 package com.neilturner.perfview.domain.cpu
 
-import com.neilturner.perfview.data.cpu.CpuRepository
+import com.neilturner.perfview.data.cpu.model.CpuUsageSnapshot
+import com.neilturner.perfview.domain.cpu.model.CpuObservation
+import com.neilturner.perfview.domain.cpu.model.CpuUsageResult
+import com.neilturner.perfview.domain.cpu.repository.CpuRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
