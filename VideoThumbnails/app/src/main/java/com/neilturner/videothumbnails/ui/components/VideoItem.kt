@@ -3,12 +3,21 @@ package com.neilturner.videothumbnails.ui.components
 import android.content.Context
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -19,8 +28,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -42,14 +53,27 @@ import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 import org.koin.core.qualifier.named
 
+/**
+ * Represents the current state of thumbnail generation.
+ */
+enum class ThumbnailState {
+    LOADING,
+    SUCCESS,
+    ERROR,
+}
+
 suspend fun clearThumbnailCache(context: Context) {
     withContext(Dispatchers.IO) {
-        context.cacheDir.listFiles { _, name -> name.startsWith("thumb_") }?.forEach { 
-            it.delete() 
+        context.cacheDir.listFiles { _, name -> name.startsWith("thumb_") }?.forEach {
+            it.delete()
         }
     }
 }
 
+/**
+ * Generates a thumbnail for a video URL.
+ * @return The cached file path if successful, null if failed.
+ */
 suspend fun generateVideoThumbnail(
     context: Context,
     videoUrl: String,
@@ -62,16 +86,16 @@ suspend fun generateVideoThumbnail(
             if (thumbnailFile.exists()) {
                 return@withContext thumbnailFile.absolutePath
             }
-            
+
             val retriever = MediaMetadataRetriever()
             retriever.setDataSource(videoUrl, HashMap<String, String>())
-            
+
             val bitmap = retriever.getFrameAtTime(
                 1_000_000, // 1 second
                 MediaMetadataRetriever.OPTION_CLOSEST_SYNC
             )
             retriever.release()
-            
+
             bitmap?.let {
                 FileOutputStream(thumbnailFile).use { out ->
                     it.compress(Bitmap.CompressFormat.JPEG, 85, out)
@@ -86,6 +110,79 @@ suspend fun generateVideoThumbnail(
     }
 }
 
+/**
+ * Small spinning loading indicator for thumbnail generation.
+ */
+@Composable
+private fun LoadingIndicator(
+    modifier: Modifier = Modifier,
+) {
+    val transition = rememberInfiniteTransition(label = "loading")
+    val rotation by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 360f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 800, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart,
+        ),
+        label = "rotation",
+    )
+
+    Box(
+        modifier = modifier
+            .size(16.dp)
+            .rotate(rotation),
+        contentAlignment = Alignment.Center,
+    ) {
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier.size(14.dp)
+        ) {
+            drawArc(
+                color = Color.White,
+                startAngle = 0f,
+                sweepAngle = 270f,
+                useCenter = false,
+                style = Stroke(width = 2.dp.toPx()),
+            )
+        }
+    }
+}
+
+/**
+ * Small red X indicator for failed thumbnail generation.
+ */
+@Composable
+private fun ErrorIndicator(
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .size(16.dp)
+            .clip(CircleShape)
+            .background(Color.Red.copy(alpha = 0.9f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        // Draw X shape
+        androidx.compose.foundation.Canvas(
+            modifier = Modifier.size(10.dp)
+        ) {
+            val strokeWidth = 2.dp.toPx()
+            drawLine(
+                color = Color.White,
+                start = androidx.compose.ui.geometry.Offset(0f, 0f),
+                end = androidx.compose.ui.geometry.Offset(size.width, size.height),
+                strokeWidth = strokeWidth,
+            )
+            drawLine(
+                color = Color.White,
+                start = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                end = androidx.compose.ui.geometry.Offset(0f, size.height),
+                strokeWidth = strokeWidth,
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun VideoItem(
@@ -96,30 +193,55 @@ fun VideoItem(
 ) {
     val context = LocalContext.current
     var thumbnailPath by remember { mutableStateOf<String?>(null) }
-    
-    LaunchedEffect(video.url1080H264, thumbnailPath) {
-        if (thumbnailPath == null) {
-            thumbnailPath = generateVideoThumbnail(context, video.url1080H264, thumbnailDispatcher)
+    var thumbnailState by remember { mutableStateOf(ThumbnailState.LOADING) }
+    var retryCount by remember { mutableStateOf(0) }
+
+    LaunchedEffect(video.url1080H264) {
+        if (thumbnailState != ThumbnailState.SUCCESS) {
+            thumbnailState = ThumbnailState.LOADING
+            val result = generateVideoThumbnail(context, video.url1080H264, thumbnailDispatcher)
+            
+            if (result != null) {
+                thumbnailPath = result
+                thumbnailState = ThumbnailState.SUCCESS
+            } else {
+                // First failure - retry once
+                if (retryCount < 1) {
+                    retryCount++
+                    val retryResult = generateVideoThumbnail(context, video.url1080H264, thumbnailDispatcher)
+                    if (retryResult != null) {
+                        thumbnailPath = retryResult
+                        thumbnailState = ThumbnailState.SUCCESS
+                    } else {
+                        thumbnailState = ThumbnailState.ERROR
+                    }
+                } else {
+                    thumbnailState = ThumbnailState.ERROR
+                }
+            }
         }
     }
-    
+
     Card(
         onClick = { onClick(video) },
         modifier = modifier.aspectRatio(16f / 9f),
         shape = CardDefaults.shape(RoundedCornerShape(12.dp))
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            thumbnailPath?.let { path ->
-                AsyncImage(
-                    model = path,
-                    contentDescription = video.title,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clip(RoundedCornerShape(12.dp))
-                )
+            // Show thumbnail if available
+            if (thumbnailState == ThumbnailState.SUCCESS) {
+                thumbnailPath?.let { path ->
+                    AsyncImage(
+                        model = path,
+                        contentDescription = video.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(12.dp))
+                    )
+                }
             }
-            
+
             // Gradient scrim for better text readability
             Box(
                 modifier = Modifier
@@ -131,6 +253,27 @@ fun VideoItem(
                         )
                     )
             )
+
+            // Status indicator in top-right corner
+            when (thumbnailState) {
+                ThumbnailState.LOADING -> {
+                    LoadingIndicator(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp),
+                    )
+                }
+                ThumbnailState.ERROR -> {
+                    ErrorIndicator(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp),
+                    )
+                }
+                ThumbnailState.SUCCESS -> {
+                    // No indicator needed
+                }
+            }
 
             Text(
                 text = video.title,
