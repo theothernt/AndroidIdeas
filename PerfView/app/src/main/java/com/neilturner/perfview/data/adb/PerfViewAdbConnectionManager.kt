@@ -2,15 +2,11 @@ package com.neilturner.perfview.data.adb
 
 import android.content.Context
 import android.os.Build
-import android.util.Base64
 import android.util.Log
 import io.github.muntashirakon.adb.AbsAdbConnectionManager
 import java.io.File
-import java.io.FileInputStream
-import java.io.FileOutputStream
 import java.io.IOException
 import java.math.BigInteger
-import java.nio.charset.StandardCharsets
 import java.security.KeyFactory
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
@@ -58,11 +54,11 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
 
     companion object {
         private const val TAG = "PerfViewAdbConn"
-        private const val KEY_ALIAS = "perfview"
-        private const val CERT_FILE_NAME = "perfview-cert.pem"
+        private const val CERT_FILE_NAME = "perfview-cert.der"
         private const val KEY_FILE_NAME = "perfview-private.key"
         private const val CERT_VALIDITY_DAYS = 365 * 20
 
+        @Volatile
         private var INSTANCE: PerfViewAdbConnectionManager? = null
 
         @Synchronized
@@ -75,25 +71,28 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
         }
 
         private fun loadOrGenerateKeyPair(context: Context): KeyPairData {
+            val keyFile = File(context.filesDir, KEY_FILE_NAME)
+            val pubKeyFile = File(context.filesDir, "$KEY_FILE_NAME.pub")
+
+            // Diagnostic logging: file state at load time
+            Log.d(TAG, "Key file: exists=${keyFile.exists()}, size=${keyFile.length()}, modified=${Date(keyFile.lastModified())}")
+            Log.d(TAG, "PubKey file: exists=${pubKeyFile.exists()}, size=${pubKeyFile.length()}, modified=${Date(pubKeyFile.lastModified())}")
+
             val privateKey = readPrivateKeyFromFile(context)
             val publicKey = readPublicKeyFromFile(context)
 
             return if (privateKey != null && publicKey != null) {
                 Log.d(TAG, "Loaded existing RSA key pair from files")
-                Log.d(TAG, "Private key file exists: ${File(context.filesDir, KEY_FILE_NAME).exists()}")
-                Log.d(TAG, "Public key file exists: ${File(context.filesDir, "$KEY_FILE_NAME.pub").exists()}")
                 Log.d(TAG, "Public key fingerprint: ${publicKey.getFingerprint()}")
                 KeyPairData(publicKey, privateKey)
             } else {
-                Log.i(TAG, "Generating new RSA key pair...")
-                Log.d(TAG, "Private key file exists: ${File(context.filesDir, KEY_FILE_NAME).exists()}")
-                Log.d(TAG, "Public key file exists: ${File(context.filesDir, "$KEY_FILE_NAME.pub").exists()}")
+                Log.i(TAG, "Generating new RSA key pair (previous files missing or corrupted)...")
                 val keyPairGenerator = KeyPairGenerator.getInstance("RSA", BouncyCastleProvider())
                 keyPairGenerator.initialize(2048, SecureRandom())
                 val keyPair = keyPairGenerator.generateKeyPair()
 
-                writePrivateKeyToFile(context, keyPair.private)
-                writePublicKeyToFile(context, keyPair.public)
+                writeAtomically(keyFile, keyPair.private.encoded)
+                writeAtomically(pubKeyFile, keyPair.public.encoded)
 
                 Log.d(TAG, "New public key fingerprint: ${keyPair.public.getFingerprint()}")
                 KeyPairData(keyPair.public, keyPair.private)
@@ -115,15 +114,19 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
             publicKey: PublicKey,
             privateKey: PrivateKey
         ): Certificate {
+            val certFile = File(context.filesDir, CERT_FILE_NAME)
+            Log.d(TAG, "Cert file: exists=${certFile.exists()}, size=${certFile.length()}, modified=${Date(certFile.lastModified())}")
+
             val storedCert = readCertificateFromFile(context)
 
             return storedCert?.also {
-                Log.d(TAG, "Loaded existing certificate from files")
-                Log.d(TAG, "Certificate file exists: ${File(context.filesDir, CERT_FILE_NAME).exists()}")
+                Log.d(TAG, "Loaded existing certificate from file")
+                Log.d(TAG, "Cert public key fingerprint: ${it.publicKey.getFingerprint()}")
             } ?: run {
                 Log.i(TAG, "Generating new certificate...")
                 val certificate = generateCertificate(publicKey, privateKey)
-                writeCertificateToFile(context, certificate)
+                writeAtomically(certFile, certificate.encoded)
+                Log.d(TAG, "Certificate written (${certificate.encoded.size} bytes)")
                 certificate
             }
         }
@@ -162,81 +165,77 @@ class PerfViewAdbConnectionManager private constructor(context: Context) :
                 .getCertificate(certHolder)
         }
 
-        @Throws(IOException::class, java.security.cert.CertificateException::class)
         private fun readCertificateFromFile(context: Context): Certificate? {
             val certFile = File(context.filesDir, CERT_FILE_NAME)
             if (!certFile.exists()) return null
 
-            // Read PEM format and extract Base64 content between headers
-            val pemContent = certFile.readText()
-            val base64Content = pemContent
-                .replace("-----BEGIN CERTIFICATE-----", "")
-                .replace("-----END CERTIFICATE-----", "")
-                .replace("\\s".toRegex(), "")
-
-            if (base64Content.isBlank()) return null
-
-            val derBytes = Base64.decode(base64Content, Base64.DEFAULT)
-            return CertificateFactory.getInstance("X.509")
-                .generateCertificate(derBytes.inputStream())
-        }
-
-        @Throws(IOException::class)
-        private fun writeCertificateToFile(context: Context, certificate: Certificate) {
-            val certFile = File(context.filesDir, CERT_FILE_NAME)
-            Log.d(TAG, "Writing certificate to ${certFile.absolutePath}")
-
-            FileOutputStream(certFile).use { os ->
-                os.write("-----BEGIN CERTIFICATE-----\n".toByteArray(StandardCharsets.UTF_8))
-                val encoded = Base64.encodeToString(certificate.encoded, Base64.DEFAULT)
-                os.write(encoded.toByteArray(StandardCharsets.UTF_8))
-                os.write("-----END CERTIFICATE-----\n".toByteArray(StandardCharsets.UTF_8))
+            return try {
+                val derBytes = certFile.readBytes()
+                if (derBytes.isEmpty()) return null
+                CertificateFactory.getInstance("X.509")
+                    .generateCertificate(derBytes.inputStream())
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load certificate, deleting corrupted file", e)
+                safeDelete(certFile)
+                null
             }
         }
 
-        @Throws(IOException::class)
         private fun readPrivateKeyFromFile(context: Context): PrivateKey? {
             val privateKeyFile = File(context.filesDir, KEY_FILE_NAME)
             if (!privateKeyFile.exists()) return null
 
-            val privateKeyBytes = ByteArray(privateKeyFile.length().toInt())
-            FileInputStream(privateKeyFile).use { `is` ->
-                `is`.read(privateKeyBytes)
+            return try {
+                val privateKeyBytes = privateKeyFile.readBytes()
+                val keyFactory = KeyFactory.getInstance("RSA")
+                keyFactory.generatePrivate(PKCS8EncodedKeySpec(privateKeyBytes))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load private key, deleting corrupted file", e)
+                safeDelete(privateKeyFile)
+                null
             }
-
-            val keyFactory = KeyFactory.getInstance("RSA")
-            val privateKeySpec = PKCS8EncodedKeySpec(privateKeyBytes)
-            return keyFactory.generatePrivate(privateKeySpec)
         }
 
-        @Throws(IOException::class)
         private fun readPublicKeyFromFile(context: Context): PublicKey? {
             val publicKeyFile = File(context.filesDir, "$KEY_FILE_NAME.pub")
             if (!publicKeyFile.exists()) return null
 
-            val publicKeyBytes = ByteArray(publicKeyFile.length().toInt())
-            FileInputStream(publicKeyFile).use { `is` ->
-                `is`.read(publicKeyBytes)
-            }
-
-            val keyFactory = KeyFactory.getInstance("RSA")
-            val publicKeySpec = X509EncodedKeySpec(publicKeyBytes)
-            return keyFactory.generatePublic(publicKeySpec)
-        }
-
-        @Throws(IOException::class)
-        private fun writePrivateKeyToFile(context: Context, privateKey: PrivateKey) {
-            val privateKeyFile = File(context.filesDir, KEY_FILE_NAME)
-            FileOutputStream(privateKeyFile).use { os ->
-                os.write(privateKey.encoded)
+            return try {
+                val publicKeyBytes = publicKeyFile.readBytes()
+                val keyFactory = KeyFactory.getInstance("RSA")
+                keyFactory.generatePublic(X509EncodedKeySpec(publicKeyBytes))
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed to load public key, deleting corrupted file", e)
+                safeDelete(publicKeyFile)
+                null
             }
         }
 
+        /**
+         * Writes data atomically using a temp file + rename to prevent
+         * corruption if the process is killed mid-write.
+         */
         @Throws(IOException::class)
-        private fun writePublicKeyToFile(context: Context, publicKey: PublicKey) {
-            val publicKeyFile = File(context.filesDir, "$KEY_FILE_NAME.pub")
-            FileOutputStream(publicKeyFile).use { os ->
-                os.write(publicKey.encoded)
+        private fun writeAtomically(targetFile: File, data: ByteArray) {
+            val tempFile = File(targetFile.parentFile, "${targetFile.name}.tmp")
+            try {
+                tempFile.writeBytes(data)
+                if (!tempFile.renameTo(targetFile)) {
+                    throw IOException("Failed to rename ${tempFile.name} to ${targetFile.name}")
+                }
+            } catch (e: Exception) {
+                safeDelete(tempFile)
+                throw e
+            }
+        }
+
+        private fun safeDelete(file: File) {
+            try {
+                if (file.exists() && !file.delete()) {
+                    Log.w(TAG, "Failed to delete file: ${file.name}")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Exception while deleting file: ${file.name}", e)
             }
         }
 
