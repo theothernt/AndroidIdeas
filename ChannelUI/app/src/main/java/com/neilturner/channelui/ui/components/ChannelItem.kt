@@ -1,5 +1,6 @@
 package com.neilturner.channelui.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
@@ -15,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Glow
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
@@ -36,14 +38,23 @@ fun ChannelItem(
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(12.dp)),
         border = ClickableSurfaceDefaults.border(
             focusedBorder = Border(
-                border = androidx.compose.foundation.BorderStroke(
-                    width = 4.dp,
+                border = BorderStroke(
+                    width = 2.dp,
                     color = Color.White
                 ),
                 shape = RoundedCornerShape(12.dp)
             )
         ),
-        scale = ClickableSurfaceDefaults.scale(focusedScale = 1.0f)
+        scale = ClickableSurfaceDefaults.scale(
+            focusedScale = 1.05f,  // Reduced from 1.1f for better fit
+            pressedScale = 0.98f,  // Subtle press effect
+        ),
+        glow = ClickableSurfaceDefaults.glow(
+            focusedGlow = Glow(
+                elevation = 2.dp,
+                elevationColor = Color.White.copy(alpha = 0.3f)
+            )
+        )
     ) {
         Box(
             modifier = Modifier
