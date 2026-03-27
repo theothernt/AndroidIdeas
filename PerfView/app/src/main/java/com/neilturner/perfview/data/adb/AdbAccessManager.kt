@@ -13,3 +13,18 @@ interface AdbAccessManager {
         const val DEFAULT_CONNECT_TIMEOUT_MILLIS = 2_500L
     }
 }
+
+open class AdbAccessException(
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
+
+class AdbAuthorizationRequiredException(
+    message: String,
+    cause: Throwable? = null,
+) : AdbAccessException(message, cause)
+
+class AdbUnavailableException(
+    message: String,
+    cause: Throwable? = null,
+) : AdbAccessException(message, cause)

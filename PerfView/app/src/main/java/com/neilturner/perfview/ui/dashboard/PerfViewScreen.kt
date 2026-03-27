@@ -4,15 +4,17 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.neilturner.perfview.data.cpu.model.TopProcessUsage
 import com.neilturner.perfview.ui.dashboard.components.BackgroundActionCard
-import com.neilturner.perfview.ui.dashboard.components.DashboardCard
 import com.neilturner.perfview.ui.dashboard.components.ErrorCard
 import com.neilturner.perfview.ui.dashboard.components.PermissionGateCard
 import com.neilturner.perfview.ui.dashboard.components.PerfHeaderCard
@@ -51,21 +53,42 @@ fun PerfViewScreen(
                 modifier = Modifier.align(Alignment.Center),
             )
         } else if (dashboardState != null) {
-            Column(
+            Row(
                 modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.spacedBy(PerfViewTokens.sectionSpacing),
+                horizontalArrangement = Arrangement.spacedBy(PerfViewTokens.sectionSpacing),
             ) {
-                PerfHeaderCard(dashboardState = dashboardState)
-                ProcessListCard(contentState = dashboardState.content)
-                if (dashboardState.content is DashboardContentState.Unsupported) {
-                    ErrorCard(message = dashboardState.content.message)
+                Column(
+                    modifier = Modifier
+                        .weight(0.18f)
+                        .fillMaxHeight()
+                        .widthIn(min = PerfViewTokens.statusColumnMinWidth),
+                    verticalArrangement = Arrangement.spacedBy(PerfViewTokens.sectionSpacing),
+                ) {
+                    PerfHeaderCard(
+                        dashboardState = dashboardState,
+                        modifier = Modifier.weight(1f, fill = true),
+                    )
+                    BackgroundActionCard(
+                        backgroundActionState = uiState.backgroundActionState,
+                        onRunInBackground = onRunInBackground,
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(0.82f)
+                        .fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(PerfViewTokens.sectionSpacing),
+                )
+                {
+                    ProcessListCard(
+                        contentState = dashboardState.content,
+                        modifier = Modifier.weight(1f, fill = true),
+                    )
+                    if (dashboardState.content is DashboardContentState.Unsupported) {
+                        ErrorCard(message = dashboardState.content.message)
+                    }
                 }
             }
-            BackgroundActionCard(
-                backgroundActionState = uiState.backgroundActionState,
-                onRunInBackground = onRunInBackground,
-                modifier = Modifier.align(Alignment.BottomEnd),
-            )
         }
     }
 }

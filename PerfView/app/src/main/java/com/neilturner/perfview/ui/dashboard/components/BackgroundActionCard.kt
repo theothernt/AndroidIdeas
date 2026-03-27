@@ -2,11 +2,11 @@ package com.neilturner.perfview.ui.dashboard.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import com.neilturner.perfview.ui.dashboard.contract.BackgroundActionUiState
@@ -20,22 +20,25 @@ fun BackgroundActionCard(
 ) {
     Column(
         modifier = modifier,
-        horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(PerfViewTokens.cardSpacing),
     ) {
         if (!backgroundActionState.backgroundActionMessage.isNullOrBlank()) {
             Text(
                 text = backgroundActionState.backgroundActionMessage,
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onBackground,
-                textAlign = TextAlign.End,
+                textAlign = TextAlign.Start,
             )
         }
         Button(
             onClick = onRunInBackground,
             shape = PerfViewTokens.buttonShape,
+            modifier = Modifier.fillMaxWidth(),
         ) {
-            Text(text = "Run in the background")
+            Text(
+                text = "Run in the background",
+                style = MaterialTheme.typography.labelLarge,
+            )
         }
     }
 }

@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.util.Log
 import com.neilturner.perfview.data.adb.AdbAccessManager
+import com.neilturner.perfview.data.adb.AdbAuthorizationRequiredException
+import com.neilturner.perfview.data.adb.AdbUnavailableException
 import com.neilturner.perfview.domain.cpu.CpuMonitor
 import com.neilturner.perfview.domain.cpu.model.CpuUsageResult
 import com.neilturner.perfview.overlay.OverlayPermissionManager
@@ -57,8 +59,11 @@ class PerfViewViewModel(
                 }
             }
             PerfViewIntent.ResumeObserving -> {
-                // App came back to foreground, resume polling
-                startObserving()
+                // Only resume when the dashboard is already active. On first launch,
+                // ON_START also fires before the initial load flow completes.
+                if (_uiState.value.permissionState == null) {
+                    startObserving()
+                }
             }
             PerfViewIntent.RequestAdbAccess -> requestAdbAccess()
             PerfViewIntent.RunInBackgroundClicked -> runInBackground()
@@ -117,10 +122,18 @@ class PerfViewViewModel(
                 startObserving()
             }.onFailure { error ->
                 Log.w(TAG, "ADB connection check failed", error)
-                // Connection failed but user previously granted access.
-                // Try to start observing anyway - the actual error will be shown
-                // if the ADB commands fail.
-                startObserving()
+                when (error) {
+                    is AdbAuthorizationRequiredException -> showAuthorizationFailed(
+                        title = "ADB access needs approval",
+                        detailMessage = error.message ?: AUTHORIZATION_FAILED_MESSAGE,
+                    )
+                    is AdbUnavailableException -> showAdbUnavailable(
+                        error.message ?: ADB_UNAVAILABLE_MESSAGE,
+                    )
+                    else -> showAdbUnavailable(
+                        error.message ?: ADB_UNAVAILABLE_MESSAGE,
+                    )
+                }
             }
         }
     }
@@ -149,17 +162,13 @@ class PerfViewViewModel(
                 startObserving()
             }.onFailure { error ->
                 Log.w(TAG, "ADB authorization failed", error)
-                _uiState.update {
-                    it.copy(
-                        permissionState = PermissionUiState(
-                            phase = PermissionPhase.Failed,
-                            title = "ADB access was not granted",
-                            message = (error.message ?: AUTHORIZATION_FAILED_MESSAGE) +
-                                " Press the button to try again.",
-                            buttonLabel = "Retry ADB access",
-                            detailMessage = error.message ?: AUTHORIZATION_FAILED_MESSAGE,
-                        ),
-                        dashboardState = null,
+                when (error) {
+                    is AdbUnavailableException -> showAdbUnavailable(
+                        error.message ?: ADB_UNAVAILABLE_MESSAGE,
+                    )
+                    else -> showAuthorizationFailed(
+                        title = "ADB access was not granted",
+                        detailMessage = error.message ?: AUTHORIZATION_FAILED_MESSAGE,
                     )
                 }
             }
@@ -337,6 +346,40 @@ class PerfViewViewModel(
         super.onCleared()
     }
 
+    private fun showAuthorizationFailed(
+        title: String,
+        detailMessage: String,
+    ) {
+        _uiState.update {
+            it.copy(
+                permissionState = PermissionUiState(
+                    phase = PermissionPhase.Failed,
+                    title = title,
+                    message = "$detailMessage Press the button to try again.",
+                    buttonLabel = "Retry ADB access",
+                    detailMessage = detailMessage,
+                ),
+                dashboardState = null,
+            )
+        }
+    }
+
+    private fun showAdbUnavailable(message: String) {
+        _uiState.update {
+            it.copy(
+                permissionState = null,
+                dashboardState = DashboardUiState(
+                    sourceLabel = "Unavailable",
+                    statusLabel = "ADB unavailable",
+                    isPolling = false,
+                    content = DashboardContentState.Unsupported(
+                        message = message,
+                    ),
+                ),
+            )
+        }
+    }
+
     private fun shouldReturnToPermissionGate(message: String): Boolean {
         val normalized = message.lowercase()
         return "adb" in normalized || "debugging" in normalized || "authoriz" in normalized
@@ -348,6 +391,8 @@ class PerfViewViewModel(
         private const val OVERLAY_PERMISSION_POLL_ATTEMPTS = 20
         private const val AUTHORIZATION_FAILED_MESSAGE =
             "Perf View could not get ADB access within 30 seconds."
+        private const val ADB_UNAVAILABLE_MESSAGE =
+            "Perf View could not connect to ADB right now. Make sure wireless debugging is enabled and try again."
         private const val TAG = "PerfViewVm"
     }
 }

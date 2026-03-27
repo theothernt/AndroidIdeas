@@ -8,6 +8,7 @@ object PerfViewTokens {
     val screenHorizontalPadding = 24.dp
     val screenVerticalPadding = 20.dp
     val sectionSpacing = 16.dp
+    val statusColumnMinWidth = 140.dp
     val cardSpacing = 12.dp
     val cardPadding = 20.dp
     val buttonHorizontalPadding = 20.dp
