@@ -104,6 +104,7 @@ private fun PerfViewScreenContentPreview() {
                     sourceLabel = "ADB shell",
                     statusLabel = "Top process usage via ADB",
                     lastUpdatedLabel = "22:41:10",
+                    isPolling = true,
                     content = DashboardContentState.Data(
                         processes = listOf(
                             TopProcessUsage(pid = 1178, name = "system_server", cpuPercent = 38f, ramPercent = 7.8f, ramMb = 812f, user = "system", state = "R"),
