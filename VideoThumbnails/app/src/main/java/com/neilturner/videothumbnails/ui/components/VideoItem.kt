@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -26,7 +27,6 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import coil3.request.crossfade
 import com.neilturner.videothumbnails.data.Video
 import com.neilturner.videothumbnails.ui.theme.VideoThumbnailsTheme
 
@@ -39,11 +39,13 @@ fun VideoItem(
 ) {
     val context = LocalContext.current
     val drawableName = video.getThumbnailDrawableName()
-    val drawableId = context.resources.getIdentifier(
-        drawableName,
-        "drawable",
-        context.packageName
-    )
+    val drawableId = remember(drawableName) {
+        context.resources.getIdentifier(
+            drawableName,
+            "drawable",
+            context.packageName
+        )
+    }
 
     Card(
         onClick = { onClick(video) },

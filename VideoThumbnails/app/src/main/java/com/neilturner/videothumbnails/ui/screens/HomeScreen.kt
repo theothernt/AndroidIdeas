@@ -75,7 +75,10 @@ fun VideoGrid(
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        itemsIndexed(videos) { index, video ->
+        itemsIndexed(
+            items = videos,
+            key = { _, video -> video.id }
+        ) { index, video ->
             VideoItem(
                 video = video,
                 onClick = { /* TODO: Handle click */ },

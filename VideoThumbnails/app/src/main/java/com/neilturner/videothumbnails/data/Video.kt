@@ -1,9 +1,11 @@
 package com.neilturner.videothumbnails.data
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 @Serializable
+@Immutable
 data class VideoResponse(
     val assets: List<Video>,
     val version: Int,
@@ -11,6 +13,7 @@ data class VideoResponse(
 )
 
 @Serializable
+@Immutable
 data class Video(
     val id: String,
     val title: String = "",
