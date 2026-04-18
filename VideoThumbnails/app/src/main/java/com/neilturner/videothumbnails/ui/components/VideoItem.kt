@@ -49,6 +49,8 @@ import java.io.File
 import java.io.FileOutputStream
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.koin.compose.koinInject
 import org.koin.core.qualifier.named
@@ -62,9 +64,13 @@ enum class ThumbnailState {
     ERROR,
 }
 
+// Semaphore to limit concurrent thumbnail generation to 2 at a time
+private val thumbnailSemaphore = Semaphore(permits = 2)
+
 suspend fun clearThumbnailCache(context: Context) {
     withContext(Dispatchers.IO) {
-        context.cacheDir.listFiles { _, name -> name.startsWith("thumb_") }?.forEach {
+        val thumbnailDir = File(context.filesDir, "thumbnails")
+        thumbnailDir.listFiles { _, name -> name.startsWith("thumb_") }?.forEach {
             it.delete()
         }
     }
@@ -81,27 +87,36 @@ suspend fun generateVideoThumbnail(
 ): String? {
     return withContext(dispatcher) {
         try {
-            // Check if thumbnail already exists in cache
-            val thumbnailFile = File(context.cacheDir, "thumb_${videoUrl.hashCode()}.jpg")
-            if (thumbnailFile.exists()) {
-                return@withContext thumbnailFile.absolutePath
-            }
-
-            val retriever = MediaMetadataRetriever()
-            retriever.setDataSource(videoUrl, HashMap<String, String>())
-
-            val bitmap = retriever.getFrameAtTime(
-                1_000_000, // 1 second
-                MediaMetadataRetriever.OPTION_CLOSEST_SYNC
-            )
-            retriever.release()
-
-            bitmap?.let {
-                FileOutputStream(thumbnailFile).use { out ->
-                    it.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            // Acquire semaphore permit to limit concurrent generation
+            thumbnailSemaphore.withPermit {
+                // Create thumbnails directory if it doesn't exist
+                val thumbnailDir = File(context.filesDir, "thumbnails")
+                if (!thumbnailDir.exists()) {
+                    thumbnailDir.mkdirs()
                 }
-                it.recycle()
-                thumbnailFile.absolutePath
+
+                // Check if thumbnail already exists
+                val thumbnailFile = File(thumbnailDir, "thumb_${videoUrl.hashCode()}.jpg")
+                if (thumbnailFile.exists()) {
+                    return@withPermit thumbnailFile.absolutePath
+                }
+
+                val retriever = MediaMetadataRetriever()
+                retriever.setDataSource(videoUrl, HashMap<String, String>())
+
+                val bitmap = retriever.getFrameAtTime(
+                    1_000_000, // 1 second
+                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                )
+                retriever.release()
+
+                bitmap?.let {
+                    FileOutputStream(thumbnailFile).use { out ->
+                        it.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                    }
+                    it.recycle()
+                    thumbnailFile.absolutePath
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
