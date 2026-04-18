@@ -14,7 +14,7 @@ import java.util.concurrent.Executors
 val appModule = module {
     single<VideoRepository> { RawResourceVideoRepository(androidContext()) }
     single<CoroutineDispatcher>(named("ThumbnailDispatcher")) {
-        Executors.newFixedThreadPool(4).asCoroutineDispatcher()
+        Executors.newFixedThreadPool(2).asCoroutineDispatcher()
     }
     viewModel { HomeViewModel(get()) }
 }

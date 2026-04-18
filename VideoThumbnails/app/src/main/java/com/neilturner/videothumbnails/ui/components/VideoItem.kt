@@ -192,9 +192,9 @@ fun VideoItem(
     thumbnailDispatcher: CoroutineDispatcher = koinInject(named("ThumbnailDispatcher"))
 ) {
     val context = LocalContext.current
-    var thumbnailPath by remember { mutableStateOf<String?>(null) }
-    var thumbnailState by remember { mutableStateOf(ThumbnailState.LOADING) }
-    var retryCount by remember { mutableStateOf(0) }
+    var thumbnailPath by remember(video.id) { mutableStateOf<String?>(null) }
+    var thumbnailState by remember(video.id) { mutableStateOf(ThumbnailState.LOADING) }
+    var retryCount by remember(video.id) { mutableStateOf(0) }
 
     LaunchedEffect(video.id) {
         if (thumbnailState != ThumbnailState.SUCCESS) {
