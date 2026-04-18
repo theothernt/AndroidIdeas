@@ -12,7 +12,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -27,6 +26,8 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
+import coil3.request.crossfade
+import coil3.size.Size
 import com.neilturner.videothumbnails.data.Video
 import com.neilturner.videothumbnails.ui.theme.VideoThumbnailsTheme
 
@@ -38,43 +39,37 @@ fun VideoItem(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val drawableName = video.getThumbnailDrawableName()
-    val drawableId = remember(drawableName) {
-        context.resources.getIdentifier(
-            drawableName,
-            "drawable",
-            context.packageName
+    val gradientScrim = remember {
+        Brush.verticalGradient(
+            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+            startY = 100f
         )
     }
 
     Card(
         onClick = { onClick(video) },
         modifier = modifier.aspectRatio(16f / 9f),
-        shape = CardDefaults.shape(RoundedCornerShape(12.dp))
+        shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
+        scale = CardDefaults.scale(focusedScale = 1f)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // Show pre-generated thumbnail
             AsyncImage(
                 model = ImageRequest.Builder(context)
-                    .data(drawableId)
+                    .data(video.thumbnailDrawableId)
+                    .size(Size.ORIGINAL)
+                    .crossfade(false)
                     .build(),
                 contentDescription = video.getDisplayTitle(),
                 contentScale = ContentScale.Crop,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp))
+                modifier = Modifier.fillMaxSize()
             )
 
             // Gradient scrim for better text readability
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
-                            startY = 100f
-                        )
-                    )
+                    .background(gradientScrim)
             )
 
             Text(

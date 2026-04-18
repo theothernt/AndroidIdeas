@@ -34,6 +34,7 @@ data class Video(
     val url4KSDR: String? = null,
     @SerialName("pointsOfInterest")
     val pointsOfInterest: Map<String, String>? = null,
+    val thumbnailDrawableId: Int = 0,
 ) {
     // Get the preferred video URL: H264 first, then H265/HEVC as fallback
     fun getPreferredVideoUrl(): String =
