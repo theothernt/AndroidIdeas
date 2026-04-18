@@ -50,8 +50,7 @@ fun VideoItem(
     Card(
         onClick = { onClick(video) },
         modifier = modifier.aspectRatio(16f / 9f),
-        shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
-        scale = CardDefaults.scale(focusedScale = 1f)
+        shape = CardDefaults.shape(RoundedCornerShape(12.dp))
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             // Show pre-generated thumbnail
