@@ -196,28 +196,33 @@ fun VideoItem(
     var thumbnailState by remember { mutableStateOf(ThumbnailState.LOADING) }
     var retryCount by remember { mutableStateOf(0) }
 
-    LaunchedEffect(video.url1080H264) {
+    LaunchedEffect(video.id) {
         if (thumbnailState != ThumbnailState.SUCCESS) {
             thumbnailState = ThumbnailState.LOADING
-            val result = generateVideoThumbnail(context, video.url1080H264, thumbnailDispatcher)
-            
-            if (result != null) {
-                thumbnailPath = result
-                thumbnailState = ThumbnailState.SUCCESS
-            } else {
-                // First failure - retry once
-                if (retryCount < 1) {
-                    retryCount++
-                    val retryResult = generateVideoThumbnail(context, video.url1080H264, thumbnailDispatcher)
-                    if (retryResult != null) {
-                        thumbnailPath = retryResult
-                        thumbnailState = ThumbnailState.SUCCESS
+            try {
+                val videoUrl = video.getPreferredVideoUrl()
+                val result = generateVideoThumbnail(context, videoUrl, thumbnailDispatcher)
+                
+                if (result != null) {
+                    thumbnailPath = result
+                    thumbnailState = ThumbnailState.SUCCESS
+                } else {
+                    // First failure - retry once
+                    if (retryCount < 1) {
+                        retryCount++
+                        val retryResult = generateVideoThumbnail(context, videoUrl, thumbnailDispatcher)
+                        if (retryResult != null) {
+                            thumbnailPath = retryResult
+                            thumbnailState = ThumbnailState.SUCCESS
+                        } else {
+                            thumbnailState = ThumbnailState.ERROR
+                        }
                     } else {
                         thumbnailState = ThumbnailState.ERROR
                     }
-                } else {
-                    thumbnailState = ThumbnailState.ERROR
                 }
+            } catch (e: Exception) {
+                thumbnailState = ThumbnailState.ERROR
             }
         }
     }
@@ -233,7 +238,7 @@ fun VideoItem(
                 thumbnailPath?.let { path ->
                     AsyncImage(
                         model = path,
-                        contentDescription = video.title,
+                        contentDescription = video.getDisplayTitle(),
                         contentScale = ContentScale.Crop,
                         modifier = Modifier
                             .fillMaxSize()
@@ -276,7 +281,7 @@ fun VideoItem(
             }
 
             Text(
-                text = video.title,
+                text = video.getDisplayTitle(),
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color.White,
                 textAlign = TextAlign.Center,
@@ -294,7 +299,14 @@ fun VideoItem(
 private fun VideoItemPreview() {
     VideoThumbnailsTheme {
         VideoItem(
-            video = Video(title = "Sample Video", url1080H264 = ""),
+            video = Video(
+                id = "preview_video",
+                title = "Sample Video",
+                accessibilityLabel = "Sample Video Location",
+                timeOfDay = "day",
+                scene = "nature",
+                url1080H264 = "https://example.com/video.mp4"
+            ),
             onClick = {}
         )
     }
