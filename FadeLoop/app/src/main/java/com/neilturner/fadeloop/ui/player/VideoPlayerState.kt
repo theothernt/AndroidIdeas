@@ -147,6 +147,7 @@ class VideoPlayerState(
     val startupBlackAlpha: Animatable<Float, *> = Animatable(1f)
 
     private var hasStartedPlayback by mutableStateOf(false)
+    private var hasTriggeredStartupFade = false
     private var isCrossFading by mutableStateOf(false)
     private var isNextPlayerPrepared by mutableStateOf(false)
 
@@ -158,15 +159,16 @@ class VideoPlayerState(
     }
 
     fun startStartupFadeIfNeeded() {
-        if (hasStartedPlayback) {
+        if (hasStartedPlayback && startupBlackAlpha.value > 0f) {
             scope.launch {
-                if (startupBlackAlpha.value > 0f) {
+                if (!hasTriggeredStartupFade) {
                     Log.d(TAG, "First playback detected. Fading out black screen.")
-                    startupBlackAlpha.animateTo(
-                        0f,
-                        animationSpec = tween(config.startupFadeDurationMs, easing = LinearEasing)
-                    )
+                    hasTriggeredStartupFade = true
                 }
+                startupBlackAlpha.animateTo(
+                    0f,
+                    animationSpec = tween(config.startupFadeDurationMs, easing = LinearEasing)
+                )
             }
         }
     }
