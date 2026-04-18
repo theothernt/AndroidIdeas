@@ -1,15 +1,15 @@
 [versions]
-agp = "9.1.0"
+agp = "9.1.1"
 coreKtx = "1.18.0"
 appcompat = "1.7.1"
 kotlin = "2.3.20"
-kotlinSerialization = "1.10.0"
+kotlinSerialization = "1.11.0"
 composeBom = "2026.03.01"
-tvFoundation = "1.0.0-beta01"
+tvFoundation = "1.0.0-rc01"
 tvMaterial = "1.0.1"
 lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.13.0"
-koin = "4.2.0"
+koin = "4.2.1"
 coil = "3.4.0"
 leakcanary = "3.0-alpha-8"
 kotlinter = "5.4.2"
@@ -43,7 +43,6 @@ leakcanary = { group = "com.squareup.leakcanary", name = "leakcanary-android", v
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlinter = { id = "org.jmailen.kotlinter", version.ref = "kotlinter" }
