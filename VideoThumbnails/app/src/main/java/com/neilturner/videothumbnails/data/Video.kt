@@ -43,6 +43,16 @@ data class Video(
             ?: url4KSDR
             ?: throw IllegalStateException("No valid video URL found for video: $id")
 
+    // Get all available video URLs in preference order for fallback
+    fun getVideoUrlsInPreferenceOrder(): List<String> =
+        listOfNotNull(
+            url1080H264,
+            url1080HDR,
+            url1080SDR,
+            url4KHDR,
+            url4KSDR
+        )
+
     // Get display title (use accessibilityLabel if title is empty)
     fun getDisplayTitle(): String = if (title.isBlank()) accessibilityLabel else title
 }

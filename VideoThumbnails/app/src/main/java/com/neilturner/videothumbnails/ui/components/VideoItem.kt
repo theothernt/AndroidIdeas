@@ -125,6 +125,65 @@ suspend fun generateVideoThumbnail(
     }
 }
 
+suspend fun generateVideoThumbnailWithFallback(
+    context: Context,
+    video: Video,
+    dispatcher: CoroutineDispatcher = Dispatchers.IO
+): String? {
+    return withContext(dispatcher) {
+        try {
+            // Acquire semaphore permit to limit concurrent generation
+            thumbnailSemaphore.withPermit {
+                // Create thumbnails directory if it doesn't exist
+                val thumbnailDir = File(context.filesDir, "thumbnails")
+                if (!thumbnailDir.exists()) {
+                    thumbnailDir.mkdirs()
+                }
+
+                // Try each video URL in preference order
+                val videoUrls = video.getVideoUrlsInPreferenceOrder()
+                
+                for (url in videoUrls) {
+                    try {
+                        // Check if thumbnail already exists for this URL
+                        val thumbnailFile = File(thumbnailDir, "thumb_${url.hashCode()}.jpg")
+                        if (thumbnailFile.exists()) {
+                            return@withPermit thumbnailFile.absolutePath
+                        }
+
+                        val retriever = MediaMetadataRetriever()
+                        retriever.setDataSource(url, HashMap<String, String>())
+
+                        val bitmap = retriever.getFrameAtTime(
+                            1_000_000, // 1 second
+                            MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+                        )
+                        retriever.release()
+
+                        bitmap?.let {
+                            FileOutputStream(thumbnailFile).use { out ->
+                                it.compress(Bitmap.CompressFormat.JPEG, 85, out)
+                            }
+                            it.recycle()
+                            return@withPermit thumbnailFile.absolutePath
+                        }
+                    } catch (e: Exception) {
+                        // Log error and try next URL
+                        println("Failed to generate thumbnail for URL $url: ${e.message}")
+                        continue
+                    }
+                }
+                
+                // All URLs failed
+                null
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+}
+
 /**
  * Small spinning loading indicator for thumbnail generation.
  */
@@ -209,32 +268,18 @@ fun VideoItem(
     val context = LocalContext.current
     var thumbnailPath by remember(video.id) { mutableStateOf<String?>(null) }
     var thumbnailState by remember(video.id) { mutableStateOf(ThumbnailState.LOADING) }
-    var retryCount by remember(video.id) { mutableStateOf(0) }
 
     LaunchedEffect(video.id) {
         if (thumbnailState != ThumbnailState.SUCCESS) {
             thumbnailState = ThumbnailState.LOADING
             try {
-                val videoUrl = video.getPreferredVideoUrl()
-                val result = generateVideoThumbnail(context, videoUrl, thumbnailDispatcher)
+                val result = generateVideoThumbnailWithFallback(context, video, thumbnailDispatcher)
                 
                 if (result != null) {
                     thumbnailPath = result
                     thumbnailState = ThumbnailState.SUCCESS
                 } else {
-                    // First failure - retry once
-                    if (retryCount < 1) {
-                        retryCount++
-                        val retryResult = generateVideoThumbnail(context, videoUrl, thumbnailDispatcher)
-                        if (retryResult != null) {
-                            thumbnailPath = retryResult
-                            thumbnailState = ThumbnailState.SUCCESS
-                        } else {
-                            thumbnailState = ThumbnailState.ERROR
-                        }
-                    } else {
-                        thumbnailState = ThumbnailState.ERROR
-                    }
+                    thumbnailState = ThumbnailState.ERROR
                 }
             } catch (e: Exception) {
                 thumbnailState = ThumbnailState.ERROR
