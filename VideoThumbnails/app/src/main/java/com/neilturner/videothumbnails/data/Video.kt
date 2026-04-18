@@ -55,4 +55,7 @@ data class Video(
 
     // Get display title (use accessibilityLabel if title is empty)
     fun getDisplayTitle(): String = if (title.isBlank()) accessibilityLabel else title
+
+    // Get the drawable resource name for the pre-generated thumbnail
+    fun getThumbnailDrawableName(): String = "thumb_${id.lowercase().replace('-', '_')}"
 }

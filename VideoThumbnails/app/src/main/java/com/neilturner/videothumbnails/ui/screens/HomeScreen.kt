@@ -26,7 +26,6 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.Text
 import com.neilturner.videothumbnails.data.Video
 import com.neilturner.videothumbnails.ui.components.VideoItem
-import com.neilturner.videothumbnails.ui.components.clearThumbnailCache
 import kotlinx.coroutines.launch
 import org.koin.androidx.compose.koinViewModel
 
@@ -64,8 +63,6 @@ fun VideoGrid(
     modifier: Modifier = Modifier
 ) {
     val focusRequester = remember { FocusRequester() }
-    val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
@@ -84,21 +81,6 @@ fun VideoGrid(
                 onClick = { /* TODO: Handle click */ },
                 modifier = if (index == 0) Modifier.focusRequester(focusRequester) else Modifier
             )
-        }
-        
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Column(
-                modifier = Modifier.padding(top = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Button(onClick = {
-                    coroutineScope.launch {
-                        clearThumbnailCache(context)
-                    }
-                }) {
-                    Text("Clear Cache")
-                }
-            }
         }
     }
 }
