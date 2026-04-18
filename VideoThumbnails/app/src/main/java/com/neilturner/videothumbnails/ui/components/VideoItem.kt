@@ -55,7 +55,6 @@ fun VideoItem(
             AsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(drawableId)
-                    .crossfade(true)
                     .build(),
                 contentDescription = video.getDisplayTitle(),
                 contentScale = ContentScale.Crop,

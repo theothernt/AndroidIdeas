@@ -5,7 +5,6 @@ import coil3.ImageLoader
 import coil3.PlatformContext
 import coil3.SingletonImageLoader
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
-import coil3.request.crossfade
 import coil3.util.DebugLogger
 import coil3.video.VideoFrameDecoder
 import com.neilturner.videothumbnails.di.appModule
@@ -39,7 +38,7 @@ class VideoThumbnailsApp : Application(), SingletonImageLoader.Factory {
                 add(VideoFrameDecoder.Factory())
                 add(OkHttpNetworkFetcherFactory(callFactory = okHttpClient))
             }
-            .crossfade(true)
+            .diskCache(null)
             .logger(DebugLogger())
             .build()
     }
