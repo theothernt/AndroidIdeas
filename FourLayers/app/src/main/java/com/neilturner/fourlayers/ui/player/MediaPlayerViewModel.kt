@@ -1,6 +1,7 @@
 package com.neilturner.fourlayers.ui.player
 
 import android.content.Context
+import android.util.Log
 import androidx.annotation.OptIn
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -30,6 +31,10 @@ import kotlinx.coroutines.launch
 class MediaPlayerViewModel(
     private val context: Context
 ) : ViewModel() {
+
+    companion object {
+        private const val TAG = "MediaPlayerViewModel"
+    }
 
     private val _state = MutableStateFlow(PlayerState())
     val state: StateFlow<PlayerState> = _state.asStateFlow()
@@ -151,6 +156,7 @@ class MediaPlayerViewModel(
         viewModelScope.launch {
             // Preload 4 seconds before current item ends
             val delayMs = maxOf(0L, currentDuration - 4000L)
+            Log.d(TAG, "Scheduling preload for item index $nextIndex in ${delayMs}ms")
             delay(delayMs)
             preloadNextItem(nextIndex)
         }
@@ -163,10 +169,16 @@ class MediaPlayerViewModel(
 
         val normalizedIndex = nextIndex % playlist.size
         val nextItem = playlist[normalizedIndex]
-        
+
         // Determine target (inactive) renderer
-        val targetRendererType = if (currentState.activeRenderer == RendererType.RendererA) 
+        val targetRendererType = if (currentState.activeRenderer == RendererType.RendererA)
             RendererType.RendererB else RendererType.RendererA
+
+        val mediaType = when (nextItem) {
+            is MediaItem.Image -> "Image"
+            is MediaItem.Video -> "Video"
+        }
+        Log.d(TAG, "Preloading $mediaType at index $normalizedIndex into $targetRendererType")
 
         // Clean up any existing content in the target renderer
         val oldLayer = if (targetRendererType == RendererType.RendererA) currentState.rendererA else currentState.rendererB
