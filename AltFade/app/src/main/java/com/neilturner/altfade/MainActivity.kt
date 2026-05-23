@@ -13,6 +13,8 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Surface
 import com.neilturner.altfade.ui.theme.AltFadeTheme
 
+import com.neilturner.altfade.ui.screens.HomeScreen
+
 class MainActivity : ComponentActivity() {
 	@OptIn(ExperimentalTvMaterial3Api::class)
 	override fun onCreate(savedInstanceState: Bundle?) {
@@ -23,7 +25,7 @@ class MainActivity : ComponentActivity() {
 					modifier = Modifier.fillMaxSize(),
 					shape = RectangleShape
 				) {
-					Greeting("Android")
+					HomeScreen()
 				}
 			}
 		}
