@@ -1,7 +1,5 @@
 package com.neilturner.altfade.ui.components
 
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import androidx.annotation.OptIn
@@ -34,6 +32,7 @@ private const val TAG = "CrossfadeVideoPlayer"
 /**
  * Extension to check if the current video track is HDR.
  */
+@OptIn(UnstableApi::class)
 fun ExoPlayer.isPlayingHdr(): Boolean {
     val colorInfo = videoFormat?.colorInfo ?: return false
     return colorInfo.colorTransfer == C.COLOR_TRANSFER_ST2084  // PQ (HDR10)
@@ -81,7 +80,6 @@ fun CrossfadeVideoPlayer(
     val activePlayer = if (isPlayer1Active) player1 else player2
     val backgroundPlayer = if (isPlayer1Active) player2 else player1
     val activeSurfaceType = if (isPlayer1Active) player1SurfaceType else player2SurfaceType
-    val backgroundSurfaceType = if (isPlayer1Active) player2SurfaceType else player1SurfaceType
 
     // Monitor Active Player for initial loading
     DisposableEffect(activePlayer) {
