@@ -12,10 +12,12 @@ fun HomeScreen(
     videoRepository: VideoRepository = remember { VideoRepository() }
 ) {
     val videos = remember { videoRepository.getVideos() }
+    val transitionImage = remember { videoRepository.getTransitionImage() }
     
     if (videos.isNotEmpty()) {
         CrossfadeVideoPlayer(
             videos = videos,
+            transitionImage = transitionImage,
             modifier = modifier.fillMaxSize()
         )
     }

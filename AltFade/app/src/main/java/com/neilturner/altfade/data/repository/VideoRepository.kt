@@ -11,7 +11,15 @@ class VideoRepository {
         "http://sylvan.apple.com/itunes-assets/Aerials116/v4/e6/1a/ca/e61acac6-1c10-41a6-b796-7dc03fbc4517/M010_C009_F01_2K_HEVC.mov"
     )
 
+    private val transitionImageUrl =
+        "http://mynokiablog.com/wp-content/uploads/2012/05/8081.jpg"
+        // "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1920&q=85"
+
     fun getVideos(): List<Uri> {
         return videoUrls.map { it.toUri() }
+    }
+
+    fun getTransitionImage(): Uri {
+        return transitionImageUrl.toUri()
     }
 }
