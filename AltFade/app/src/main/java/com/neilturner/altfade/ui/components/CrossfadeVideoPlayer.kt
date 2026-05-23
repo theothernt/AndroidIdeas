@@ -5,7 +5,6 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import android.util.Log
 import android.widget.ImageView
-import androidx.annotation.OptIn
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
@@ -30,7 +29,6 @@ import androidx.media3.ui.compose.PlayerSurface
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import androidx.media3.common.util.UnstableApi
 import java.net.URL
 
 private const val TAG = "CrossfadeVideoPlayer"
@@ -77,7 +75,7 @@ private suspend fun loadTransitionBitmap(uri: Uri): Bitmap? = withContext(Dispat
 private const val MAX_PLAYBACK_DURATION_MS = 15000L  // Force transition at 15 seconds
 private const val TRANSITION_BEFORE_END_MS = 2000L
 private const val BACKGROUND_BUFFER_DELAY_MS = 4000L // 4 seconds before buffering next video
-private const val FADE_DURATION_MS = 1500 // 1.5 seconds fade duration
+private const val FADE_DURATION_MS = 2500 // seconds fade duration
 
 private fun Player.shouldStartTransition(): Boolean {
     // 1. Check if we've hit the hard limit of 15 seconds
