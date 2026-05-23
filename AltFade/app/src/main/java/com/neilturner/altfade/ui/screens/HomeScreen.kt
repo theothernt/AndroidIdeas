@@ -17,7 +17,6 @@ fun HomeScreen(
     if (videos.isNotEmpty()) {
         CrossfadeVideoPlayer(
             videos = videos,
-            transitionImage = transitionImage,
             modifier = modifier.fillMaxSize()
         )
     }

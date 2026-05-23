@@ -3,22 +3,13 @@ package com.neilturner.altfade.ui.components
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.os.Build
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
-import android.view.PixelCopy
-import android.view.SurfaceView
-import android.widget.ImageView
 import androidx.annotation.OptIn
-import androidx.annotation.RequiresApi
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.snap
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.*
@@ -28,194 +19,33 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import androidx.media3.ui.compose.PlayerSurface
+import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
+import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import java.net.URL
 
 private const val TAG = "CrossfadeVideoPlayer"
 
-enum class CrossfadeState {
-    IDLE,       // Active video playing normally
-    FROZEN,     // Transition image visible at alpha=1
-    FADING      // Animating alpha 1→0
-}
-
-@OptIn(UnstableApi::class)
-@RequiresApi(Build.VERSION_CODES.O)
-private fun captureFromSurfaceView(
-    playerView: PlayerView,
-    onResult: (Bitmap?) -> Unit
-) {
-    val surfaceView = playerView.videoSurfaceView as? SurfaceView
-    if (surfaceView == null) {
-        Log.e(TAG, "captureFromSurfaceView: no SurfaceView available")
-        onResult(null)
-        return
-    }
-
-    if (surfaceView.width <= 0 || surfaceView.height <= 0) {
-        Log.e(TAG, "captureFromSurfaceView: Invalid surface dimensions: ${surfaceView.width}x${surfaceView.height}")
-        onResult(null)
-        return
-    }
-
-    val bitmap = Bitmap.createBitmap(surfaceView.width, surfaceView.height, Bitmap.Config.RGBA_F16)
-    try {
-        PixelCopy.request(
-            surfaceView,
-            bitmap,
-            { result ->
-                if (result == PixelCopy.SUCCESS) {
-                    onResult(bitmap.to1080p())
-                    bitmap.recycle()
-                } else {
-                    Log.e(TAG, "captureFromSurfaceView: PixelCopy failed with result=$result")
-                    bitmap.recycle()
-                    onResult(null)
-                }
-            },
-            Handler(Looper.getMainLooper())
-        )
-    } catch (error: Exception) {
-        Log.e(TAG, "captureFromSurfaceView: PixelCopy request failed", error)
-        if (!bitmap.isRecycled) {
-            bitmap.recycle()
-        }
-        onResult(null)
-    }
-}
-
-private fun Bitmap.to1080p(): Bitmap {
-    val targetHeight = 1080
-    val targetWidth = (width * (targetHeight / height.toFloat())).toInt().coerceAtLeast(1)
-    return Bitmap.createScaledBitmap(this, targetWidth, targetHeight, true)
-}
-
-@OptIn(UnstableApi::class)
-@Composable
-private fun ActivePlayerView(
-    player: Player,
-    playerViewRef: MutableState<PlayerView?>,
-    modifier: Modifier = Modifier
-) {
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            PlayerView(context).apply {
-                useController = false
-                this.player = player
-                (videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
-            }.also { playerView ->
-                playerViewRef.value = playerView
-            }
-        },
-        update = { playerView ->
-            if (playerView.player != player) {
-                playerView.player = player
-            }
-            (playerView.videoSurfaceView as? SurfaceView)?.setZOrderMediaOverlay(true)
-            playerViewRef.value = playerView
-        },
-        onRelease = { playerView ->
-            if (playerViewRef.value == playerView) {
-                playerViewRef.value = null
-            }
-            playerView.player = null
-        }
-    )
-}
-
-@Composable
-private fun FrozenFrameOverlay(
-    bitmap: Bitmap,
-    alpha: Float,
-    modifier: Modifier = Modifier
-) {
-    AndroidView(
-        modifier = modifier.alpha(alpha),
-        factory = { context ->
-            ImageView(context).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                setBackgroundColor(android.graphics.Color.TRANSPARENT)
-            }
-        },
-        update = { imageView ->
-            imageView.setImageBitmap(bitmap)
-        },
-        onRelease = { imageView ->
-            imageView.setImageDrawable(null)
-        }
-    )
-}
-
-@Composable
-private fun CaptureThumbnailOverlay(
-    bitmap: Bitmap,
-    modifier: Modifier = Modifier
-) {
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            ImageView(context).apply {
-                scaleType = ImageView.ScaleType.CENTER_CROP
-                setBackgroundColor(android.graphics.Color.BLACK)
-            }
-        },
-        update = { imageView ->
-            imageView.setImageBitmap(bitmap)
-        },
-        onRelease = { imageView ->
-            imageView.setImageDrawable(null)
-        }
-    )
-}
-
-private suspend fun loadTransitionBitmap(uri: Uri): Bitmap? = withContext(Dispatchers.IO) {
-    runCatching {
-        URL(uri.toString()).openStream().use { stream ->
-            BitmapFactory.decodeStream(stream)
-        }
-    }.onFailure { error ->
-        Log.e(TAG, "Failed to load transition image: $uri", error)
-    }.getOrNull()
+/**
+ * Extension to check if the current video track is HDR.
+ */
+fun ExoPlayer.isPlayingHdr(): Boolean {
+    val colorInfo = videoFormat?.colorInfo ?: return false
+    return colorInfo.colorTransfer == C.COLOR_TRANSFER_ST2084  // PQ (HDR10)
+        || colorInfo.colorTransfer == C.COLOR_TRANSFER_HLG     // HLG
 }
 
 private const val MAX_PLAYBACK_DURATION_MS = 15000L  // Force transition at 15 seconds
-private const val DEBUG_CAPTURE_AT_MS = 5000L
-private const val DEBUG_CAPTURE_PAUSE_MS = 2000L
-private const val DEBUG_CAPTURE_VISIBLE_MS = 2000L
-private const val TRANSITION_BEFORE_END_MS = 2000L
 private const val BACKGROUND_BUFFER_DELAY_MS = 4000L // 4 seconds before buffering next video
-private const val FADE_DURATION_MS = 2500 // seconds fade duration
-
-private fun Player.shouldStartTransition(): Boolean {
-    // 1. Check if we've hit the hard limit of 15 seconds
-    if (currentPosition >= MAX_PLAYBACK_DURATION_MS) {
-        return true
-    }
-
-    // 2. Otherwise, check if we're near the natural end of the clip
-    val durationMs = duration
-    return if (durationMs != C.TIME_UNSET && durationMs > 0) {
-        currentPosition >= durationMs - TRANSITION_BEFORE_END_MS
-    } else {
-        false
-    }
-}
 
 @Composable
 fun CrossfadeVideoPlayer(
     videos: List<Uri>,
-    transitionImage: Uri,
     modifier: Modifier = Modifier
 ) {
     if (videos.isEmpty()) {
@@ -232,15 +62,13 @@ fun CrossfadeVideoPlayer(
         ExoPlayer.Builder(context).build().apply { repeatMode = Player.REPEAT_MODE_OFF } 
     }
 
-    var state by remember { mutableStateOf(CrossfadeState.IDLE) }
-    var transitionBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var captureThumbnail by remember { mutableStateOf<Bitmap?>(null) }
-    var capturedThumbnailIndex by remember { mutableIntStateOf(-1) }
-    var incomingFrameRendered by remember { mutableStateOf(false) }
-    val activePlayerViewRef = remember { mutableStateOf<PlayerView?>(null) }
-    
     var currentIndex by remember { mutableIntStateOf(0) }
+    var isTransitioning by remember { mutableStateOf(false) }
     
+    // Track required surface type for each player
+    var player1SurfaceType by remember { mutableIntStateOf(SURFACE_TYPE_SURFACE_VIEW) }
+    var player2SurfaceType by remember { mutableIntStateOf(SURFACE_TYPE_SURFACE_VIEW) }
+
     // Startup loading state
     var isAppLoading by remember { mutableStateOf(true) }
     val loadingAlpha by animateFloatAsState(
@@ -252,57 +80,8 @@ fun CrossfadeVideoPlayer(
     val isPlayer1Active = currentIndex % 2 == 0
     val activePlayer = if (isPlayer1Active) player1 else player2
     val backgroundPlayer = if (isPlayer1Active) player2 else player1
-
-    LaunchedEffect(transitionImage) {
-        transitionBitmap?.recycle()
-        transitionBitmap = loadTransitionBitmap(transitionImage)
-    }
-
-    // Animate alpha only during FADING; snap to 1f instantly when FROZEN
-    val overlayAlpha by animateFloatAsState(
-        targetValue = if (state == CrossfadeState.FADING) 0f else 1f,
-        animationSpec = if (state == CrossfadeState.FADING) tween(FADE_DURATION_MS) else snap(),
-        finishedListener = {
-            if (state == CrossfadeState.FADING) {
-                Log.d(TAG, "Fade finished for index $currentIndex. Advancing.")
-                // Advance to next video
-                currentIndex++
-                state = CrossfadeState.IDLE
-            }
-        },
-        label = "overlay_alpha"
-    )
-
-    // Log state changes and handle FROZEN transition
-    LaunchedEffect(state) {
-        Log.d(TAG, "State changed: $state (Index: $currentIndex)")
-    }
-
-    LaunchedEffect(state, incomingFrameRendered) {
-        if (state == CrossfadeState.FROZEN && incomingFrameRendered) {
-            withFrameMillis { }   // let Compose render the frozen frame first
-            Log.d(TAG, "Incoming video rendered first frame, starting fade out")
-            state = CrossfadeState.FADING
-        }
-    }
-
-    LaunchedEffect(state) {
-        if (state == CrossfadeState.FROZEN) {
-            delay(500)
-            if (state == CrossfadeState.FROZEN && !incomingFrameRendered) {
-                Log.w(TAG, "Incoming first-frame callback not received; starting fade after fallback delay")
-                incomingFrameRendered = true
-            }
-        }
-    }
-
-    LaunchedEffect(captureThumbnail) {
-        if (captureThumbnail != null) {
-            delay(DEBUG_CAPTURE_VISIBLE_MS)
-            captureThumbnail?.recycle()
-            captureThumbnail = null
-        }
-    }
+    val activeSurfaceType = if (isPlayer1Active) player1SurfaceType else player2SurfaceType
+    val backgroundSurfaceType = if (isPlayer1Active) player2SurfaceType else player1SurfaceType
 
     // Monitor Active Player for initial loading
     DisposableEffect(activePlayer) {
@@ -318,129 +97,85 @@ fun CrossfadeVideoPlayer(
         onDispose { activePlayer.removeListener(listener) }
     }
 
-    // Setup players when index changes
+    // Setup players and handle background pre-buffering
     LaunchedEffect(currentIndex, videos) {
         val activeUri = videos[currentIndex % videos.size]
         val nextUri = videos[(currentIndex + 1) % videos.size]
         
-        Log.d(TAG, "New cycle - Index: $currentIndex, Active: $activeUri, Next: $nextUri")
+        Log.d(TAG, "Cycle start - Index: $currentIndex, Active: $activeUri")
         
-        // Only load the active player on the very first run.
         if (currentIndex == 0) {
-            Log.d(TAG, "Initial setup: Starting active player")
             activePlayer.setMediaItem(MediaItem.fromUri(activeUri))
             activePlayer.prepare()
             activePlayer.play()
         }
         
-        // Prepare the next video in the background after a delay
-        Log.d(TAG, "Waiting ${BACKGROUND_BUFFER_DELAY_MS}ms before preparing background player")
+        // Wait then prepare the background player
         delay(BACKGROUND_BUFFER_DELAY_MS)
-        Log.d(TAG, "Preparing background player for next video")
+        Log.d(TAG, "Preparing background player for next video: $nextUri")
         backgroundPlayer.setMediaItem(MediaItem.fromUri(nextUri))
         backgroundPlayer.prepare()
     }
 
-    // Monitor background player buffering
+    // Monitor background player for HDR detection
     DisposableEffect(backgroundPlayer) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
-                val stateName = when (playbackState) {
-                    Player.STATE_BUFFERING -> "BUFFERING"
-                    Player.STATE_READY -> "READY"
-                    Player.STATE_ENDED -> "ENDED"
-                    Player.STATE_IDLE -> "IDLE"
-                    else -> "UNKNOWN"
+                if (playbackState == Player.STATE_READY) {
+                    val isHdr = backgroundPlayer.isPlayingHdr()
+                    val newSurfaceType = if (isHdr) SURFACE_TYPE_SURFACE_VIEW else SURFACE_TYPE_TEXTURE_VIEW
+                    Log.d(TAG, "Background Player READY. HDR=$isHdr. Surface: ${if (isHdr) "SurfaceView" else "TextureView"}")
+                    
+                    if (isPlayer1Active) {
+                        player2SurfaceType = newSurfaceType
+                    } else {
+                        player1SurfaceType = newSurfaceType
+                    }
                 }
-                Log.d(TAG, "Background Player state: $stateName")
-            }
-
-            override fun onRenderedFirstFrame() {
-                Log.d(TAG, "Background Player rendered first frame")
-                incomingFrameRendered = true
             }
         }
         backgroundPlayer.addListener(listener)
         onDispose { backgroundPlayer.removeListener(listener) }
     }
 
-    // Poll for transition trigger
+    // Simple transition trigger
     LaunchedEffect(activePlayer) {
-        while (state == CrossfadeState.IDLE) {
-            delay(50)
-            if (
-                capturedThumbnailIndex != currentIndex &&
-                activePlayer.currentPosition >= DEBUG_CAPTURE_AT_MS
-            ) {
-                capturedThumbnailIndex = currentIndex
-                val playerView = activePlayerViewRef.value
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && playerView != null) {
-                    val shouldResumeAfterCapture = activePlayer.playWhenReady
-                    Log.d(TAG, "Pausing for debug thumbnail at ${activePlayer.currentPosition}ms")
-                    activePlayer.pause()
-                    Log.d(TAG, "Capturing debug thumbnail immediately after pause at ${activePlayer.currentPosition}ms")
-                    captureFromSurfaceView(playerView) { bitmap ->
-                        captureThumbnail?.recycle()
-                        captureThumbnail = bitmap
-                    }
-                    delay(DEBUG_CAPTURE_PAUSE_MS)
-                    if (shouldResumeAfterCapture && state == CrossfadeState.IDLE) {
-                        activePlayer.play()
-                    }
-                } else {
-                    Log.w(TAG, "Skipping debug thumbnail capture: SDK/player view not available")
-                }
-            }
+        while (true) {
+            delay(100)
+            val duration = activePlayer.duration
+            val position = activePlayer.currentPosition
+            
+            val shouldTransition = (duration != C.TIME_UNSET && duration > 0 && position >= duration - 100) || 
+                                   (position >= MAX_PLAYBACK_DURATION_MS)
 
-            if (activePlayer.shouldStartTransition()) {
-                Log.d(TAG, "Transition trigger reached at ${activePlayer.currentPosition}ms")
-                state = CrossfadeState.FROZEN
+            if (shouldTransition && !isTransitioning) {
+                isTransitioning = true
+                Log.d(TAG, "Transitioning to next video at position ${position}ms")
+                
+                // Handover
+                backgroundPlayer.play()
                 activePlayer.pause()
                 activePlayer.stop()
                 activePlayer.clearMediaItems()
-                incomingFrameRendered = false
-                backgroundPlayer.seekTo(0)
-                backgroundPlayer.play()
+                
+                currentIndex++
+                isTransitioning = false
             }
         }
     }
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
-
-        // ── Bottom layer: Background Player (next video) ───────────────────
+        // We only show the active player's surface to ensure the clean jump.
+        // Because the background player is prepared and "ready", 
+        // the switch in the currentIndex will swap which PlayerSurface is composed.
+        
         PlayerSurface(
-            player = backgroundPlayer,
+            player = activePlayer,
+            surfaceType = activeSurfaceType,
             modifier = Modifier.fillMaxSize()
         )
-
-        // ── Middle layer: Active Player (current video) ────────────────────
-        if (state == CrossfadeState.IDLE) {
-            ActivePlayerView(
-                player = activePlayer,
-                playerViewRef = activePlayerViewRef,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
-
-        // ── Top layer: transition image ────────────────────────────────────
-        if (state == CrossfadeState.FROZEN || state == CrossfadeState.FADING) {
-            transitionBitmap?.let { bmp ->
-                FrozenFrameOverlay(
-                    bitmap = bmp,
-                    alpha = overlayAlpha,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-
-        captureThumbnail?.let { bmp ->
-            CaptureThumbnailOverlay(
-                bitmap = bmp,
-                modifier = Modifier.fillMaxSize()
-            )
-        }
         
-        // ── Startup Loading Layer ──────────────────────────────────────────
+        // Startup Loading Layer
         if (loadingAlpha > 0f) {
             Box(
                 modifier = Modifier
@@ -460,8 +195,6 @@ fun CrossfadeVideoPlayer(
     DisposableEffect(Unit) {
         onDispose {
             Log.d(TAG, "Releasing players")
-            transitionBitmap?.recycle()
-            captureThumbnail?.recycle()
             player1.release()
             player2.release()
         }
