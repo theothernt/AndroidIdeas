@@ -2,7 +2,7 @@ package com.neilturner.altfade.ui.components
 
 import android.net.Uri
 import android.util.Log
-import androidx.annotation.OptIn
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -17,28 +17,18 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
-import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.compose.PlayerSurface
 import androidx.media3.ui.compose.SURFACE_TYPE_SURFACE_VIEW
-import androidx.media3.ui.compose.SURFACE_TYPE_TEXTURE_VIEW
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.first
 
 private const val TAG = "CrossfadeVideoPlayer"
-
-/**
- * Extension to check if the current video track is HDR.
- */
-@OptIn(UnstableApi::class)
-fun ExoPlayer.isPlayingHdr(): Boolean {
-    val colorInfo = videoFormat?.colorInfo ?: return false
-    return colorInfo.colorTransfer == C.COLOR_TRANSFER_ST2084  // PQ (HDR10)
-        || colorInfo.colorTransfer == C.COLOR_TRANSFER_HLG     // HLG
-}
-
 private const val MAX_PLAYBACK_DURATION_MS = 15000L  // Force transition at 15 seconds
 private const val BACKGROUND_BUFFER_DELAY_MS = 4000L // 4 seconds before buffering next video
 
@@ -54,19 +44,22 @@ fun CrossfadeVideoPlayer(
 
     val context = LocalContext.current
 
-    val player1 = remember { 
+    val playerA = remember { 
         ExoPlayer.Builder(context).build().apply { repeatMode = Player.REPEAT_MODE_OFF } 
     }
-    val player2 = remember { 
+    val playerB = remember { 
         ExoPlayer.Builder(context).build().apply { repeatMode = Player.REPEAT_MODE_OFF } 
     }
 
     var currentIndex by remember { mutableIntStateOf(0) }
-    var isTransitioning by remember { mutableStateOf(false) }
+    var isPlayerAFront by remember { mutableStateOf(true) }
     
-    // Track required surface type for each player
-    var player1SurfaceType by remember { mutableIntStateOf(SURFACE_TYPE_SURFACE_VIEW) }
-    var player2SurfaceType by remember { mutableIntStateOf(SURFACE_TYPE_SURFACE_VIEW) }
+    val alphaA = remember { Animatable(1f) }
+    val alphaB = remember { Animatable(1f) }
+
+    // First frame rendering detection
+    var playerARenderedFirstFrame by remember { mutableStateOf(false) }
+    var playerBRenderedFirstFrame by remember { mutableStateOf(false) }
 
     // Startup loading state
     var isAppLoading by remember { mutableStateOf(true) }
@@ -76,104 +69,126 @@ fun CrossfadeVideoPlayer(
         label = "loading_alpha"
     )
 
-    val isPlayer1Active = currentIndex % 2 == 0
-    val activePlayer = if (isPlayer1Active) player1 else player2
-    val backgroundPlayer = if (isPlayer1Active) player2 else player1
-    val activeSurfaceType = if (isPlayer1Active) player1SurfaceType else player2SurfaceType
-
-    // Monitor Active Player for initial loading
-    DisposableEffect(activePlayer) {
+    // Listeners for first frame detection
+    DisposableEffect(playerA) {
         val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (isAppLoading && playbackState == Player.STATE_READY) {
-                    Log.d(TAG, "Initial video ready, fading out loading screen")
+            override fun onRenderedFirstFrame() {
+                playerARenderedFirstFrame = true
+                if (isAppLoading && isPlayerAFront) {
+                    Log.d(TAG, "Initial video (A) ready")
                     isAppLoading = false
                 }
             }
         }
-        activePlayer.addListener(listener)
-        onDispose { activePlayer.removeListener(listener) }
+        playerA.addListener(listener)
+        onDispose { playerA.removeListener(listener) }
     }
 
-    // Setup players and handle background pre-buffering
-    LaunchedEffect(currentIndex, videos) {
-        val activeUri = videos[currentIndex % videos.size]
-        val nextUri = videos[(currentIndex + 1) % videos.size]
-        
-        Log.d(TAG, "Cycle start - Index: $currentIndex, Active: $activeUri")
-        
-        if (currentIndex == 0) {
-            activePlayer.setMediaItem(MediaItem.fromUri(activeUri))
-            activePlayer.prepare()
-            activePlayer.play()
-        }
-        
-        // Wait then prepare the background player
-        delay(BACKGROUND_BUFFER_DELAY_MS)
-        Log.d(TAG, "Preparing background player for next video: $nextUri")
-        backgroundPlayer.setMediaItem(MediaItem.fromUri(nextUri))
-        backgroundPlayer.prepare()
-    }
-
-    // Monitor background player for HDR detection
-    DisposableEffect(backgroundPlayer) {
+    DisposableEffect(playerB) {
         val listener = object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_READY) {
-                    val isHdr = backgroundPlayer.isPlayingHdr()
-                    val newSurfaceType = if (isHdr) SURFACE_TYPE_SURFACE_VIEW else SURFACE_TYPE_TEXTURE_VIEW
-                    Log.d(TAG, "Background Player READY. HDR=$isHdr. Surface: ${if (isHdr) "SurfaceView" else "TextureView"}")
-                    
-                    if (isPlayer1Active) {
-                        player2SurfaceType = newSurfaceType
-                    } else {
-                        player1SurfaceType = newSurfaceType
-                    }
+            override fun onRenderedFirstFrame() {
+                playerBRenderedFirstFrame = true
+                if (isAppLoading && !isPlayerAFront) {
+                    Log.d(TAG, "Initial video (B) ready")
+                    isAppLoading = false
                 }
             }
         }
-        backgroundPlayer.addListener(listener)
-        onDispose { backgroundPlayer.removeListener(listener) }
+        playerB.addListener(listener)
+        onDispose { playerB.removeListener(listener) }
     }
 
-    // Simple transition trigger
-    LaunchedEffect(activePlayer) {
+    // Initial setup
+    LaunchedEffect(Unit) {
+        playerA.setMediaItem(MediaItem.fromUri(videos[0]))
+        playerA.prepare()
+        playerA.play()
+    }
+
+    // Background pre-buffering
+    LaunchedEffect(currentIndex, videos) {
+        val nextIndex = (currentIndex + 1) % videos.size
+        val nextUri = videos[nextIndex]
+        
+        delay(BACKGROUND_BUFFER_DELAY_MS)
+        
+        val backPlayer = if (isPlayerAFront) playerB else playerA
+        Log.d(TAG, "Pre-buffering background player with: $nextUri")
+        
+        // Reset frame flag before preparation
+        if (isPlayerAFront) playerBRenderedFirstFrame = false else playerARenderedFirstFrame = false
+        
+        backPlayer.setMediaItem(MediaItem.fromUri(nextUri))
+        backPlayer.prepare()
+        backPlayer.playWhenReady = false
+    }
+
+    // Main playback and transition logic
+    LaunchedEffect(currentIndex) {
+        val frontPlayer = if (isPlayerAFront) playerA else playerB
+        val backPlayer = if (isPlayerAFront) playerB else playerA
+        val frontAlpha = if (isPlayerAFront) alphaA else alphaB
+        
         while (true) {
-            delay(100)
-            val duration = activePlayer.duration
-            val position = activePlayer.currentPosition
+            delay(500)
+            val duration = frontPlayer.duration
+            val position = frontPlayer.currentPosition
             
-            val shouldTransition = (duration != C.TIME_UNSET && duration > 0 && position >= duration - 100) || 
+            val shouldTransition = (duration != C.TIME_UNSET && duration > 0 && position >= duration - 1000) || 
                                    (position >= MAX_PLAYBACK_DURATION_MS)
 
-            if (shouldTransition && !isTransitioning) {
-                isTransitioning = true
-                Log.d(TAG, "Transitioning to next video at position ${position}ms")
+            if (shouldTransition) {
+                Log.d(TAG, "Starting transition: Pausing front player. Back player status: renderedFirstFrame=${if (isPlayerAFront) playerBRenderedFirstFrame else playerARenderedFirstFrame}")
+                frontPlayer.pause()
                 
-                // Handover
-                backgroundPlayer.play()
-                activePlayer.pause()
-                activePlayer.stop()
-                activePlayer.clearMediaItems()
+                Log.d(TAG, "Starting back player")
+                backPlayer.play()
                 
+                // Wait for the first frame to actually render (if it hasn't already during preparation)
+                snapshotFlow { if (isPlayerAFront) playerBRenderedFirstFrame else playerARenderedFirstFrame }
+                    .filter { it }
+                    .first()
+                
+                Log.d(TAG, "Back player is active and rendered. Fading out front player.")
+                
+                // Execute fade
+                frontAlpha.animateTo(0f, animationSpec = tween(1500))
+                
+                // Cleanup front player
+                frontPlayer.stop()
+                frontPlayer.clearMediaItems()
+                
+                // Reset for next lifecycle
+                frontAlpha.snapTo(1f)
+                isPlayerAFront = !isPlayerAFront
                 currentIndex++
-                isTransitioning = false
+                break
             }
         }
     }
 
     Box(modifier.fillMaxSize().background(Color.Black)) {
-        // We only show the active player's surface to ensure the clean jump.
-        // Because the background player is prepared and "ready", 
-        // the switch in the currentIndex will swap which PlayerSurface is composed.
-        
+        // Player B Surface
         PlayerSurface(
-            player = activePlayer,
-            surfaceType = activeSurfaceType,
-            modifier = Modifier.fillMaxSize()
+            player = playerB,
+            surfaceType = SURFACE_TYPE_SURFACE_VIEW,
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(alphaB.value)
+                .zIndex(if (isPlayerAFront) 0f else 1f)
         )
         
-        // Startup Loading Layer
+        // Player A Surface
+        PlayerSurface(
+            player = playerA,
+            surfaceType = SURFACE_TYPE_SURFACE_VIEW,
+            modifier = Modifier
+                .fillMaxSize()
+                .alpha(alphaA.value)
+                .zIndex(if (isPlayerAFront) 1f else 0f)
+        )
+        
+        // Startup Loading Overlay
         if (loadingAlpha > 0f) {
             Box(
                 modifier = Modifier
@@ -193,8 +208,8 @@ fun CrossfadeVideoPlayer(
     DisposableEffect(Unit) {
         onDispose {
             Log.d(TAG, "Releasing players")
-            player1.release()
-            player2.release()
+            playerA.release()
+            playerB.release()
         }
     }
 }
