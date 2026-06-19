@@ -1,27 +1,27 @@
 [versions]
 agp = "9.2.1"
-coreKtx = "1.19.0"
+core = "1.19.0"
 appcompat = "1.7.1"
 kotlin = "2.4.0"
-composeBom = "2026.06.00"
-tvFoundation = "1.0.0"
-tvMaterial = "1.1.0"
-lifecycleRuntimeKtx = "2.11.0"
-lifecycleRuntimeCompose = "2.11.0"
-lifecycleViewModelKtx = "2.11.0"
-activityCompose = "1.13.0"
+compose-bom = "2026.06.00"
+tv-foundation = "1.0.0"
+tv-material = "1.1.0"
+lifecycle-runtime = "2.11.0"
+lifecycle-compose = "2.11.0"
+lifecycle-viewmodel = "2.11.0"
+activity-compose = "1.13.0"
 koin = "4.2.2"
-libadbAndroid = "3.1.1"
-bouncyCastle = "1.84"
+libadb-android = "3.1.1"
+bouncy-castle = "1.84"
 navigation3 = "1.1.3"
 junit = "4.13.2"
-androidxTestExt = "1.3.0"
-androidxTestRules = "1.7.0"
+junit-test = "1.3.0"
+junit-test-rules = "1.7.0"
 
 [libraries]
-androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
+androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "core" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
-androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
+androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "compose-bom" }
 androidx-compose-ui = { group = "androidx.compose.ui", name = "ui" }
 androidx-compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics" }
 androidx-compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling" }
@@ -29,22 +29,22 @@ androidx-compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "u
 androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
-androidx-tv-foundation = { group = "androidx.tv", name = "tv-foundation", version.ref = "tvFoundation" }
-androidx-tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tvMaterial" }
-androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
-androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycleRuntimeCompose" }
-androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycleViewModelKtx" }
-androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
+androidx-tv-foundation = { group = "androidx.tv", name = "tv-foundation", version.ref = "tv-foundation" }
+androidx-tv-material = { group = "androidx.tv", name = "tv-material", version.ref = "tv-material" }
+androidx-lifecycle-runtime-ktx = { group = "androidx.lifecycle", name = "lifecycle-runtime-ktx", version.ref = "lifecycle-runtime" }
+androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lifecycle-runtime-compose", version.ref = "lifecycle-compose" }
+androidx-lifecycle-viewmodel-ktx = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-ktx", version.ref = "lifecycle-viewmodel" }
+androidx-activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activity-compose" }
 koin-android = { group = "io.insert-koin", name = "koin-android", version.ref = "koin" }
 koin-androidx-compose = { group = "io.insert-koin", name = "koin-androidx-compose", version.ref = "koin" }
-libadb-android = { group = "com.github.MuntashirAkon", name = "libadb-android", version.ref = "libadbAndroid" }
-bouncy-castle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncyCastle" }
-bouncy-castle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncyCastle" }
+libadb-android = { group = "com.github.MuntashirAkon", name = "libadb-android", version.ref = "libadb-android" }
+bouncy-castle-bcprov = { group = "org.bouncycastle", name = "bcprov-jdk18on", version.ref = "bouncy-castle" }
+bouncy-castle-bcpkix = { group = "org.bouncycastle", name = "bcpkix-jdk18on", version.ref = "bouncy-castle" }
 androidx-navigation3-ui = { group = "androidx.navigation3", name = "navigation3-ui", version.ref = "navigation3" }
 androidx-navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version.ref = "navigation3" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
-androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "androidxTestExt" }
-androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "androidxTestRules" }
+androidx-test-ext-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junit-test" }
+androidx-test-rules = { group = "androidx.test", name = "rules", version.ref = "junit-test-rules" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
