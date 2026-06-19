@@ -29,6 +29,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.isActive
 
 class PerfViewViewModel(
     private val adbAccessManager: AdbAccessManager,
@@ -47,16 +48,14 @@ class PerfViewViewModel(
 
     private var observeJob: Job? = null
     private var overlayPermissionPollJob: Job? = null
+    private var connectingJob: Job? = null
+    private var pollingJob: Job? = null
     private var isMonitoringActive = false
 
     fun accept(intent: PerfViewIntent) {
         when (intent) {
             PerfViewIntent.Load -> {
-                if (adbAccessManager.hasGrantedAccess()) {
-                    ensureConnectedThenObserve()
-                } else {
-                    showPermissionRationale()
-                }
+                startConnecting()
             }
             PerfViewIntent.ResumeObserving -> {
                 // Only resume when the dashboard is already active. On first launch,
@@ -343,6 +342,8 @@ class PerfViewViewModel(
 
     override fun onCleared() {
         stopMonitoring()
+        connectingJob?.cancel()
+        pollingJob?.cancel()
         super.onCleared()
     }
 
@@ -380,6 +381,109 @@ class PerfViewViewModel(
         }
     }
 
+    private fun startConnecting() {
+        stopMonitoring()
+        observeJob?.cancel()
+        connectingJob?.cancel()
+        pollingJob?.cancel()
+
+        _uiState.value = PerfViewViewState(
+            permissionState = PermissionUiState(
+                phase = PermissionPhase.Connecting,
+                title = "Connecting...",
+                message = "Establishing ADB connection.",
+                buttonLabel = "",
+            ),
+        )
+
+        viewModelScope.launch {
+            connectingJob = launch {
+                runCatching {
+                    adbAccessManager.requestAccess(timeoutMillis = ADB_REQUEST_TIMEOUT_MILLIS)
+                }.onSuccess {
+                    Log.d(TAG, "ADB connection established via requestAccess")
+                    finishConnecting()
+                }.onFailure { error ->
+                    Log.w(TAG, "requestAccess failed", error)
+                    handleConnectingFailure(error)
+                }
+            }
+
+            val startTime = System.currentTimeMillis()
+            pollingJob = launch {
+                while (isActive) {
+                    delay(POLL_INTERVAL_MILLIS)
+
+                    if (adbAccessManager.isConnected) {
+                        Log.d(TAG, "ADB isConnected=true, verifying shell access")
+                        finishConnecting()
+                        return@launch
+                    }
+
+                    val elapsed = System.currentTimeMillis() - startTime
+                    if (elapsed >= ADB_REQUEST_TIMEOUT_MILLIS) {
+                        Log.w(TAG, "ADB connection timed out after ${elapsed}ms")
+                        connectingJob?.cancel()
+                        showConnectingTimeout()
+                        return@launch
+                    }
+                }
+            }
+        }
+    }
+
+    @Synchronized
+    private fun finishConnecting() {
+        val wasConnecting = connectingJob != null || pollingJob != null
+        if (!wasConnecting) return
+        connectingJob?.cancel()
+        connectingJob = null
+        pollingJob?.cancel()
+        pollingJob = null
+
+        viewModelScope.launch {
+            runCatching {
+                adbAccessManager.ensureConnected(timeoutMillis = ADB_REQUEST_TIMEOUT_MILLIS)
+            }.onSuccess {
+                startObserving()
+            }.onFailure { error ->
+                Log.w(TAG, "Shell probe failed after connection", error)
+                handleConnectingFailure(error)
+            }
+        }
+    }
+
+    private fun handleConnectingFailure(error: Throwable) {
+        pollingJob?.cancel()
+        pollingJob = null
+        when (error) {
+            is AdbAuthorizationRequiredException -> showAuthorizationFailed(
+                title = "ADB access needs approval",
+                detailMessage = error.message ?: AUTHORIZATION_FAILED_MESSAGE,
+            )
+            is AdbUnavailableException -> showAdbUnavailable(
+                error.message ?: ADB_UNAVAILABLE_MESSAGE,
+            )
+            else -> showAdbUnavailable(
+                error.message ?: ADB_UNAVAILABLE_MESSAGE,
+            )
+        }
+    }
+
+    private fun showConnectingTimeout() {
+        _uiState.value = PerfViewViewState(
+            permissionState = null,
+            dashboardState = DashboardUiState(
+                sourceLabel = "Unavailable",
+                statusLabel = "ADB connection timed out",
+                isPolling = false,
+                content = DashboardContentState.Unsupported(
+                    message = ADB_UNAVAILABLE_MESSAGE,
+                ),
+            ),
+        )
+    }
+
     private fun shouldReturnToPermissionGate(message: String): Boolean {
         val normalized = message.lowercase()
         return "adb" in normalized || "debugging" in normalized || "authoriz" in normalized
@@ -387,6 +491,7 @@ class PerfViewViewModel(
 
     private companion object {
         private const val ADB_REQUEST_TIMEOUT_MILLIS = 30_000L
+        private const val POLL_INTERVAL_MILLIS = 1_000L
         private const val OVERLAY_PERMISSION_POLL_INTERVAL_MILLIS = 1_000L
         private const val OVERLAY_PERMISSION_POLL_ATTEMPTS = 20
         private const val AUTHORIZATION_FAILED_MESSAGE =

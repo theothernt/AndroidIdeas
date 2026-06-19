@@ -21,6 +21,7 @@ data class PermissionUiState(
 )
 
 enum class PermissionPhase {
+    Connecting,
     Rationale,
     Authorizing,
     Failed,

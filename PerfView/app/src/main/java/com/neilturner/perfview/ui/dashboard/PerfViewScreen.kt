@@ -16,6 +16,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.neilturner.perfview.data.cpu.model.TopProcessUsage
 import com.neilturner.perfview.ui.dashboard.components.BackgroundActionCard
 import com.neilturner.perfview.ui.dashboard.components.ErrorCard
+import com.neilturner.perfview.ui.dashboard.components.ConnectingDialog
 import com.neilturner.perfview.ui.dashboard.components.PermissionGateCard
 import com.neilturner.perfview.ui.dashboard.components.PerfHeaderCard
 import com.neilturner.perfview.ui.dashboard.components.ProcessListCard
@@ -46,7 +47,11 @@ fun PerfViewScreen(
                 vertical = PerfViewTokens.screenVerticalPadding,
             )
     ) {
-        if (permissionState != null) {
+        if (permissionState != null && permissionState.phase == PermissionPhase.Connecting) {
+            ConnectingDialog(
+                message = permissionState.message,
+            )
+        } else if (permissionState != null) {
             PermissionGateCard(
                 permissionState = permissionState,
                 onRequestAdbAccess = onRequestAdbAccess,

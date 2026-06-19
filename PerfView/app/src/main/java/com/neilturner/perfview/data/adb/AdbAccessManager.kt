@@ -1,6 +1,7 @@
 package com.neilturner.perfview.data.adb
 
 interface AdbAccessManager {
+    val isConnected: Boolean
     fun hasGrantedAccess(): Boolean
 
     @Throws(Exception::class)

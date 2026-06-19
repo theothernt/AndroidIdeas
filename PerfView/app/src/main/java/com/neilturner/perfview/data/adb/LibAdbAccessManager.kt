@@ -12,6 +12,9 @@ class LibAdbAccessManager(
 ) : AdbAccessManager {
     private val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
+    override val isConnected: Boolean
+        get() = PerfViewAdbConnectionManager.getInstance(context).isConnected
+
     override fun hasGrantedAccess(): Boolean = preferences.getBoolean(KEY_ACCESS_GRANTED, false)
 
     override suspend fun requestAccess(timeoutMillis: Long) = withContext(Dispatchers.IO) {
