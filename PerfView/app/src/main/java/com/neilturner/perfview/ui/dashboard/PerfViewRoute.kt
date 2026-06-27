@@ -1,10 +1,10 @@
 package com.neilturner.perfview.ui.dashboard
 
 import android.app.Activity
-import androidx.compose.runtime.DisposableEffect
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -38,12 +38,7 @@ fun PerfViewRoute(
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 androidx.lifecycle.Lifecycle.Event.ON_START -> {
-                    viewModel.accept(PerfViewIntent.AppOpenedToForeground)
-                    viewModel.accept(PerfViewIntent.ResumeObserving)
-                }
-
-                androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
-                    viewModel.accept(PerfViewIntent.AppBackgrounded)
+                    viewModel.accept(PerfViewIntent.Load)
                 }
 
                 else -> Unit
@@ -66,11 +61,11 @@ fun PerfViewRoute(
                         context,
                         CpuOverlayService.createStartIntent(context),
                     )
-                    (context as? Activity)?.moveTaskToBack(true)
+                    (context as? Activity)?.finish()
                 }
 
-                PerfViewCommand.StopBackgroundOverlay -> {
-                    context.stopService(CpuOverlayService.createStopIntent(context))
+                PerfViewCommand.ExitApp -> {
+                    (context as? Activity)?.finish()
                 }
             }
         }
@@ -78,7 +73,7 @@ fun PerfViewRoute(
 
     PerfViewScreen(
         uiState = uiState.value,
-        onRequestAdbAccess = { viewModel.accept(PerfViewIntent.RequestAdbAccess) },
         onRunInBackground = { viewModel.accept(PerfViewIntent.RunInBackgroundClicked) },
+        onExitApp = { viewModel.accept(PerfViewIntent.ExitApp) },
     )
 }

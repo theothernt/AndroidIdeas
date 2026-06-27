@@ -8,5 +8,5 @@ sealed interface PerfViewCommand {
     ) : PerfViewCommand
 
     data object StartBackgroundOverlay : PerfViewCommand
-    data object StopBackgroundOverlay : PerfViewCommand
+    data object ExitApp : PerfViewCommand
 }
