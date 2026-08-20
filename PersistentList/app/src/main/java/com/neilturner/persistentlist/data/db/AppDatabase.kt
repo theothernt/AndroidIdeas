@@ -1,7 +1,7 @@
 package com.neilturner.persistentlist.data.db
 
-import androidx.room.Database
-import androidx.room.RoomDatabase
+import androidx.room3.Database
+import androidx.room3.RoomDatabase
 
 @Database(entities = [FileEntity::class], version = 3)
 abstract class AppDatabase : RoomDatabase() {

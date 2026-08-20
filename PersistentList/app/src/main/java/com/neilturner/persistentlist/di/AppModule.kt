@@ -1,6 +1,6 @@
 package com.neilturner.persistentlist.di
 
-import androidx.room.Room
+import androidx.room3.Room
 import com.neilturner.persistentlist.data.FileRepository
 import com.neilturner.persistentlist.data.SmbRepository
 import com.neilturner.persistentlist.data.SmbRepositoryImpl

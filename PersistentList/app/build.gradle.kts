@@ -11,7 +11,7 @@ plugins {
 android {
 	namespace = "com.neilturner.persistentlist"
 	compileSdk {
-		version = release(36)
+		version = release(37)
 	}
 
 	val sambaProperties = Properties().apply {
@@ -69,9 +69,8 @@ dependencies {
 	implementation(libs.androidx.tv.material)
 	implementation(libs.androidx.lifecycle.runtime.ktx)
 	implementation(libs.androidx.activity.compose)
-	implementation(libs.androidx.room.runtime)
-	implementation(libs.androidx.room.ktx)
-	ksp(libs.androidx.room.compiler)
+	implementation(libs.androidx.room3.runtime)
+	ksp(libs.androidx.room3.compiler)
 	implementation(libs.smbj)
 	implementation(libs.slf4j.simple)
 	implementation(libs.koin.android)

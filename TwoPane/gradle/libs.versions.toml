@@ -1,18 +1,18 @@
 [versions]
-agp = "9.2.1"
-coreKtx = "1.18.0"
+agp = "9.3.1"
+coreKtx = "1.19.0"
 appcompat = "1.7.1"
-kotlin = "2.3.21"
-composeBom = "2026.05.01"
+kotlin = "2.4.10"
+composeBom = "2026.06.00"
 tvFoundation = "1.0.0"
 tvMaterial = "1.1.0"
 material3 = "1.4.0"
-lifecycleRuntimeKtx = "2.10.0"
+lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
-navigation3 = "1.1.2"
+navigation3 = "1.1.4"
 kotlinxSerialization = "1.11.0"
 leakcanary = "3.0-alpha-8"
-kotlinter = "5.4.2"
+kotlinter = "5.7.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -41,4 +41,3 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 kotlinter = { id = "org.jmailen.kotlinter", version.ref = "kotlinter" }
-
