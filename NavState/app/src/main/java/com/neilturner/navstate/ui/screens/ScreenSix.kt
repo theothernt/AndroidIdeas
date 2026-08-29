@@ -1,35 +1,50 @@
 package com.neilturner.navstate.ui.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.lifecycle.viewmodel.initializer
+import androidx.lifecycle.viewmodel.viewModelFactory
 import androidx.tv.material3.Button
 import androidx.tv.material3.Text
-import com.neilturner.navstate.viewmodel.ScreenSixViewModel
+import com.neilturner.navstate.navigation.ScreenSix
+import com.neilturner.navstate.ui.FocusableText
+import com.neilturner.navstate.ui.TvScreenColumn
+import com.neilturner.navstate.viewmodel.CounterViewModel
 
 @Composable
-fun ScreenSix(
+fun ScreenSixContent(
     onNavigateToScreenFive: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: ScreenSixViewModel = viewModel()
+    viewModel: CounterViewModel = viewModel(
+        viewModelStoreOwner = LocalActivity.current as ComponentActivity,
+        key = ScreenSix::class.qualifiedName!!,
+        factory = viewModelFactory { initializer { CounterViewModel() } },
+    ),
 ) {
-    Column(
-        modifier = modifier.fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Text(text = "Screen Six", modifier = Modifier.padding(16.dp))
-        Text(text = "Counter: ${viewModel.counter}", modifier = Modifier.padding(16.dp))
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
+    }
+
+    TvScreenColumn(modifier = modifier) {
+        FocusableText(text = "Screen Six")
+        FocusableText(text = "Counter: ${viewModel.counter}")
         Spacer(modifier = Modifier.height(24.dp))
-        Button(onClick = onNavigateToScreenFive) {
+        Button(
+            onClick = onNavigateToScreenFive,
+            modifier = Modifier.focusRequester(focusRequester),
+        ) {
             Text(text = "Back to Screen 5")
         }
     }
