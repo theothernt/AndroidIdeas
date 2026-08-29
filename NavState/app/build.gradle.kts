@@ -16,20 +16,27 @@ android {
 		targetSdk = 37
 		versionCode = 1
 		versionName = "1.0"
-
 	}
 
 	buildTypes {
+		debug {
+		}
 		release {
-			optimization {
-				enable = false
-			}
+			isMinifyEnabled = true
+			isShrinkResources = true
+			proguardFiles(
+				getDefaultProguardFile("proguard-android-optimize.txt"),
+				"proguard-rules.pro"
+			)
+			signingConfig = signingConfigs.getByName("debug")
 		}
 	}
+
 	compileOptions {
-		sourceCompatibility = JavaVersion.VERSION_11
-		targetCompatibility = JavaVersion.VERSION_11
+		sourceCompatibility = JavaVersion.VERSION_21
+		targetCompatibility = JavaVersion.VERSION_21
 	}
+
 	buildFeatures {
 		compose = true
 	}
@@ -50,7 +57,6 @@ dependencies {
 	implementation(libs.androidx.navigation3.ui)
 	implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 	implementation(libs.kotlinx.serialization.core)
-	androidTestImplementation(platform(libs.androidx.compose.bom))
 	androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 	debugImplementation(libs.androidx.compose.ui.test.manifest)
 	debugImplementation(libs.androidx.compose.ui.tooling)
