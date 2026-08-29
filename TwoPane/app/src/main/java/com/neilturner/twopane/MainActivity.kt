@@ -16,7 +16,9 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.ui.NavDisplay
 import com.neilturner.twopane.ui.mainmenu.MainMenuScreen
 import com.neilturner.twopane.ui.media.MediaScreen
+import com.neilturner.twopane.ui.newmenu.NewMenuScreen
 import com.neilturner.twopane.ui.settings.SettingsScreen
+import com.neilturner.twopane.ui.start.StartScreen
 import com.neilturner.twopane.ui.theme.TwoPaneTheme
 
 
@@ -26,7 +28,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             TwoPaneTheme {
-                val backStack = remember { mutableStateListOf<AppNavKey>(AppNavKey.MainMenu) }
+                val backStack = remember { mutableStateListOf<AppNavKey>(AppNavKey.Start) }
 
                 BackHandler(enabled = backStack.size > 1) {
                     backStack.removeAt(backStack.size - 1)
@@ -54,6 +56,12 @@ class MainActivity : ComponentActivity() {
                         )
                     },
                     entryProvider = entryProvider {
+                        entry<AppNavKey.Start> {
+                            StartScreen(
+                                onNavigateToOldMenu = { backStack.add(AppNavKey.MainMenu) },
+                                onNavigateToNewMenu = { backStack.add(AppNavKey.NewMenu) }
+                            )
+                        }
                         entry<AppNavKey.MainMenu> {
                             MainMenuScreen(
                                 onNavigateToMedia = { backStack.add(AppNavKey.Media) },
@@ -69,6 +77,13 @@ class MainActivity : ComponentActivity() {
                         }
                         entry<AppNavKey.Settings> {
                             SettingsScreen(onBack = {
+                                if (backStack.size > 1) {
+                                    backStack.removeAt(backStack.size - 1)
+                                }
+                            })
+                        }
+                        entry<AppNavKey.NewMenu> {
+                            NewMenuScreen(onBack = {
                                 if (backStack.size > 1) {
                                     backStack.removeAt(backStack.size - 1)
                                 }
