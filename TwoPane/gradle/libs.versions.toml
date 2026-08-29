@@ -1,17 +1,17 @@
 [versions]
-agp = "9.3.1"
+agp = "9.3.2"
 coreKtx = "1.19.0"
-appcompat = "1.7.1"
+appcompat = "1.8.0"
 kotlin = "2.4.10"
-composeBom = "2026.06.00"
+composeBom = "2026.08.00"
 tvFoundation = "1.0.0"
 tvMaterial = "1.1.0"
 material3 = "1.4.0"
 lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
-navigation3 = "1.1.4"
+navigation3 = "1.1.7"
 kotlinxSerialization = "1.11.0"
-leakcanary = "3.0-alpha-8"
+leakcanary = "3.0-alpha-9"
 kotlinter = "5.7.0"
 
 [libraries]
