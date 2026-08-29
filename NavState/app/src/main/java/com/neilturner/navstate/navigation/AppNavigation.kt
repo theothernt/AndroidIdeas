@@ -1,5 +1,11 @@
 package com.neilturner.navstate.navigation
 
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntryDecorator
@@ -25,6 +31,24 @@ fun AppNavigation() {
     NavDisplay(
         backStack = backStack,
         onBack = { backStack.removeLastOrNull() },
+        transitionSpec = {
+            ContentTransform(
+                targetContentEnter = fadeIn(tween(300)) + slideInHorizontally(tween(300)) { it },
+                initialContentExit = fadeOut(tween(300)) + slideOutHorizontally(tween(300)) { -it }
+            )
+        },
+        popTransitionSpec = {
+            ContentTransform(
+                targetContentEnter = fadeIn(tween(300)) + slideInHorizontally(tween(300)) { -it },
+                initialContentExit = fadeOut(tween(300)) + slideOutHorizontally(tween(300)) { it }
+            )
+        },
+        predictivePopTransitionSpec = { swipeEdge ->
+            ContentTransform(
+                targetContentEnter = fadeIn(tween(300)) + slideInHorizontally(tween(300)) { -it / 2 },
+                initialContentExit = fadeOut(tween(300)) + slideOutHorizontally(tween(300)) { it / 2 }
+            )
+        },
         entryProvider = entryProvider {
             entry<ScreenOne> {
                 ScreenOne(
