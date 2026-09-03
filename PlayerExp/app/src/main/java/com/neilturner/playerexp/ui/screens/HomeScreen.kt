@@ -10,7 +10,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -27,6 +31,12 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel()
 ) {
+    val firstButtonFocus = remember { FocusRequester() }
+
+    LaunchedEffect(Unit) {
+        firstButtonFocus.requestFocus()
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -50,6 +60,7 @@ fun HomeScreen(
         Button(
             onClick = { onNavigateToPlayer("progressive") },
             modifier = Modifier
+                .focusRequester(firstButtonFocus)
                 .width(360.dp)
                 .height(56.dp)
         ) {

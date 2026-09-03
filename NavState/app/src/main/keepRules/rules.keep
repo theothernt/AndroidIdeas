@@ -4,9 +4,88 @@
 # For more details, see
 #   https://d.android.com/r/tools/r8/keep-rules
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Kotlin
+-keep class kotlin.** { *; }
+-keep class kotlinx.** { *; }
+-dontwarn kotlin.**
+-dontwarn kotlinx.**
+
+# Kotlin Serialization
+-keepclassmembers class ** {
+    @kotlinx.serialization.Serializable *;
+}
+-keepclassmembers class * implements kotlinx.serialization.KSerializer {
+    *;
+}
+-keep class kotlinx.serialization.** { *; }
+-keep class kotlinx.serialization.descriptors.** { *; }
+-keep class kotlinx.serialization.encoding.** { *; }
+
+# Navigation 3
+-keep class androidx.navigation3.** { *; }
+-dontwarn androidx.navigation3.**
+
+# Compose
+-keep class androidx.compose.** { *; }
+-keep class androidx.compose.runtime.** { *; }
+-dontwarn androidx.compose.**
+
+# TV Material / Foundation
+-keep class androidx.tv.** { *; }
+-dontwarn androidx.tv.**
+
+# Lifecycle / ViewModel
+-keep class androidx.lifecycle.** { *; }
+-dontwarn androidx.lifecycle.**
+
+# Keep ViewModelStore and SavedStateHandle
+-keep class androidx.lifecycle.viewmodel.** { *; }
+-keep class androidx.lifecycle.savedstate.** { *; }
+
+# Keep annotations
+-keepattributes *Annotation*,EnclosingMethod,InnerClasses,Signature
+
+# Keep serializable classes
+-keepclassmembers class ** implements java.io.Serializable {
+    static final long serialVersionUID;
+    private static final java.io.ObjectStreamField[] serialPersistentFields;
+    !static !transient <fields>;
+    !private <fields>;
+    !private <methods>;
+    private void writeObject(java.io.ObjectOutputStream);
+    private void readObject(java.io.ObjectInputStream);
+    java.lang.Object writeReplace();
+    java.lang.Object readResolve();
+}
+
+# Keep Parcelable
+-keepclassmembers class * implements android.os.Parcelable {
+    static ** CREATOR;
+}
+
+# Keep enums
+-keepclassmembers enum * {
+    **[] $VALUES;
+    public *;
+}
+
+# Keep NavKey serializable objects
+-keepclassmembers class com.neilturner.navstate.navigation.** {
+    *;
+}
+-keep class com.neilturner.navstate.navigation.** { *; }
+
+# Keep ViewModels
+-keep class com.neilturner.navstate.viewmodel.** { *; }
+
+# Keep UI composables
+-keep class com.neilturner.navstate.ui.** { *; }
+
+# ProGuard optimizations for Compose
+-optimizations !code/simplification/arithmetic,!field/*,!class/merging/*
+-optimizationpasses 5
+
+# Don't warn about missing classes that are optional
+-dontwarn androidx.activity.**
+-dontwarn androidx.core.**
+-dontwarn androidx.appcompat.**
