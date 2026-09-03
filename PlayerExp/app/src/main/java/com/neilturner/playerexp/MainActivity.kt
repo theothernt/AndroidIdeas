@@ -7,7 +7,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.tv.material3.Surface
 import com.neilturner.playerexp.ui.screens.HomeScreen
 import com.neilturner.playerexp.ui.screens.PlayerScreen
@@ -23,7 +23,7 @@ class MainActivity : ComponentActivity() {
             PlayerExpTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    tonalElevation = 5.dp
+                    shape = RectangleShape
                 ) {
                     val currentScreen = remember { mutableStateOf("home") }
                     val selectedMediaType = remember { mutableStateOf("") }

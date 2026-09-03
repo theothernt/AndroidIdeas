@@ -1,25 +1,31 @@
 package com.neilturner.playerexp.ui.screens
 
 import android.content.Context
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Button
+import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import com.neilturner.playerexp.ui.viewmodels.PlayerViewModel
 
@@ -37,7 +43,7 @@ fun PlayerScreen(
 
     val mediaUri = when (mediaType) {
         "hls" -> "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
-        else -> "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+        else -> "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
     }
 
     val title = when (mediaType) {
@@ -45,16 +51,21 @@ fun PlayerScreen(
         else -> "Big Buck Bunny"
     }
 
+    BackHandler {
+        viewModel.releasePlayer()
+        onBack()
+    }
+
     LaunchedEffect(mediaUri) {
         viewModel.initialize(mediaUri, title)
     }
 
     DisposableEffect(lifecycleOwner.lifecycle) {
-        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+        val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_PAUSE) {
-                viewModel.player.playWhenReady = false
+                viewModel.pause()
             } else if (event == Lifecycle.Event.ON_RESUME) {
-                viewModel.player.playWhenReady = true
+                viewModel.resume()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -65,36 +76,53 @@ fun PlayerScreen(
 
     DisposableEffect(Unit) {
         onDispose {
-            viewModel.player.playWhenReady = false
+            viewModel.releasePlayer()
         }
     }
 
     Column(modifier = modifier.fillMaxSize()) {
-        androidx.tv.material3.Surface(
+        Surface(
             tonalElevation = 8.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
-            androidx.compose.foundation.layout.Row(
+            Row(
                 modifier = Modifier.padding(16.dp),
-                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Button(onClick = onBack) {
+                Button(
+                    onClick = {
+                        viewModel.releasePlayer()
+                        onBack()
+                    }
+                ) {
                     Text("Back")
                 }
-                Spacer(modifier = Modifier.height(16.dp))
-                androidx.compose.material3.Text(
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
                     text = title,
-                    style = androidx.compose.material3.MaterialTheme.typography.titleLarge
+                    style = MaterialTheme.typography.titleLarge
                 )
             }
         }
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            AndroidPlayerView(
-                context = context,
-                player = viewModel.player,
-                modifier = Modifier.fillMaxSize()
-            )
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
+            val player = viewModel.player
+            if (player != null) {
+                AndroidPlayerView(
+                    context = context,
+                    player = player,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                Text(
+                    text = "Loading media...",
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
     }
 }
@@ -113,6 +141,11 @@ private fun AndroidPlayerView(
                 useController = true
                 controllerAutoShow = true
                 controllerShowTimeoutMs = 3000
+            }
+        },
+        update = { playerView ->
+            if (playerView.player != player) {
+                playerView.player = player
             }
         },
         modifier = modifier

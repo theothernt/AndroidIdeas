@@ -50,6 +50,7 @@ dependencies {
 	implementation(libs.androidx.tv.material)
 	implementation(libs.androidx.lifecycle.viewmodel.compose)
 	implementation(libs.androidx.media3.exoplayer)
+	implementation(libs.androidx.media3.exoplayer.hls)
 	implementation(libs.androidx.media3.ui)
 	implementation(libs.androidx.media3.datasource.okhttp)
 	androidTestImplementation(libs.androidx.compose.ui.test.junit4)
