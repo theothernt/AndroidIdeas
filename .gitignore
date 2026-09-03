@@ -16,6 +16,11 @@ captures/
 *.apk
 output-metadata.json
 
+# Agents
+.qwen/
+.mimocode/
+.kilo/
+
 # IntelliJ
 *.iml
 .idea/
