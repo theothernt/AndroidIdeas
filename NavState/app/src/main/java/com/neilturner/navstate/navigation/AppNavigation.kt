@@ -22,7 +22,8 @@ import com.neilturner.navstate.ui.screens.ScreenSixContent
 import com.neilturner.navstate.ui.screens.ScreenThreeContent
 import com.neilturner.navstate.ui.screens.ScreenTwoContent
 
-private const val TRANSITION_MS = 200
+private const val TRANSITION_MS = 1000
+private const val ALT_TRANSITION_MS = 500
 
 @Composable
 fun AppNavigation(
@@ -38,20 +39,20 @@ fun AppNavigation(
         onBack = { backStack.removeLastOrNull() },
         transitionSpec = {
             ContentTransform(
-                targetContentEnter = fadeIn(tween(TRANSITION_MS)) + slideInHorizontally(tween(TRANSITION_MS)) { it },
-                initialContentExit = fadeOut(tween(TRANSITION_MS)) + slideOutHorizontally(tween(TRANSITION_MS)) { -it }
+                targetContentEnter = fadeIn(tween(TRANSITION_MS - ALT_TRANSITION_MS)) + slideInHorizontally(tween(TRANSITION_MS)) { it },
+                initialContentExit = fadeOut(tween(TRANSITION_MS - ALT_TRANSITION_MS)) + slideOutHorizontally(tween(TRANSITION_MS)) { -it }
             )
         },
         popTransitionSpec = {
             ContentTransform(
-                targetContentEnter = fadeIn(tween(TRANSITION_MS)) + slideInHorizontally(tween(TRANSITION_MS)) { -it },
-                initialContentExit = fadeOut(tween(TRANSITION_MS)) + slideOutHorizontally(tween(TRANSITION_MS)) { it }
+                targetContentEnter = fadeIn(tween(TRANSITION_MS - ALT_TRANSITION_MS)) + slideInHorizontally(tween(TRANSITION_MS)) { -it },
+                initialContentExit = fadeOut(tween(TRANSITION_MS - ALT_TRANSITION_MS)) + slideOutHorizontally(tween(TRANSITION_MS)) { it }
             )
         },
         predictivePopTransitionSpec = { swipeEdge ->
             ContentTransform(
-                targetContentEnter = fadeIn(tween(TRANSITION_MS)) + slideInHorizontally(tween(TRANSITION_MS)) { -it / 2 },
-                initialContentExit = fadeOut(tween(TRANSITION_MS)) + slideOutHorizontally(tween(TRANSITION_MS)) { it / 2 }
+                targetContentEnter = fadeIn(tween(TRANSITION_MS - ALT_TRANSITION_MS)) + slideInHorizontally(tween(TRANSITION_MS)) { -it / 2 },
+                initialContentExit = fadeOut(tween(TRANSITION_MS - ALT_TRANSITION_MS)) + slideOutHorizontally(tween(TRANSITION_MS)) { it / 2 }
             )
         },
         entryProvider = entryProvider {
