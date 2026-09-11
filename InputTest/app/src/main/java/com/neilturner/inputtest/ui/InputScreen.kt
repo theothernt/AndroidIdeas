@@ -38,6 +38,8 @@ import com.neilturner.inputtest.ui.theme.InputTestTheme
 fun InputScreen(modifier: Modifier = Modifier) {
 	var username by remember { mutableStateOf("") }
 	var password by remember { mutableStateOf("") }
+	var email by remember { mutableStateOf("") }
+	var phone by remember { mutableStateOf("") }
 	val focusManager = LocalFocusManager.current
 
 	Surface(
@@ -103,6 +105,70 @@ fun InputScreen(modifier: Modifier = Modifier) {
 							(event.key == Key.Enter || event.key == Key.NumPadEnter)
 						) {
 							focusManager.moveFocus(FocusDirection.Down)  // moves to next field, not "escape"
+							true
+						} else {
+							false
+						}
+					}
+			)
+
+			OutlinedTextField(
+				value = email,
+				onValueChange = { email = it },
+				label = { Text("Email") },
+				singleLine = true,
+				keyboardOptions = KeyboardOptions(
+					keyboardType = KeyboardType.Email,
+					imeAction = ImeAction.Next
+				),
+				colors = OutlinedTextFieldDefaults.colors(
+					focusedTextColor = Color.White,
+					unfocusedTextColor = Color.White,
+					focusedLabelColor = Color.White,
+					unfocusedLabelColor = Color.White,
+					cursorColor = Color.White,
+					focusedBorderColor = Color.White,
+					unfocusedBorderColor = Color.Gray
+				),
+				modifier = Modifier
+					.fillMaxWidth()
+					.onPreviewKeyEvent { event ->
+						if (event.type == KeyEventType.KeyDown &&
+							(event.key == Key.Enter || event.key == Key.NumPadEnter)
+						) {
+							focusManager.moveFocus(FocusDirection.Down)
+							true
+						} else {
+							false
+						}
+					}
+			)
+
+			OutlinedTextField(
+				value = phone,
+				onValueChange = { phone = it },
+				label = { Text("Phone") },
+				singleLine = true,
+				keyboardOptions = KeyboardOptions(
+					keyboardType = KeyboardType.Phone,
+					imeAction = ImeAction.Done
+				),
+				colors = OutlinedTextFieldDefaults.colors(
+					focusedTextColor = Color.White,
+					unfocusedTextColor = Color.White,
+					focusedLabelColor = Color.White,
+					unfocusedLabelColor = Color.White,
+					cursorColor = Color.White,
+					focusedBorderColor = Color.White,
+					unfocusedBorderColor = Color.Gray
+				),
+				modifier = Modifier
+					.fillMaxWidth()
+					.onPreviewKeyEvent { event ->
+						if (event.type == KeyEventType.KeyDown &&
+							(event.key == Key.Enter || event.key == Key.NumPadEnter)
+						) {
+							focusManager.moveFocus(FocusDirection.Next)
 							true
 						} else {
 							false
