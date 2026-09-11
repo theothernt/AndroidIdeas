@@ -39,6 +39,12 @@ android {
 			isIncludeAndroidResources = true
 		}
 	}
+
+	packaging {
+		resources {
+			excludes += "/META-INF/LICENSE.md"
+		}
+	}
 }
 
 dependencies {

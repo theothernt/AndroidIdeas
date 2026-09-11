@@ -1,9 +1,9 @@
 [versions]
-agp = "9.3.2"
+agp = "9.4.0"
 coreKtx = "1.19.0"
 appcompat = "1.8.0"
-kotlin = "2.4.10"
-composeBom = "2026.08.00"
+kotlin = "2.4.20"
+composeBom = "2026.09.00"
 tvFoundation = "1.0.0"
 tvMaterial = "1.1.0"
 material3 = "1.4.0"
