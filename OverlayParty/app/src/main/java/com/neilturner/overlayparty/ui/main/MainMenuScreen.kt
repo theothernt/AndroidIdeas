@@ -54,7 +54,6 @@ fun MainMenuScreen(
     modifier: Modifier = Modifier,
 ) {
     val focusRequester = remember { FocusRequester() }
-
     val infiniteTransition = rememberInfiniteTransition(label = "border_transition")
     val animatedAlpha by infiniteTransition.animateFloat(
         initialValue = BORDER_ALPHA_START,
@@ -72,7 +71,6 @@ fun MainMenuScreen(
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
     }
-
     Surface(
         modifier = modifier.fillMaxSize(),
         shape = RectangleShape,
@@ -132,7 +130,6 @@ fun MainMenuScreen(
                     )
                 }
             }
-
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
@@ -186,4 +183,3 @@ private fun MainMenuScreenPreview() {
         )
     }
 }
-
