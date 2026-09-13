@@ -8,7 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Surface
-import com.neilturner.overlayparty.ui.main.MainScreen
+import com.neilturner.overlayparty.ui.navigation.AppNavigation
 import com.neilturner.overlayparty.ui.theme.OverlayPartyTheme
 
 class MainActivity : ComponentActivity() {
@@ -19,9 +19,9 @@ class MainActivity : ComponentActivity() {
             OverlayPartyTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
-                    shape = RectangleShape
+                    shape = RectangleShape,
                 ) {
-                    MainScreen()
+                    AppNavigation(Modifier.fillMaxSize())
                 }
             }
         }

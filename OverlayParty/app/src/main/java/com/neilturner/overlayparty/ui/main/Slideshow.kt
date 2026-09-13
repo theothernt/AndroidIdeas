@@ -25,7 +25,7 @@ import kotlinx.coroutines.delay
 fun Slideshow(
     modifier: Modifier = Modifier,
     delayMillis: Long = 12000L,
-    crossfadeDurationMillis: Int = 2000
+    crossfadeDurationMillis: Int = 2000,
 ) {
     val context = LocalContext.current
 
@@ -37,9 +37,10 @@ fun Slideshow(
     val screenHeightPx = containerSize.height
 
     // Get all images from assets/slideshow
-    val imagePaths = remember {
-        context.assets.list("slideshow")?.map { "file:///android_asset/slideshow/$it" } ?: emptyList()
-    }
+    val imagePaths =
+        remember {
+            context.assets.list("slideshow")?.map { "file:///android_asset/slideshow/$it" } ?: emptyList()
+        }
 
     if (imagePaths.isEmpty()) return
     var currentIndex by remember { mutableIntStateOf(0) }
@@ -55,16 +56,18 @@ fun Slideshow(
         targetState = imagePaths[currentIndex],
         animationSpec = tween(durationMillis = crossfadeDurationMillis, easing = LinearEasing),
         label = "Slideshow Crossfade",
-        modifier = modifier.fillMaxSize()
+        modifier = modifier.fillMaxSize(),
     ) { imagePath ->
         AsyncImage(
-            model = ImageRequest.Builder(context)
-                .data(imagePath)
-                .size(screenWidthPx, screenHeightPx)
-                .build(),
+            model =
+                ImageRequest
+                    .Builder(context)
+                    .data(imagePath)
+                    .size(screenWidthPx, screenHeightPx)
+                    .build(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
         )
     }
 }

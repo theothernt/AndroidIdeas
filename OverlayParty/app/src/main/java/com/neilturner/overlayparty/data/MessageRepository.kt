@@ -5,17 +5,27 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
 class MessageRepository {
-    private val countries = listOf(
-        "France", "Germany", "Italy", "Spain", "Portugal",
-        "Brazil", "Argentina", "Japan", "China", "India"
-    )
+    private val countries =
+        listOf(
+            "France",
+            "Germany",
+            "Italy",
+            "Spain",
+            "Portugal",
+            "Brazil",
+            "Argentina",
+            "Japan",
+            "China",
+            "India",
+        )
 
-    fun getMessageStream(): Flow<String> = flow {
-        var index = 0
-        while (true) {
-            emit(countries[index])
-            index = (index + 1) % countries.size
-            delay(6_000)
+    fun getMessageStream(): Flow<String> =
+        flow {
+            var index = 0
+            while (true) {
+                emit(countries[index])
+                index = (index + 1) % countries.size
+                delay(6_000)
+            }
         }
-    }
 }

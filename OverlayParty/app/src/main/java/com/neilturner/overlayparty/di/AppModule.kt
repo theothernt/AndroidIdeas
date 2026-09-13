@@ -10,13 +10,14 @@ import com.neilturner.overlayparty.ui.main.MainViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
-val appModule = module {
-    single { WeatherRepository() }
-    single { TimeRepository() }
-    single { MusicRepository() }
-    single { LocationRepository() }
-    single { MessageRepository() }
-    single { CountdownRepository() }
+val appModule =
+    module {
+        single { WeatherRepository() }
+        single { TimeRepository() }
+        single { MusicRepository() }
+        single { LocationRepository() }
+        single { MessageRepository() }
+        single { CountdownRepository() }
 
-    viewModel { MainViewModel(get(), get(), get(), get(), get(), get()) }
-}
+        viewModel { MainViewModel(get(), get(), get(), get(), get(), get()) }
+    }

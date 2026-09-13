@@ -34,7 +34,7 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
     val blackoutAlpha by animateFloatAsState(
         targetValue = if (showInitialBlackout) 1f else 0f,
         animationSpec = tween(durationMillis = 500),
-        label = "InitialBlackoutFade"
+        label = "InitialBlackoutFade",
     )
 
     LaunchedEffect(Unit) {
@@ -43,42 +43,45 @@ fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
     }
 
     Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black),
     ) {
         Slideshow()
 
         // Gradient at the top to make overlays more readable
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(300.dp)
-                .background(
-                    Brush.verticalGradient(
-                        0.00f to Color.Black.copy(alpha = 0.80f),
-                        0.25f to Color.Black.copy(alpha = 0.55f),
-                        0.50f to Color.Black.copy(alpha = 0.30f),
-                        0.70f to Color.Black.copy(alpha = 0.15f),
-                        0.85f to Color.Black.copy(alpha = 0.05f),
-                        1.00f to Color.Transparent
-                    )
-                )
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(300.dp)
+                    .background(
+                        Brush.verticalGradient(
+                            0.00f to Color.Black.copy(alpha = 0.80f),
+                            0.25f to Color.Black.copy(alpha = 0.55f),
+                            0.50f to Color.Black.copy(alpha = 0.30f),
+                            0.70f to Color.Black.copy(alpha = 0.15f),
+                            0.85f to Color.Black.copy(alpha = 0.05f),
+                            1.00f to Color.Transparent,
+                        ),
+                    ),
         )
 
         OverlayLayout(
             topStart = topStart,
             topEnd = topEnd,
             bottomStart = bottomStart,
-            bottomEnd = bottomEnd
+            bottomEnd = bottomEnd,
         )
 
         if (blackoutAlpha > 0f) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .alpha(blackoutAlpha)
-                    .background(Color.Black)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .alpha(blackoutAlpha)
+                        .background(Color.Black),
             )
         }
     }

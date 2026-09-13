@@ -11,7 +11,7 @@ enum class OverlayPosition {
     TOP_START,
     TOP_END,
     BOTTOM_START,
-    BOTTOM_END
+    BOTTOM_END,
 }
 
 /**
@@ -19,24 +19,30 @@ enum class OverlayPosition {
  */
 enum class IconPosition {
     LEADING,
-    TRAILING
+    TRAILING,
 }
 
 /**
  * Items that can be used in a flexible multi-item overlay.
  */
 sealed interface OverlayItem {
-    data class Text(val text: String, val scale: Float = 1f) : OverlayItem
-    data class Icon(val icon: ImageVector) : OverlayItem
+    data class Text(
+        val text: String,
+        val scale: Float = 1f,
+    ) : OverlayItem
+
+    data class Icon(
+        val icon: ImageVector,
+    ) : OverlayItem
 }
 
 /**
  * Animation types for overlay updates.
  */
 enum class OverlayAnimationType {
-    NONE,             // No animation
+    NONE, // No animation
     RESIZE, // Standard size animation, no fade
-    FADE  // Crossfade between content updates
+    FADE, // Crossfade between content updates
 }
 
 /**
@@ -45,7 +51,7 @@ enum class OverlayAnimationType {
 enum class StackAlignment {
     START,
     CENTER,
-    END
+    END,
 }
 
 /**
@@ -63,19 +69,19 @@ sealed interface OverlayContent {
         val text: String,
         val scale: Float = 1f,
         override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
-        override val padding: Dp = 8.dp
+        override val padding: Dp = 8.dp,
     ) : OverlayContent
 
     /**
      * Overlay content with an icon and text.
      */
     data class IconWithText(
-        val text: String, 
+        val text: String,
         val icon: ImageVector,
         val iconPosition: IconPosition = IconPosition.LEADING,
         val scale: Float = 1f,
         override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
-        override val padding: Dp = 8.dp
+        override val padding: Dp = 8.dp,
     ) : OverlayContent
 
     /**
@@ -84,10 +90,8 @@ sealed interface OverlayContent {
     data class MultiItemContent(
         val items: List<OverlayItem>,
         override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
-        override val padding: Dp = 8.dp
+        override val padding: Dp = 8.dp,
     ) : OverlayContent
-
-
 
     /**
      * Vertical stack of independent overlay contents.
@@ -96,7 +100,6 @@ sealed interface OverlayContent {
         val items: List<OverlayContent>,
         val alignment: StackAlignment = StackAlignment.END,
         override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
-        override val padding: Dp = 8.dp
+        override val padding: Dp = 8.dp,
     ) : OverlayContent
 }
-

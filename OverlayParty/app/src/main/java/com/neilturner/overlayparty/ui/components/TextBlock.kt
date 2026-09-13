@@ -27,11 +27,12 @@ import com.neilturner.overlayparty.ui.overlay.OverlayItem
 private val OverlayShape = RoundedCornerShape(12.dp)
 private val OverlayBackgroundColor = Color.Black.copy(alpha = 0.6f)
 
-private val OverlayContentShadow = Shadow(
-    color = Color.Black,
-    offset = Offset(2f, 2f),
-    blurRadius = 2f
-)
+private val OverlayContentShadow =
+    Shadow(
+        color = Color.Black,
+        offset = Offset(2f, 2f),
+        blurRadius = 2f,
+    )
 
 @Composable
 fun TextBlock(
@@ -42,12 +43,12 @@ fun TextBlock(
     showBackground: Boolean = true,
     animateSize: Boolean = true,
     scale: Float = 1f,
-    padding: Dp = 8.dp
+    padding: Dp = 8.dp,
 ) {
     OverlayContainer(modifier, showBackground, animateSize, padding) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (icon != null && iconPosition == IconPosition.LEADING) {
                 OverlayIcon(icon, useShadow = !showBackground)
@@ -68,12 +69,12 @@ fun MultiItemBlock(
     modifier: Modifier = Modifier,
     showBackground: Boolean = true,
     animateSize: Boolean = true,
-    padding: Dp = 8.dp
+    padding: Dp = 8.dp,
 ) {
     OverlayContainer(modifier, showBackground, animateSize, padding) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items.forEach { item ->
                 when (item) {
@@ -85,16 +86,17 @@ fun MultiItemBlock(
     }
 }
 
-private fun Modifier.overlayBackground(showBackground: Boolean): Modifier = this.then(
-    if (showBackground) {
-        Modifier.background(
-            color = OverlayBackgroundColor,
-            shape = OverlayShape
-        )
-    } else {
-        Modifier
-    }
-)
+private fun Modifier.overlayBackground(showBackground: Boolean): Modifier =
+    this.then(
+        if (showBackground) {
+            Modifier.background(
+                color = OverlayBackgroundColor,
+                shape = OverlayShape,
+            )
+        } else {
+            Modifier
+        },
+    )
 
 @Composable
 private fun OverlayContainer(
@@ -102,42 +104,46 @@ private fun OverlayContainer(
     showBackground: Boolean,
     animateSize: Boolean,
     padding: Dp,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     Box(
-        modifier = modifier
-            .then(if (animateSize) Modifier.animateContentSize() else Modifier)
-            .overlayBackground(showBackground)
-            .padding(padding)
+        modifier =
+            modifier
+                .then(if (animateSize) Modifier.animateContentSize() else Modifier)
+                .overlayBackground(showBackground)
+                .padding(padding),
     ) {
         content()
     }
 }
 
-private fun TextStyle.applyShadow(useShadow: Boolean): TextStyle = if (useShadow) {
-    this.copy(shadow = OverlayContentShadow)
-} else {
-    this
-}
+private fun TextStyle.applyShadow(useShadow: Boolean): TextStyle =
+    if (useShadow) {
+        this.copy(shadow = OverlayContentShadow)
+    } else {
+        this
+    }
 
 @Composable
 private fun OverlayText(
     text: String,
     showBackground: Boolean,
     modifier: Modifier = Modifier,
-    scale: Float = 1f
+    scale: Float = 1f,
 ) {
     val useShadow = !showBackground
     val baseStyle = MaterialTheme.typography.bodyLarge
-    val scaledStyle = baseStyle.copy(
-        fontSize = baseStyle.fontSize * scale
-    ).applyShadow(useShadow)
+    val scaledStyle =
+        baseStyle
+            .copy(
+                fontSize = baseStyle.fontSize * scale,
+            ).applyShadow(useShadow)
 
     Text(
         text = text,
         modifier = modifier,
         style = scaledStyle,
-        color = Color.White
+        color = Color.White,
     )
 }
 
@@ -145,7 +151,7 @@ private fun OverlayText(
 private fun OverlayIcon(
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    useShadow: Boolean = false
+    useShadow: Boolean = false,
 ) {
     if (useShadow) {
         ShadowedIcon(icon, modifier)
@@ -154,24 +160,27 @@ private fun OverlayIcon(
             imageVector = icon,
             contentDescription = null,
             tint = Color.White,
-            modifier = modifier
+            modifier = modifier,
         )
     }
 }
 
 @Composable
-private fun ShadowedIcon(icon: ImageVector, modifier: Modifier = Modifier) {
+private fun ShadowedIcon(
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+) {
     Box(modifier = modifier) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = Color.Black,
-            modifier = Modifier.offset(2.dp, 2.dp)
+            modifier = Modifier.offset(2.dp, 2.dp),
         )
         Icon(
             imageVector = icon,
             contentDescription = null,
-            tint = Color.White
+            tint = Color.White,
         )
     }
 }

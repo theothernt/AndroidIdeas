@@ -5,13 +5,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.SubcomposeLayout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-
-import androidx.compose.ui.Alignment
 
 /**
  * A flexible layout composable that positions overlays in the 4 screen corners.
@@ -32,19 +31,20 @@ fun OverlayLayout(
     topEnd: OverlayContent?,
     bottomStart: OverlayContent?,
     bottomEnd: OverlayContent?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(16.dp)
+        modifier =
+            modifier
+                .fillMaxSize()
+                .padding(16.dp),
     ) {
         // Top row with adaptive spacing - Top aligned
         AdaptiveOverlayRow(
             startContent = topStart,
             endContent = topEnd,
             verticalAlignment = Alignment.Top,
-            showBackground = false
+            showBackground = false,
         )
 
         // Flexible spacer pushes bottom row to the bottom
@@ -55,7 +55,7 @@ fun OverlayLayout(
             startContent = bottomStart,
             endContent = bottomEnd,
             verticalAlignment = Alignment.Bottom,
-            showBackground = true
+            showBackground = true,
         )
     }
 }
@@ -78,7 +78,7 @@ private fun AdaptiveOverlayRow(
     endContent: OverlayContent?,
     minGap: Dp = 16.dp,
     verticalAlignment: Alignment.Vertical = Alignment.Top,
-    showBackground: Boolean = true
+    showBackground: Boolean = true,
 ) {
     SubcomposeLayout { constraints ->
         val gapPx = minGap.roundToPx()
@@ -86,30 +86,32 @@ private fun AdaptiveOverlayRow(
         // Measure start overlay first - it wraps to its content size
         // but is capped at 50% of available width to prevent it from taking everything
         val maxStartWidth = (constraints.maxWidth - gapPx) / 2
-        val startPlaceable = subcompose("start") {
-            OverlaySlot(content = startContent, showBackground = showBackground)
-        }.firstOrNull()?.measure(
-            Constraints(
-                minWidth = 0,
-                maxWidth = maxStartWidth.coerceAtLeast(0),
-                minHeight = 0,
-                maxHeight = constraints.maxHeight
+        val startPlaceable =
+            subcompose("start") {
+                OverlaySlot(content = startContent, showBackground = showBackground)
+            }.firstOrNull()?.measure(
+                Constraints(
+                    minWidth = 0,
+                    maxWidth = maxStartWidth.coerceAtLeast(0),
+                    minHeight = 0,
+                    maxHeight = constraints.maxHeight,
+                ),
             )
-        )
         val startWidth = startPlaceable?.width ?: 0
 
         // End overlay gets remaining space after start overlay and gap
         val endMaxWidth = constraints.maxWidth - startWidth - gapPx
-        val endPlaceable = subcompose("end") {
-            OverlaySlot(content = endContent, showBackground = showBackground)
-        }.firstOrNull()?.measure(
-            Constraints(
-                minWidth = 0,
-                maxWidth = endMaxWidth.coerceAtLeast(0),
-                minHeight = 0,
-                maxHeight = constraints.maxHeight
+        val endPlaceable =
+            subcompose("end") {
+                OverlaySlot(content = endContent, showBackground = showBackground)
+            }.firstOrNull()?.measure(
+                Constraints(
+                    minWidth = 0,
+                    maxWidth = endMaxWidth.coerceAtLeast(0),
+                    minHeight = 0,
+                    maxHeight = constraints.maxHeight,
+                ),
             )
-        )
 
         val endWidth = endPlaceable?.width ?: 0
         val height = maxOf(startPlaceable?.height ?: 0, endPlaceable?.height ?: 0)

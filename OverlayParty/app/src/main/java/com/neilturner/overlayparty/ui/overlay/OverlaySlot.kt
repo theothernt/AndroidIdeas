@@ -26,7 +26,7 @@ import com.neilturner.overlayparty.ui.components.TextBlock
 fun OverlaySlot(
     content: OverlayContent?,
     modifier: Modifier = Modifier,
-    showBackground: Boolean = true
+    showBackground: Boolean = true,
 ) {
     if (content == null) return
 
@@ -37,39 +37,42 @@ fun OverlaySlot(
             AnimatedContent(
                 targetState = content,
                 transitionSpec = {
-                    (fadeIn(animationSpec = tween(500, delayMillis = 500)) togetherWith
-                     fadeOut(animationSpec = tween(500)))
-                     .using(
-                         SizeTransform { _, _ ->
-                             // Delay the size animation to match the fade-in start (after fade-out completes)
-                             tween(durationMillis = 100, delayMillis = 500)
-                         }
-                     )
+                    (
+                        fadeIn(animationSpec = tween(500, delayMillis = 500)) togetherWith
+                            fadeOut(animationSpec = tween(500))
+                    ).using(
+                        SizeTransform { _, _ ->
+                            // Delay the size animation to match the fade-in start (after fade-out completes)
+                            tween(durationMillis = 100, delayMillis = 500)
+                        },
+                    )
                 },
-                label = "OverlayFade"
+                label = "OverlayFade",
             ) { targetContent ->
                 RenderOverlayContent(
                     content = targetContent,
                     modifier = modifier,
                     showBackground = showBackground,
-                    animateSize = false // Size animation handled by AnimatedContent
+                    animateSize = false, // Size animation handled by AnimatedContent
                 )
             }
         }
+
         OverlayAnimationType.RESIZE -> {
             RenderOverlayContent(
                 content = content,
                 modifier = modifier,
                 showBackground = showBackground,
-                animateSize = true
+                animateSize = true,
             )
         }
+
         OverlayAnimationType.NONE -> {
             RenderOverlayContent(
                 content = content,
                 modifier = modifier,
                 showBackground = showBackground,
-                animateSize = false
+                animateSize = false,
             )
         }
     }
@@ -80,51 +83,61 @@ private fun RenderOverlayContent(
     content: OverlayContent,
     modifier: Modifier,
     showBackground: Boolean,
-    animateSize: Boolean
+    animateSize: Boolean,
 ) {
     when (content) {
-        is OverlayContent.TextOnly -> TextBlock(
-            text = content.text,
-            modifier = modifier,
-            showBackground = showBackground,
-            animateSize = animateSize,
-            scale = content.scale,
-            padding = content.padding
-        )
-        is OverlayContent.IconWithText -> TextBlock(
-            text = content.text,
-            icon = content.icon,
-            iconPosition = content.iconPosition,
-            modifier = modifier,
-            showBackground = showBackground,
-            animateSize = animateSize,
-            scale = content.scale,
-            padding = content.padding
-        )
-        is OverlayContent.MultiItemContent -> MultiItemBlock(
-            items = content.items,
-            modifier = modifier,
-            showBackground = showBackground,
-            animateSize = animateSize,
-            padding = content.padding
-        )
+        is OverlayContent.TextOnly -> {
+            TextBlock(
+                text = content.text,
+                modifier = modifier,
+                showBackground = showBackground,
+                animateSize = animateSize,
+                scale = content.scale,
+                padding = content.padding,
+            )
+        }
+
+        is OverlayContent.IconWithText -> {
+            TextBlock(
+                text = content.text,
+                icon = content.icon,
+                iconPosition = content.iconPosition,
+                modifier = modifier,
+                showBackground = showBackground,
+                animateSize = animateSize,
+                scale = content.scale,
+                padding = content.padding,
+            )
+        }
+
+        is OverlayContent.MultiItemContent -> {
+            MultiItemBlock(
+                items = content.items,
+                modifier = modifier,
+                showBackground = showBackground,
+                animateSize = animateSize,
+                padding = content.padding,
+            )
+        }
+
         is OverlayContent.VerticalStack -> {
-            val horizontalAlignment = when (content.alignment) {
-                StackAlignment.START -> Alignment.Start
-                StackAlignment.CENTER -> Alignment.CenterHorizontally
-                StackAlignment.END -> Alignment.End
-            }
+            val horizontalAlignment =
+                when (content.alignment) {
+                    StackAlignment.START -> Alignment.Start
+                    StackAlignment.CENTER -> Alignment.CenterHorizontally
+                    StackAlignment.END -> Alignment.End
+                }
 
             Column(
                 modifier = modifier,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                horizontalAlignment = horizontalAlignment
+                horizontalAlignment = horizontalAlignment,
             ) {
                 content.items.forEach { childContent ->
                     OverlaySlot(
                         content = childContent,
                         modifier = Modifier, // Modifier is applied to the stack container, not individual items
-                        showBackground = showBackground
+                        showBackground = showBackground,
                     )
                 }
             }

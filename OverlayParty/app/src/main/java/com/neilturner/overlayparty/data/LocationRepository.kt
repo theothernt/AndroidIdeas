@@ -5,25 +5,27 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
 class LocationRepository {
-    private val scenicLocations = listOf(
-        "Grand Canyon, USA - An immense steep-sided canyon carved by the Colorado River.",
-        "Great Barrier Reef, Australia - The world's largest coral reef system.",
-        "Machu Picchu, Peru - A 15th-century Inca citadel situated on a mountain ridge.",
-        "Aurora Borealis, Iceland - A natural light display in the Earth's sky.",
-        "Victoria Falls, Zambia/Zimbabwe - A waterfall on the Zambezi River in southern Africa, providing habitat for several unique species of plants and animals.",
-        "Mount Everest, Nepal - The Earth's highest mountain above sea level.",
-        "Petra, Jordan - A historical and archaeological city in southern Jordan.",
-        "Taj Mahal, India - An ivory-white marble mausoleum on the southern bank of the river Yamuna in the Indian city of Agra, commissioned in 1632.",
-        "Santorini, Greece - An island in the southern Aegean Sea.",
-        "Banff National Park, Canada - Canada's oldest national park, established in 1885."
-    )
+    private val scenicLocations =
+        listOf(
+            "Grand Canyon, USA - An immense steep-sided canyon carved by the Colorado River.",
+            "Great Barrier Reef, Australia - The world's largest coral reef system.",
+            "Machu Picchu, Peru - A 15th-century Inca citadel situated on a mountain ridge.",
+            "Aurora Borealis, Iceland - A natural light display in the Earth's sky.",
+            "Victoria Falls, Zambia/Zimbabwe - A waterfall on the Zambezi River in southern Africa, providing habitat for several unique species of plants and animals.",
+            "Mount Everest, Nepal - The Earth's highest mountain above sea level.",
+            "Petra, Jordan - A historical and archaeological city in southern Jordan.",
+            "Taj Mahal, India - An ivory-white marble mausoleum on the southern bank of the river Yamuna in the Indian city of Agra, commissioned in 1632.",
+            "Santorini, Greece - An island in the southern Aegean Sea.",
+            "Banff National Park, Canada - Canada's oldest national park, established in 1885.",
+        )
 
-    fun getLocationStream(): Flow<String> = flow {
-        var index = 0
-        while (true) {
-            emit(scenicLocations[index])
-            index = (index + 1) % scenicLocations.size
-            delay(8_000)
+    fun getLocationStream(): Flow<String> =
+        flow {
+            var index = 0
+            while (true) {
+                emit(scenicLocations[index])
+                index = (index + 1) % scenicLocations.size
+                delay(8_000)
+            }
         }
-    }
 }
