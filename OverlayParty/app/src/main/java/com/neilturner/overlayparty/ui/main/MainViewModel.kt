@@ -1,12 +1,7 @@
 package com.neilturner.overlayparty.ui.main
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AcUnit
-import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.WaterDrop
-import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neilturner.overlayparty.data.CountdownRepository
@@ -15,19 +10,17 @@ import com.neilturner.overlayparty.data.MessageRepository
 import com.neilturner.overlayparty.data.MusicRepository
 import com.neilturner.overlayparty.data.TimeRepository
 import com.neilturner.overlayparty.data.WeatherRepository
-import com.neilturner.overlayparty.ui.overlay.IconPosition
-import com.neilturner.overlayparty.ui.overlay.OverlayAnimationType
+import com.neilturner.overlayparty.domain.overlay.BottomStartOverlayContentUseCase
+import com.neilturner.overlayparty.domain.overlay.LocationMessageToOverlayContentUseCase
+import com.neilturner.overlayparty.domain.overlay.MusicToOverlayContentUseCase
+import com.neilturner.overlayparty.domain.overlay.OverlayVisibilityManager
+import com.neilturner.overlayparty.domain.overlay.TimeToOverlayContentUseCase
+import com.neilturner.overlayparty.domain.overlay.WeatherToOverlayContentUseCase
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
-import com.neilturner.overlayparty.ui.overlay.OverlayItem
 import com.neilturner.overlayparty.ui.overlay.OverlayPosition
-import com.neilturner.overlayparty.ui.overlay.StackAlignment
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.flow.update
 
 class MainViewModel(
     weatherRepository: WeatherRepository,
@@ -36,85 +29,47 @@ class MainViewModel(
     locationRepository: LocationRepository,
     messageRepository: MessageRepository,
     countdownRepository: CountdownRepository,
+    private val visibility: OverlayVisibilityManager = OverlayVisibilityManager(),
+    private val weatherMapper: WeatherToOverlayContentUseCase = WeatherToOverlayContentUseCase(),
+    private val timeMapper: TimeToOverlayContentUseCase = TimeToOverlayContentUseCase(),
+    private val bottomStartMapper: BottomStartOverlayContentUseCase =
+        BottomStartOverlayContentUseCase(MusicToOverlayContentUseCase()),
+    private val bottomEndMapper: LocationMessageToOverlayContentUseCase = LocationMessageToOverlayContentUseCase(),
 ) : ViewModel() {
-    // Default all overlays to visible
-    private val _visibleOverlays =
-        MutableStateFlow(
-            setOf(
-                OverlayPosition.TOP_START,
-                OverlayPosition.TOP_END,
-                OverlayPosition.BOTTOM_START,
-                OverlayPosition.BOTTOM_END,
-            ),
-        )
+    val visibleOverlays = visibility.visibleOverlays
 
     fun setOverlayVisibility(
         position: OverlayPosition,
         isVisible: Boolean,
-    ) {
-        _visibleOverlays.update { current ->
-            if (isVisible) current + position else current - position
-        }
-    }
+    ) = visibility.setOverlayVisibility(position, isVisible)
 
-    fun toggleOverlay(position: OverlayPosition) {
-        _visibleOverlays.update { current ->
-            if (current.contains(position)) current - position else current + position
-        }
-    }
+    fun toggleOverlay(position: OverlayPosition) = visibility.toggleOverlay(position)
 
-    val visibleOverlays: StateFlow<Set<OverlayPosition>> = _visibleOverlays.asStateFlow()
-
-    val topStartOverlay: StateFlow<OverlayContent?> =
+    val topStartOverlay =
         combine(
             weatherRepository.getWeatherStream(),
-            _visibleOverlays,
+            visibility.visibleOverlays,
         ) { weather, visibleOverlays ->
             if (!visibleOverlays.contains(OverlayPosition.TOP_START)) {
                 null
             } else {
-                val icon =
-                    when (weather.condition) {
-                        "Sunny" -> Icons.Filled.WbSunny
-                        "Cloudy" -> Icons.Filled.Cloud
-                        "Rainy" -> Icons.Filled.WaterDrop
-                        "Snowy" -> Icons.Filled.AcUnit
-                        else -> Icons.Filled.Cloud
-                    }
-
-                OverlayContent.MultiItemContent(
-                    items =
-                        listOf(
-                            OverlayItem.Text(weather.city),
-                            OverlayItem.Icon(icon),
-                            OverlayItem.Text(weather.temperature),
-                        ),
-                    animationType = OverlayAnimationType.FADE,
-                    padding = 4.dp,
-                )
+                weatherMapper(weather)
             }
         }.stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = OverlayContent.TextOnly("Loading Weather...", animationType = OverlayAnimationType.FADE),
+            initialValue = OverlayContent.TextOnly("Loading Weather..."),
         )
 
-    val topEndOverlay: StateFlow<OverlayContent?> =
+    val topEndOverlay =
         combine(
             timeRepository.getTimeStream(showSeconds = false),
-            _visibleOverlays,
+            visibility.visibleOverlays,
         ) { dateTime, visibleOverlays ->
             if (!visibleOverlays.contains(OverlayPosition.TOP_END)) {
                 null
             } else {
-                OverlayContent.VerticalStack(
-                    items =
-                        listOf(
-                            OverlayContent.TextOnly(dateTime.date, padding = 4.dp),
-                            OverlayContent.TextOnly(dateTime.time, scale = 2f, padding = 4.dp),
-                        ),
-                    alignment = StackAlignment.END,
-                )
+                timeMapper(dateTime)
             }
         }.stateIn(
             scope = viewModelScope,
@@ -122,28 +77,16 @@ class MainViewModel(
             initialValue = OverlayContent.TextOnly("Loading Time..."),
         )
 
-    val bottomStartOverlay: StateFlow<OverlayContent?> =
+    val bottomStartOverlay =
         combine(
             musicRepository.getMusicStream(),
             countdownRepository.getCountdownStream(durationMinutes = 2),
-            _visibleOverlays,
+            visibility.visibleOverlays,
         ) { music, countdown, visibleOverlays ->
             if (!visibleOverlays.contains(OverlayPosition.BOTTOM_START)) {
                 null
             } else {
-                OverlayContent.VerticalStack(
-                    items =
-                        listOf(
-                            OverlayContent.TextOnly(countdown),
-                            OverlayContent.IconWithText(
-                                text = music,
-                                icon = Icons.Default.MusicNote,
-                                iconPosition = IconPosition.LEADING,
-                                animationType = OverlayAnimationType.FADE,
-                            ),
-                        ),
-                    alignment = StackAlignment.START,
-                )
+                bottomStartMapper(music, countdown)
             }
         }.stateIn(
             scope = viewModelScope,
@@ -152,26 +95,19 @@ class MainViewModel(
                 OverlayContent.IconWithText(
                     "Loading Music...",
                     Icons.Default.MusicNote,
-                    animationType = OverlayAnimationType.FADE,
                 ),
         )
 
-    val bottomEndOverlay: StateFlow<OverlayContent?> =
+    val bottomEndOverlay =
         combine(
             locationRepository.getLocationStream(),
             messageRepository.getMessageStream(),
-            _visibleOverlays,
+            visibility.visibleOverlays,
         ) { location, message, visibleOverlays ->
             if (!visibleOverlays.contains(OverlayPosition.BOTTOM_END)) {
                 null
             } else {
-                OverlayContent.VerticalStack(
-                    items =
-                        listOf(
-                            OverlayContent.TextOnly(message, animationType = OverlayAnimationType.RESIZE),
-                            OverlayContent.TextOnly(location, animationType = OverlayAnimationType.RESIZE),
-                        ),
-                )
+                bottomEndMapper(location, message)
             }
         }.stateIn(
             scope = viewModelScope,

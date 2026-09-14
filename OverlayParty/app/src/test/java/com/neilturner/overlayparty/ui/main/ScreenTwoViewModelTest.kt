@@ -110,7 +110,7 @@ class ScreenTwoViewModelTest {
     @Test
     fun coordinatedFadeCycleFadesOutFlushesAndFadesIn() =
         runTest {
-            val viewModel = createViewModel(visibleDurationMs = 5_000L, fadeDurationMs = 500L)
+            val viewModel = createViewModel(visibleDurationMs = 5_000L, fadeOutDurationMs = 500L, fadeInDurationMs = 500L)
 
             // Initially visible
             assertTrue(viewModel.isOverlaysVisible.value)
