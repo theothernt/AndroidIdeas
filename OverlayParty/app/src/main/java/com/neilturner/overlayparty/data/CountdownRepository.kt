@@ -3,16 +3,17 @@ package com.neilturner.overlayparty.data
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
-import java.util.Date
 import java.util.concurrent.TimeUnit
 
-class CountdownRepository {
+class CountdownRepository(
+    private val clock: () -> Long = { System.currentTimeMillis() },
+) {
     fun getCountdownStream(durationMinutes: Long): Flow<String> =
         flow {
-            val targetTime = System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(durationMinutes)
+            val targetTime = clock() + TimeUnit.MINUTES.toMillis(durationMinutes)
 
             while (true) {
-                val currentTime = System.currentTimeMillis()
+                val currentTime = clock()
                 val remainingMillis = targetTime - currentTime
 
                 if (remainingMillis > 0) {

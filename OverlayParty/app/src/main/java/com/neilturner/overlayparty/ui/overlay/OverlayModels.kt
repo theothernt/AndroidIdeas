@@ -1,8 +1,16 @@
 package com.neilturner.overlayparty.ui.overlay
 
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
+/**
+ * Enum representing the available overlay icons.
+ * Maps to [Icons.Filled] values at render time in the UI layer.
+ */
+enum class OverlayIcon {
+    WbSunny,
+    Cloud,
+    WaterDrop,
+    AcUnit,
+    MusicNote,
+}
 
 /**
  * Position enum for the 4 screen corners where overlays can be placed.
@@ -32,7 +40,7 @@ sealed interface OverlayItem {
     ) : OverlayItem
 
     data class Icon(
-        val icon: ImageVector,
+        val icon: OverlayIcon,
     ) : OverlayItem
 }
 
@@ -60,7 +68,7 @@ enum class StackAlignment {
  */
 sealed interface OverlayContent {
     val animationType: OverlayAnimationType
-    val padding: Dp
+    val padding: Float
 
     /**
      * Simple text-only overlay content.
@@ -69,7 +77,7 @@ sealed interface OverlayContent {
         val text: String,
         val scale: Float = 1f,
         override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
-        override val padding: Dp = 8.dp,
+        override val padding: Float = 8f,
     ) : OverlayContent
 
     /**
@@ -77,11 +85,11 @@ sealed interface OverlayContent {
      */
     data class IconWithText(
         val text: String,
-        val icon: ImageVector,
+        val icon: OverlayIcon,
         val iconPosition: IconPosition = IconPosition.LEADING,
         val scale: Float = 1f,
         override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
-        override val padding: Dp = 8.dp,
+        override val padding: Float = 8f,
     ) : OverlayContent
 
     /**
@@ -90,7 +98,7 @@ sealed interface OverlayContent {
     data class MultiItemContent(
         val items: List<OverlayItem>,
         override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
-        override val padding: Dp = 8.dp,
+        override val padding: Float = 8f,
     ) : OverlayContent
 
     /**
@@ -100,6 +108,6 @@ sealed interface OverlayContent {
         val items: List<OverlayContent>,
         val alignment: StackAlignment = StackAlignment.END,
         override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
-        override val padding: Dp = 8.dp,
+        override val padding: Float = 8f,
     ) : OverlayContent
 }

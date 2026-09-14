@@ -1,6 +1,5 @@
 package com.neilturner.overlayparty.domain.overlay
 
-import androidx.compose.ui.unit.dp
 import com.neilturner.overlayparty.data.DateTimeInfo
 import com.neilturner.overlayparty.ui.overlay.OverlayAnimationType
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
@@ -16,13 +15,13 @@ class TimeToOverlayContentUseCase {
                 listOf(
                     OverlayContent.TextOnly(
                         dateTime.date,
-                        padding = 4.dp,
+                        padding = 4f,
                         animationType = animationType,
                     ),
                     OverlayContent.TextOnly(
                         dateTime.time,
                         scale = 2f,
-                        padding = 4.dp,
+                        padding = 4f,
                         animationType = animationType,
                     ),
                 ),

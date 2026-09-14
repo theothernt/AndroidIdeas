@@ -13,6 +13,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runCurrent
@@ -46,21 +47,31 @@ class ScreenTwoViewModelTest {
     @get:Rule
     val mainDispatcherRule = MainDispatcherRule()
 
+    private var testClock: Long = 0L
+
+    private fun advanceVirtualTime(testScope: TestScope, millis: Long) {
+        testClock += millis
+        testScope.advanceTimeBy(millis)
+    }
+
     private fun createViewModel(
         visibleDurationMs: Long = ScreenTwoViewModel.VISIBLE_DURATION_MS,
         fadeOutDurationMs: Long = ScreenTwoViewModel.FADE_OUT_DURATION_MS,
         fadeInDurationMs: Long = ScreenTwoViewModel.FADE_IN_DURATION_MS,
-    ) = ScreenTwoViewModel(
-        weatherRepository = WeatherRepository(),
-        timeRepository = TimeRepository(),
-        musicRepository = MusicRepository(),
-        locationRepository = LocationRepository(),
-        messageRepository = MessageRepository(),
-        countdownRepository = CountdownRepository(),
-        visibleDurationMs = visibleDurationMs,
-        fadeOutDurationMs = fadeOutDurationMs,
-        fadeInDurationMs = fadeInDurationMs,
-    )
+    ) = run {
+        testClock = 0L
+        ScreenTwoViewModel(
+            weatherRepository = WeatherRepository(),
+            timeRepository = TimeRepository(),
+            musicRepository = MusicRepository(),
+            locationRepository = LocationRepository(),
+            messageRepository = MessageRepository(),
+            countdownRepository = CountdownRepository(clock = { testClock }),
+            visibleDurationMs = visibleDurationMs,
+            fadeOutDurationMs = fadeOutDurationMs,
+            fadeInDurationMs = fadeInDurationMs,
+        )
+    }
 
     @Test
     fun allOverlaysVisibleByDefault() =
@@ -79,7 +90,7 @@ class ScreenTwoViewModelTest {
     fun toggleOverlayHidesAndShowsOverlay() =
         runTest {
             val viewModel = createViewModel()
-            advanceTimeBy(200)
+            advanceVirtualTime(this, 200)
             runCurrent()
 
             viewModel.toggleOverlay(OverlayPosition.TOP_START)
@@ -95,7 +106,7 @@ class ScreenTwoViewModelTest {
     fun setOverlayVisibilityControlsVisibility() =
         runTest {
             val viewModel = createViewModel()
-            advanceTimeBy(200)
+            advanceVirtualTime(this, 200)
             runCurrent()
 
             viewModel.setOverlayVisibility(OverlayPosition.BOTTOM_END, false)
@@ -110,14 +121,19 @@ class ScreenTwoViewModelTest {
     @Test
     fun coordinatedFadeCycleFadesOutFlushesAndFadesIn() =
         runTest {
-            val viewModel = createViewModel(visibleDurationMs = 5_000L, fadeOutDurationMs = 500L, fadeInDurationMs = 500L)
+            val viewModel =
+                createViewModel(
+                    visibleDurationMs = 5_000L,
+                    fadeOutDurationMs = 500L,
+                    fadeInDurationMs = 500L,
+                )
 
             // Initially visible
             assertTrue(viewModel.isOverlaysVisible.value)
             assertEquals(1f, viewModel.groupAlpha.value, 0.001f)
 
             // Let initial collection run
-            advanceTimeBy(150)
+            advanceVirtualTime(this, 150)
             runCurrent()
 
             // Initial content is populated
@@ -125,15 +141,15 @@ class ScreenTwoViewModelTest {
             assertTrue(topStartInitial is OverlayContent.MultiItemContent)
 
             // Advance through visible interval (5000ms)
-            advanceTimeBy(5000)
+            advanceVirtualTime(this, 5000)
             runCurrent()
 
             // Overlays fade out
             assertFalse(viewModel.isOverlaysVisible.value)
             assertEquals(0f, viewModel.groupAlpha.value, 0.001f)
 
-            // Advance through fade out (500ms) + settle time (50ms) + fade in (500ms)
-            advanceTimeBy(550)
+            // Advance through fade out (500ms) + settle time (50ms)
+            advanceVirtualTime(this, 550)
             runCurrent()
 
             // Overlays fade back in

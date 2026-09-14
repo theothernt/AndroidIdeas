@@ -1,6 +1,5 @@
 package com.neilturner.overlayparty.domain.overlay
 
-import androidx.compose.ui.unit.dp
 import com.neilturner.overlayparty.ui.overlay.OverlayAnimationType
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
 import com.neilturner.overlayparty.ui.overlay.StackAlignment

@@ -22,7 +22,9 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.overlayparty.ui.overlay.IconPosition
+import com.neilturner.overlayparty.ui.overlay.OverlayIcon
 import com.neilturner.overlayparty.ui.overlay.OverlayItem
+import com.neilturner.overlayparty.ui.overlay.toImageVector
 
 private val OverlayShape = RoundedCornerShape(12.dp)
 private val OverlayBackgroundColor = Color.Black.copy(alpha = 0.6f)
@@ -79,7 +81,7 @@ fun MultiItemBlock(
             items.forEach { item ->
                 when (item) {
                     is OverlayItem.Text -> OverlayText(item.text, showBackground, scale = item.scale)
-                    is OverlayItem.Icon -> OverlayIcon(item.icon, useShadow = !showBackground)
+                    is OverlayItem.Icon -> OverlayIcon(item.icon.toImageVector(), useShadow = !showBackground)
                 }
             }
         }

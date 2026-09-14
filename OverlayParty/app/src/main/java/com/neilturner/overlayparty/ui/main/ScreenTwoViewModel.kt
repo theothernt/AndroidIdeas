@@ -1,7 +1,5 @@
 package com.neilturner.overlayparty.ui.main
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neilturner.overlayparty.data.CountdownRepository
@@ -20,6 +18,7 @@ import com.neilturner.overlayparty.domain.overlay.TimeToOverlayContentUseCase
 import com.neilturner.overlayparty.domain.overlay.WeatherToOverlayContentUseCase
 import com.neilturner.overlayparty.ui.overlay.OverlayAnimationType
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
+import com.neilturner.overlayparty.ui.overlay.OverlayIcon
 import com.neilturner.overlayparty.ui.overlay.OverlayPosition
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -75,9 +74,9 @@ class ScreenTwoViewModel(
 
     private val _bottomStartOverlay =
         MutableStateFlow<OverlayContent?>(
-            OverlayContent.IconWithText(
+                OverlayContent.IconWithText(
                 "Loading Music...",
-                Icons.Default.MusicNote,
+                OverlayIcon.MusicNote,
                 animationType = OverlayAnimationType.NONE,
             ),
         )

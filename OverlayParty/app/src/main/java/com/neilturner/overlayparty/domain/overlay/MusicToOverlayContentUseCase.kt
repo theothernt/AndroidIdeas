@@ -1,11 +1,9 @@
 package com.neilturner.overlayparty.domain.overlay
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.ui.unit.dp
 import com.neilturner.overlayparty.ui.overlay.IconPosition
 import com.neilturner.overlayparty.ui.overlay.OverlayAnimationType
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
+import com.neilturner.overlayparty.ui.overlay.OverlayIcon
 
 class MusicToOverlayContentUseCase {
     operator fun invoke(
@@ -14,9 +12,9 @@ class MusicToOverlayContentUseCase {
     ): OverlayContent =
         OverlayContent.IconWithText(
             text = music,
-            icon = Icons.Default.MusicNote,
+            icon = OverlayIcon.MusicNote,
             iconPosition = IconPosition.LEADING,
             animationType = animationType,
-            padding = 4.dp,
+            padding = 4f,
         )
 }

@@ -93,20 +93,20 @@ private fun RenderOverlayContent(
                 showBackground = showBackground,
                 animateSize = animateSize,
                 scale = content.scale,
-                padding = content.padding,
+                padding = content.padding.dp,
             )
         }
 
         is OverlayContent.IconWithText -> {
             TextBlock(
                 text = content.text,
-                icon = content.icon,
+                icon = content.icon.toImageVector(),
                 iconPosition = content.iconPosition,
                 modifier = modifier,
                 showBackground = showBackground,
                 animateSize = animateSize,
                 scale = content.scale,
-                padding = content.padding,
+                padding = content.padding.dp,
             )
         }
 
@@ -116,7 +116,7 @@ private fun RenderOverlayContent(
                 modifier = modifier,
                 showBackground = showBackground,
                 animateSize = animateSize,
-                padding = content.padding,
+                padding = content.padding.dp,
             )
         }
 

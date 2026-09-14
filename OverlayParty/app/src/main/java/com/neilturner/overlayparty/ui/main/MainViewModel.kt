@@ -17,6 +17,7 @@ import com.neilturner.overlayparty.domain.overlay.OverlayVisibilityManager
 import com.neilturner.overlayparty.domain.overlay.TimeToOverlayContentUseCase
 import com.neilturner.overlayparty.domain.overlay.WeatherToOverlayContentUseCase
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
+import com.neilturner.overlayparty.ui.overlay.OverlayIcon
 import com.neilturner.overlayparty.ui.overlay.OverlayPosition
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
@@ -92,10 +93,10 @@ class MainViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue =
-                OverlayContent.IconWithText(
-                    "Loading Music...",
-                    Icons.Default.MusicNote,
-                ),
+OverlayContent.IconWithText(
+                     "Loading Music...",
+                     OverlayIcon.MusicNote,
+                 ),
         )
 
     val bottomEndOverlay =

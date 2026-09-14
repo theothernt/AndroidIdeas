@@ -1,6 +1,5 @@
 package com.neilturner.overlayparty.domain.overlay
 
-import androidx.compose.ui.unit.dp
 import com.neilturner.overlayparty.ui.overlay.OverlayAnimationType
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
 import com.neilturner.overlayparty.ui.overlay.StackAlignment
@@ -16,7 +15,7 @@ class BottomStartOverlayContentUseCase(
         val items =
             buildList {
                 countdown?.let {
-                    add(OverlayContent.TextOnly(it, padding = 4.dp, animationType = animationType))
+                    add(OverlayContent.TextOnly(it, padding = 4f, animationType = animationType))
                 }
                 music?.let {
                     add(musicToOverlayContent(it, animationType))
