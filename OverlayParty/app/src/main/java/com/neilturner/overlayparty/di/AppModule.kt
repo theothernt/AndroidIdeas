@@ -7,6 +7,7 @@ import com.neilturner.overlayparty.data.MusicRepository
 import com.neilturner.overlayparty.data.TimeRepository
 import com.neilturner.overlayparty.data.WeatherRepository
 import com.neilturner.overlayparty.ui.main.MainViewModel
+import com.neilturner.overlayparty.ui.main.ScreenTwoViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
@@ -20,4 +21,5 @@ val appModule =
         single { CountdownRepository() }
 
         viewModel { MainViewModel(get(), get(), get(), get(), get(), get()) }
+        viewModel { ScreenTwoViewModel(get(), get(), get(), get(), get(), get()) }
     }
