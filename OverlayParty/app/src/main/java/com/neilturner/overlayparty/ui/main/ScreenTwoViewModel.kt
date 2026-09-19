@@ -20,6 +20,7 @@ import com.neilturner.overlayparty.ui.overlay.OverlayAnimationType
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
 import com.neilturner.overlayparty.ui.overlay.OverlayIcon
 import com.neilturner.overlayparty.ui.overlay.OverlayPosition
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,6 +46,7 @@ class ScreenTwoViewModel(
     private val bottomStartMapper: BottomStartOverlayContentUseCase =
         BottomStartOverlayContentUseCase(MusicToOverlayContentUseCase()),
     private val bottomEndMapper: LocationMessageToOverlayContentUseCase = LocationMessageToOverlayContentUseCase(),
+    scope: CoroutineScope? = null,
 ) : ViewModel() {
     companion object {
         const val VISIBLE_DURATION_MS: Long = 5_000L
@@ -98,7 +100,8 @@ class ScreenTwoViewModel(
     private var hasInitialFlushOccurred = false
 
     init {
-        viewModelScope.launch {
+        val coroutineScope = scope ?: viewModelScope
+        coroutineScope.launch {
             launch {
                 weatherRepository.getWeatherStream().collect {
                     latestWeather = it
@@ -224,7 +227,7 @@ class ScreenTwoViewModel(
             if (!visible) {
                 null
             } else {
-                bottomEndMapper(location, message, OverlayAnimationType.RESIZE)
+                bottomEndMapper(location, message, OverlayAnimationType.NONE)
             }
     }
 }

@@ -8,6 +8,7 @@ import com.neilturner.overlayparty.data.TimeRepository
 import com.neilturner.overlayparty.data.WeatherRepository
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
 import com.neilturner.overlayparty.ui.overlay.OverlayPosition
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
@@ -55,6 +56,7 @@ class ScreenTwoViewModelTest {
     }
 
     private fun createViewModel(
+        scope: CoroutineScope,
         visibleDurationMs: Long = ScreenTwoViewModel.VISIBLE_DURATION_MS,
         fadeOutDurationMs: Long = ScreenTwoViewModel.FADE_OUT_DURATION_MS,
         fadeInDurationMs: Long = ScreenTwoViewModel.FADE_IN_DURATION_MS,
@@ -70,13 +72,14 @@ class ScreenTwoViewModelTest {
             visibleDurationMs = visibleDurationMs,
             fadeOutDurationMs = fadeOutDurationMs,
             fadeInDurationMs = fadeInDurationMs,
+            scope = scope,
         )
     }
 
     @Test
     fun allOverlaysVisibleByDefault() =
         runTest {
-            val viewModel = createViewModel()
+            val viewModel = createViewModel(this.backgroundScope)
             val visibleOverlays = viewModel.visibleOverlays.first()
 
             assertEquals(4, visibleOverlays.size)
@@ -89,7 +92,7 @@ class ScreenTwoViewModelTest {
     @Test
     fun toggleOverlayHidesAndShowsOverlay() =
         runTest {
-            val viewModel = createViewModel()
+            val viewModel = createViewModel(this.backgroundScope)
             advanceVirtualTime(this, 200)
             runCurrent()
 
@@ -105,7 +108,7 @@ class ScreenTwoViewModelTest {
     @Test
     fun setOverlayVisibilityControlsVisibility() =
         runTest {
-            val viewModel = createViewModel()
+            val viewModel = createViewModel(this.backgroundScope)
             advanceVirtualTime(this, 200)
             runCurrent()
 
@@ -123,6 +126,7 @@ class ScreenTwoViewModelTest {
         runTest {
             val viewModel =
                 createViewModel(
+                    scope = this.backgroundScope,
                     visibleDurationMs = 5_000L,
                     fadeOutDurationMs = 500L,
                     fadeInDurationMs = 500L,
