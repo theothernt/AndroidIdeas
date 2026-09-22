@@ -9,4 +9,9 @@
     <string name="plex_disconnect">Disconnect</string>
     <string name="plex_retrying">Connection issue. Retrying…</string>
     <string name="back">Back</string>
+    <string name="plex_player_button">Play random Plex episode</string>
+    <string name="plex_not_authorised">You must authorise Plex first</string>
+    <string name="plex_no_episodes">No TV show episodes found on your Plex server</string>
+    <string name="plex_player_error">Could not load Plex episode: %1$s</string>
+    <string name="plex_loading_episode">Finding random episode…</string>
 </resources>

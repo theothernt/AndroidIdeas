@@ -30,6 +30,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 @Composable
 fun HomeScreen(
     onNavigateToPlayer: (String) -> Unit,
+    onNavigateToPlexPlayer: () -> Unit,
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel()
@@ -93,6 +94,26 @@ fun HomeScreen(
             ) {
                 Text(
                     text = "Play HLS Stream",
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Button(
+            onClick = onNavigateToPlexPlayer,
+            modifier = Modifier
+                .width(360.dp)
+                .height(56.dp)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stringResource(R.string.plex_player_button),
                     style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center
                 )

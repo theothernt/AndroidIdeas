@@ -78,10 +78,10 @@ class PlexSettingsViewModel(application: Application) : AndroidViewModel(applica
                             val pin = api.pin(createdPin.id)
                             val token = pin.authToken
                             if (token != null) {
-                                val serverName = runCatching { api.serverName(token) }.getOrNull()
-                                store.saveLinkedAccount(token, serverName)
+                                val serverInfo = runCatching { api.serverInfo(token) }.getOrNull()
+                                store.saveLinkedAccount(token, serverInfo?.name, serverInfo?.uri)
                                 _state.update {
-                                    PlexSettingsUiState(isLinked = true, serverName = serverName)
+                                    PlexSettingsUiState(isLinked = true, serverName = serverInfo?.name)
                                 }
                                 return@launch
                             }

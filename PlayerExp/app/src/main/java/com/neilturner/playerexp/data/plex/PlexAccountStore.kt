@@ -22,14 +22,17 @@ class PlexAccountStore(context: Context) {
             preferences.edit().putString(KEY_CLIENT_IDENTIFIER, identifier).apply()
         }
 
-    fun saveLinkedAccount(accountToken: String, serverName: String?) {
+    fun saveLinkedAccount(accountToken: String, serverName: String?, serverUrl: String? = null) {
         preferences.edit()
             .putString(KEY_ACCOUNT_TOKEN, accountToken)
             .putString(KEY_SERVER_NAME, serverName)
+            .putString(KEY_SERVER_URL, serverUrl)
             .apply()
     }
 
     fun serverName(): String? = preferences.getString(KEY_SERVER_NAME, null)
+
+    fun serverUrl(): String? = preferences.getString(KEY_SERVER_URL, null)
 
     /** A reset intentionally removes every persisted Plex credential and selection. */
     fun clearPlexData() {
@@ -40,5 +43,6 @@ class PlexAccountStore(context: Context) {
         const val KEY_ACCOUNT_TOKEN = "account_token"
         const val KEY_CLIENT_IDENTIFIER = "client_identifier"
         const val KEY_SERVER_NAME = "server_name"
+        const val KEY_SERVER_URL = "server_url"
     }
 }

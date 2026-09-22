@@ -24,10 +24,83 @@ data class PlexPin(
 )
 
 @Serializable
+data class PlexConnection(
+    val uri: String? = null,
+    val address: String? = null,
+    val port: Int? = null,
+    val protocol: String? = null,
+    val local: Boolean = false,
+    val relay: Boolean = false
+)
+
+@Serializable
 data class PlexResource(
     val name: String,
     val product: String? = null,
-    val provides: String? = null
+    val provides: String? = null,
+    val connections: List<PlexConnection>? = null
+)
+
+data class PlexServerInfo(
+    val name: String,
+    val uri: String?
+)
+
+@Serializable
+data class PlexSectionsResponse(
+    @SerialName("MediaContainer") val mediaContainer: PlexSectionsContainer? = null
+)
+
+@Serializable
+data class PlexSectionsContainer(
+    @SerialName("Directory") val directory: List<PlexSectionDirectory>? = null
+)
+
+@Serializable
+data class PlexSectionDirectory(
+    val key: String,
+    val type: String,
+    val title: String? = null
+)
+
+@Serializable
+data class PlexMediaContainerResponse(
+    @SerialName("MediaContainer") val mediaContainer: PlexEpisodesContainer? = null
+)
+
+@Serializable
+data class PlexEpisodesContainer(
+    @SerialName("Metadata") val metadata: List<PlexEpisodeMetadata>? = null
+)
+
+@Serializable
+data class PlexEpisodeMetadata(
+    val ratingKey: String? = null,
+    val title: String? = null,
+    val grandparentTitle: String? = null,
+    val parentIndex: Int? = null,
+    val index: Int? = null,
+    @SerialName("Media") val media: List<PlexMediaItem>? = null
+)
+
+@Serializable
+data class PlexMediaItem(
+    @SerialName("Part") val part: List<PlexMediaPart>? = null
+)
+
+@Serializable
+data class PlexMediaPart(
+    val id: Long? = null,
+    val key: String? = null
+)
+
+data class PlexEpisode(
+    val ratingKey: String?,
+    val showTitle: String?,
+    val episodeTitle: String?,
+    val seasonNumber: Int?,
+    val episodeNumber: Int?,
+    val partKey: String
 )
 
 class PlexApi(private val clientIdentifier: String) {
@@ -48,12 +121,60 @@ class PlexApi(private val clientIdentifier: String) {
         plexHeaders()
     }.body()
 
-    suspend fun serverName(accountToken: String): String? = client.get("https://plex.tv/api/resources") {
+    suspend fun serverInfo(accountToken: String): PlexServerInfo? = client.get("https://plex.tv/api/resources") {
         parameter("includeHttps", 1)
         plexHeaders(accountToken)
     }.body<List<PlexResource>>()
         .firstOrNull { it.provides?.contains("server", ignoreCase = true) == true || it.product != null }
-        ?.name
+        ?.let { resource ->
+            val validConnections = resource.connections.orEmpty()
+            val bestUri = (validConnections.firstOrNull { it.local && !it.relay }
+                ?: validConnections.firstOrNull { !it.relay }
+                ?: validConnections.firstOrNull())?.let { conn ->
+                    conn.uri ?: if (conn.address != null && conn.port != null) {
+                        "${conn.protocol ?: "http"}://${conn.address}:${conn.port}"
+                    } else null
+                }
+            PlexServerInfo(name = resource.name, uri = bestUri)
+        }
+
+    suspend fun serverName(accountToken: String): String? = serverInfo(accountToken)?.name
+
+    suspend fun tvShowSections(serverUrl: String, accountToken: String): List<PlexSectionDirectory> {
+        val response = client.get("${serverUrl.trimEnd('/')}/library/sections") {
+            plexHeaders(accountToken)
+        }.body<PlexSectionsResponse>()
+        return response.mediaContainer?.directory.orEmpty().filter { it.type == "show" }
+    }
+
+    suspend fun recentEpisodes(
+        serverUrl: String,
+        accountToken: String,
+        sectionKey: String,
+        limit: Int = 10
+    ): List<PlexEpisode> {
+        val response = client.get("${serverUrl.trimEnd('/')}/library/sections/$sectionKey/recentlyAdded") {
+            parameter("type", 4)
+            parameter("X-Plex-Container-Start", 0)
+            parameter("X-Plex-Container-Size", limit)
+            plexHeaders(accountToken)
+        }.body<PlexMediaContainerResponse>()
+
+        return response.mediaContainer?.metadata.orEmpty().mapNotNull { item ->
+            val partKey = item.media.orEmpty().firstNotNullOfOrNull { mediaItem ->
+                mediaItem.part.orEmpty().firstNotNullOfOrNull { it.key }
+            } ?: return@mapNotNull null
+
+            PlexEpisode(
+                ratingKey = item.ratingKey,
+                showTitle = item.grandparentTitle,
+                episodeTitle = item.title,
+                seasonNumber = item.parentIndex,
+                episodeNumber = item.index,
+                partKey = partKey
+            )
+        }.take(limit)
+    }
 
     fun close() = client.close()
 
