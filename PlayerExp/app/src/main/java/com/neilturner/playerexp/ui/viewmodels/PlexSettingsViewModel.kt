@@ -1,5 +1,6 @@
 package com.neilturner.playerexp.ui.viewmodels
 
+import android.util.Log
 import android.app.Application
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.AndroidViewModel
@@ -77,9 +78,13 @@ class PlexSettingsViewModel(application: Application) : AndroidViewModel(applica
                         try {
                             val pin = api.pin(createdPin.id)
                             val token = pin.authToken
+                            Log.d("PlexApi", "SettingsViewModel: pin authenticated, token present: ${token != null}")
                             if (token != null) {
+                                Log.d("PlexApi", "SettingsViewModel: calling serverInfo()")
                                 val serverInfo = runCatching { api.serverInfo(token) }.getOrNull()
+                                Log.d("PlexApi", "SettingsViewModel: serverInfo() returned: name=${serverInfo?.name}, uri=${serverInfo?.uri}")
                                 store.saveLinkedAccount(token, serverInfo?.name, serverInfo?.uri)
+                                Log.d("PlexApi", "SettingsViewModel: saved linked account")
                                 _state.update {
                                     PlexSettingsUiState(isLinked = true, serverName = serverInfo?.name)
                                 }

@@ -1,5 +1,6 @@
 package com.neilturner.playerexp.ui.viewmodels
 
+import android.util.Log
 import android.app.Application
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
@@ -51,17 +52,23 @@ class PlexPlayerViewModel(
 
         viewModelScope.launch {
             try {
+                Log.d("PlexApi", "PlayerViewModel: token present: ${token.isNotBlank()}")
                 // If server URL wasn't cached yet (e.g. from prior auth), fetch and store it
                 var serverUrl = store.serverUrl()
+                Log.d("PlexApi", "PlayerViewModel: cached serverUrl: $serverUrl")
                 if (serverUrl == null) {
+                    Log.d("PlexApi", "PlayerViewModel: no cached URL, calling serverInfo()")
                     val info = api.serverInfo(token)
+                    Log.d("PlexApi", "PlayerViewModel: serverInfo() returned: name=${info?.name}, uri=${info?.uri}")
                     serverUrl = info?.uri
                     if (serverUrl != null) {
                         store.saveLinkedAccount(token, info.name, serverUrl)
+                        Log.d("PlexApi", "PlayerViewModel: saved linked account, serverUrl=$serverUrl")
                     }
                 }
 
                 if (serverUrl == null) {
+                    Log.w("PlexApi", "PlayerViewModel: No Plex server URL found")
                     _uiState.value = PlexPlayerUiState.Error("No Plex server URL found. Please check Plex settings.")
                     return@launch
                 }

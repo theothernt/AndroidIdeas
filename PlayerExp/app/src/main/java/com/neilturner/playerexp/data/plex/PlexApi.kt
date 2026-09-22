@@ -1,5 +1,6 @@
 package com.neilturner.playerexp.data.plex
 
+import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -38,17 +39,8 @@ data class PlexResource(
     val name: String,
     val product: String? = null,
     val provides: String? = null,
-    val connections: List<PlexConnection>? = null
-)
-
-@Serializable
-data class ResourcesResponse(
-    @SerialName("MediaContainer") val mediaContainer: MediaContainer? = null
-)
-
-@Serializable
-data class MediaContainer(
-    @SerialName("Device") val devices: List<PlexResource>? = null
+    val connections: List<PlexConnection>? = null,
+    val accessToken: String? = null
 )
 
 data class PlexServerInfo(
@@ -133,34 +125,63 @@ class PlexApi(private val clientIdentifier: String) {
     }.body()
 
     suspend fun serverInfo(accountToken: String): PlexServerInfo? {
-        val resources = runCatching {
-            client.get("https://plex.tv/api/v2/resources") {
+        val plexJson = Json { ignoreUnknownKeys = true; isLenient = true }
+        Log.d("PlexApi", "serverInfo() called, token present: ${accountToken.isNotBlank()}")
+
+        // Primary: /api/v2/resources
+        val resourcesFromPrimary = try {
+            val response = client.get("https://plex.tv/api/v2/resources") {
                 parameter("includeHttps", 1)
                 plexHeaders(accountToken)
-            }.body<ResourcesResponse>()
-                .mediaContainer?.devices.orEmpty()
-        }.getOrElse {
-            runCatching {
-                client.get("https://plex.tv/api/resources.json") {
-                    parameter("includeHttps", 1)
-                    plexHeaders(accountToken)
-                }.body<ResourcesResponse>()
-                    .mediaContainer?.devices.orEmpty()
-            }.getOrNull() ?: return null
-        }
-        return resources
-            .firstOrNull { it.provides?.contains("server", ignoreCase = true) == true || it.product != null }
-            ?.let { resource ->
-                val validConnections = resource.connections.orEmpty()
-                val bestUri = (validConnections.firstOrNull { it.local && !it.relay }
-                    ?: validConnections.firstOrNull { !it.relay }
-                    ?: validConnections.firstOrNull())?.let { conn ->
-                        conn.uri ?: if (conn.address != null && conn.port != null) {
-                            "${conn.protocol ?: "http"}://${conn.address}:${conn.port}"
-                        } else null
-                    }
-                PlexServerInfo(name = resource.name, uri = bestUri, accessToken = accountToken)
             }
+            val contentType = response.headers[HttpHeaders.ContentType] ?: "unknown"
+            val bodyString = response.body<String>()
+            Log.d("PlexApi", "Resources v2 Content-Type: $contentType")
+            Log.d("PlexApi", "Resources v2 body: ${bodyString.take(1000)}")
+            val devices = plexJson.decodeFromString<List<PlexResource>>(bodyString)
+            Log.d("PlexApi", "Resources v2 parsed: ${devices.size} devices")
+            devices.forEach { d -> Log.d("PlexApi", "  Device: name=${d.name}, provides=${d.provides}, product=${d.product}, connections=${d.connections?.size}, accessToken=${d.accessToken?.take(4)}") }
+            devices
+        } catch (e: Exception) {
+            Log.w("PlexApi", "Resources v2 call failed: ${e.message}", e)
+            null
+        }
+
+        // Fallback: /api/resources.json
+        val resources = resourcesFromPrimary ?: try {
+            val response = client.get("https://plex.tv/api/resources.json") {
+                parameter("includeHttps", 1)
+                plexHeaders(accountToken)
+            }
+            val bodyString = response.body<String>()
+            Log.d("PlexApi", "Resources .json Content-Type: ${response.headers[HttpHeaders.ContentType] ?: "unknown"}")
+            Log.d("PlexApi", "Resources .json body: ${bodyString.take(1000)}")
+            val devices = plexJson.decodeFromString<List<PlexResource>>(bodyString)
+            Log.d("PlexApi", "Resources .json parsed: ${devices.size} devices")
+            devices
+        } catch (e: Exception) {
+            Log.w("PlexApi", "Resources .json fallback failed: ${e.message}", e)
+            null
+        } ?: return null
+
+        Log.d("PlexApi", "serverInfo() found ${resources.size} resources, filtering for server")
+        val serverResource = resources
+            .firstOrNull { it.provides?.contains("server", ignoreCase = true) == true || it.product != null }
+        Log.d("PlexApi", "serverInfo() selected resource: ${serverResource?.name}")
+        return serverResource?.let { resource ->
+            val validConnections = resource.connections.orEmpty()
+            Log.d("PlexApi", "serverInfo() resource ${resource.name} has ${validConnections.size} connections")
+            validConnections.forEach { c -> Log.d("PlexApi", "  Connection: uri=${c.uri}, address=${c.address}, port=${c.port}, local=${c.local}, relay=${c.relay}") }
+            val bestUri = (validConnections.firstOrNull { it.local && !it.relay }
+                ?: validConnections.firstOrNull { !it.relay }
+                ?: validConnections.firstOrNull())?.let { conn ->
+                    conn.uri ?: if (conn.address != null && conn.port != null) {
+                        "${conn.protocol ?: "http"}://${conn.address}:${conn.port}"
+                    } else null
+                }
+            Log.d("PlexApi", "serverInfo() bestUri: $bestUri")
+            PlexServerInfo(name = resource.name, uri = bestUri, accessToken = resource.accessToken)
+        }?.also { Log.d("PlexApi", "serverInfo() returning: name=${it.name}, uri=${it.uri}, accessToken=${it.accessToken?.take(4)}") }
     }
 
     suspend fun serverName(accountToken: String): String? = serverInfo(accountToken)?.name
