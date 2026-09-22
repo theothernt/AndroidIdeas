@@ -19,7 +19,8 @@ data class PlexDeviceCapabilities(
         val videoCodecNames = videoCodecs.map { it.plexName }.distinct().sorted()
         val audioCodecNames = audioCodecs.map { it.plexName }.distinct().sorted()
         require("h264" in videoCodecNames && "aac" in audioCodecNames) {
-            "This device cannot decode the H.264/AAC HLS fallback required by this sample."
+            "Device is missing the H.264/AAC HLS transcode fallback. " +
+                "Found video: $videoCodecNames, audio: $audioCodecNames"
         }
 
         val directives = buildList {
@@ -67,7 +68,7 @@ data class PlexAudioCodecCapability(
 
 data class PlexPlaybackProfile(val clientProfileExtra: String) {
     companion object {
-        const val GENERIC_PROFILE_NAME = "generic"
+        const val GENERIC_PROFILE_NAME = "Generic"
     }
 }
 
@@ -100,7 +101,6 @@ object AndroidPlexCapabilityProbe {
         MediaCodecList(MediaCodecList.ALL_CODECS).codecInfos
             .asSequence()
             .filterNot(MediaCodecInfo::isEncoder)
-            .filter(::isUsableDecoder)
             .forEach { codecInfo ->
                 codecInfo.supportedTypes.forEach { mimeType ->
                     val capabilities = runCatching {
@@ -108,6 +108,7 @@ object AndroidPlexCapabilityProbe {
                     }.getOrNull() ?: return@forEach
 
                     videoMimeToPlexCodec[mimeType]?.let { plexName ->
+                        if (!isUsableVideoDecoder(codecInfo)) return@let
                         val videoCapabilities = capabilities.videoCapabilities ?: return@let
                         val candidate = PlexVideoCodecCapability(
                             plexName = plexName,
@@ -118,6 +119,7 @@ object AndroidPlexCapabilityProbe {
                         video[plexName] = video[plexName]?.merge(candidate) ?: candidate
                     }
                     audioMimeToPlexCodec[mimeType]?.let { plexName ->
+                        if (!isUsableAudioDecoder(codecInfo)) return@let
                         val candidate = PlexAudioCodecCapability(
                             plexName = plexName,
                             maximumChannelCount = capabilities.audioCapabilities?.maxInputChannelCount ?: 0
@@ -133,9 +135,21 @@ object AndroidPlexCapabilityProbe {
         )
     }
 
-    private fun isUsableDecoder(codecInfo: MediaCodecInfo): Boolean =
+    private fun isUsableVideoDecoder(codecInfo: MediaCodecInfo): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
-            (!codecInfo.isAlias && codecInfo.isHardwareAccelerated)
+            (!codecInfo.isAlias && (codecInfo.isHardwareAccelerated || isEmulator()))
+
+    private fun isUsableAudioDecoder(codecInfo: MediaCodecInfo): Boolean =
+        !codecInfo.isAlias
+
+    private fun isEmulator(): Boolean =
+        Build.FINGERPRINT.startsWith("generic") ||
+            Build.FINGERPRINT.startsWith("unknown") ||
+            Build.MODEL.contains("google_sdk") ||
+            Build.MODEL.contains("Emulator") ||
+            Build.MODEL.contains("Android SDK built for") ||
+            Build.HARDWARE.contains("goldfish") ||
+            Build.HARDWARE.contains("ranchu")
 
     private fun PlexVideoCodecCapability.merge(other: PlexVideoCodecCapability) = copy(
         maximumWidth = maxOf(maximumWidth, other.maximumWidth),

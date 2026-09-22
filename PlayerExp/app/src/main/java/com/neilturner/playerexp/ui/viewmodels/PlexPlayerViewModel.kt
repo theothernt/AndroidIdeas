@@ -267,7 +267,7 @@ class PlexPlayerViewModel(
 
     private fun String?.safeForLog(): String = this
         ?.replace(Regex("\\?[^\\s]+"), "?<query-redacted>")
-        ?.take(500)
+        ?.take(2000)
         ?: "<none>"
 
     private fun playbackStateName(state: Int): String = when (state) {

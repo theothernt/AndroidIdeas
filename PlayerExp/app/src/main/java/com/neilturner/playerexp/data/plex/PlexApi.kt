@@ -149,6 +149,8 @@ private data class PlexPlaybackDecisionResponse(
 private data class PlexPlaybackDecisionContainer(
     val generalDecisionCode: Int? = null,
     val generalDecisionText: String? = null,
+    val mdeDecisionCode: Int? = null,
+    val mdeDecisionText: String? = null,
     val directPlayDecisionCode: Int? = null,
     val directPlayDecisionText: String? = null,
     @SerialName("Metadata") val metadata: List<PlexPlaybackDecisionMetadata>? = null
@@ -166,6 +168,7 @@ private data class PlexPlaybackDecisionMedia(
 
 @Serializable
 private data class PlexPlaybackDecisionPart(
+    val decision: String? = null,
     @SerialName("Stream") val stream: List<PlexPlaybackDecisionStream>? = null
 )
 
@@ -309,26 +312,41 @@ class PlexApi(private val clientIdentifier: String) {
         )
         val decisionHttpResponse = client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/decision") {
             requestParameters.forEach { (name, value) -> parameter(name, value) }
+            parameter("X-Plex-Token", accountToken)
             plexHeaders(accountToken, profile, sessionIdentifier)
         }
+        Log.d(PLAYBACK_LOG_TAG, "MDE request URL: ${decisionHttpResponse.call.request.url}")
         Log.d(
             PLAYBACK_LOG_TAG,
             "MDE response: ratingKey=$ratingKey, httpStatus=${decisionHttpResponse.status.value}"
         )
+        if (decisionHttpResponse.status.value !in 200..299) {
+            val errorBody = decisionHttpResponse.body<String>()
+            Log.e(PLAYBACK_LOG_TAG, "MDE error body: $errorBody")
+            error("Plex MDE returned ${decisionHttpResponse.status}: $errorBody")
+        }
         val response = decisionHttpResponse.body<PlexPlaybackDecisionResponse>().mediaContainer
             ?: error("Plex did not return a playback decision.")
 
-        val decisionText = response.generalDecisionText ?: response.directPlayDecisionText
+        val generalCode = response.generalDecisionCode ?: response.mdeDecisionCode
+        val directPlayCode = response.directPlayDecisionCode
+            ?: if (response.mdeDecisionCode == DIRECT_PLAY_OK) DIRECT_PLAY_OK else null
+        val decisionText = response.generalDecisionText
+            ?: response.mdeDecisionText
+            ?: response.directPlayDecisionText
         Log.d(
             PLAYBACK_LOG_TAG,
-            "MDE decision: general=${response.generalDecisionCode} (${response.generalDecisionText}), " +
-                "directPlay=${response.directPlayDecisionCode} (${response.directPlayDecisionText})"
+            "MDE decision: general=$generalCode (${response.generalDecisionText ?: response.mdeDecisionText}), " +
+                "directPlay=$directPlayCode (${response.directPlayDecisionText})"
         )
-        if (response.generalDecisionCode !in SUCCESSFUL_DECISION_CODES) {
+        if (generalCode !in SUCCESSFUL_DECISION_CODES) {
             error(decisionText ?: "Plex cannot play this item on this device.")
         }
 
-        return if (response.directPlayDecisionCode == DIRECT_PLAY_OK) {
+        val partDecision = response.metadata?.firstOrNull()?.media?.firstOrNull()?.part?.firstOrNull()?.decision
+        val isDirectPlay = directPlayCode == DIRECT_PLAY_OK || partDecision.equals("directplay", ignoreCase = true)
+
+        return if (isDirectPlay) {
             val fallbackStatus = PlexPlaybackStatus(
                 video = PlexStreamPlayback(PlexStreamMode.Direct),
                 audio = PlexStreamPlayback(PlexStreamMode.Direct)
@@ -373,7 +391,7 @@ class PlexApi(private val clientIdentifier: String) {
         "directStream" to "1",
         "directStreamAudio" to "1",
         "hasMDE" to "1",
-        "subtitles" to "auto",
+        "subtitles" to "none",
         "videoQuality" to "99",
         "videoResolution" to "3840x2160",
         "X-Plex-Client-Identifier" to clientIdentifier,
