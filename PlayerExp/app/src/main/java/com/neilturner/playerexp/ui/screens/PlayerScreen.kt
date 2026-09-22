@@ -33,7 +33,7 @@ fun PlayerScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val mediaUri = when (mediaType) {
-        "hls" -> "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+        "hls" -> "https://xemzi.short.gy/1000018"
         else -> "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
     }
 
