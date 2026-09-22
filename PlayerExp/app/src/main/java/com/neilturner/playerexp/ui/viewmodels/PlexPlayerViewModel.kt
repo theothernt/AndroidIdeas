@@ -28,6 +28,8 @@ import okhttp3.OkHttpClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
 
@@ -54,6 +56,9 @@ class PlexPlayerViewModel(
 
     var player: ExoPlayer? by mutableStateOf(null)
         private set
+
+    private var progressReportingJob: Job? = null
+    private var timeline: PlexTimeline? = null
 
     init {
         loadAndPlay()
@@ -137,13 +142,19 @@ class PlexPlayerViewModel(
                 // inherited from a previous player instance.
                 player?.release()
                 val p = createPlayer(context, token, profile, sessionIdentifier).also { player = it }
+                timeline = PlexTimeline(
+                    serverUrl = serverUrl,
+                    accountToken = token,
+                    ratingKey = requireNotNull(selectedEpisode.ratingKey),
+                    sessionIdentifier = sessionIdentifier
+                )
 
                 val title = listOfNotNull(selectedEpisode.showTitle, selectedEpisode.episodeTitle)
                     .joinToString(" - ")
                     .ifEmpty { "Plex Episode" }
                 _uiState.value = PlexPlayerUiState.Ready(title)
                 val prepareStartedAt = SystemClock.elapsedRealtime()
-                p.addListener(playbackDiagnostics(playbackPlan.playbackStatus, prepareStartedAt))
+                p.addListener(playbackListener(playbackPlan.playbackStatus, prepareStartedAt))
 
                 val mediaItem = MediaItem.fromUri(playbackPlan.url)
                 p.setMediaItem(mediaItem)
@@ -169,9 +180,12 @@ class PlexPlayerViewModel(
     }
 
     fun releasePlayer() {
+        stopProgressReporting()
+        reportProgress(state = TIMELINE_STATE_PAUSED)
         player?.stop()
         player?.release()
         player = null
+        timeline = null
     }
 
     override fun onCleared() {
@@ -204,7 +218,7 @@ class PlexPlayerViewModel(
             .build()
     }
 
-    private fun playbackDiagnostics(
+    private fun playbackListener(
         playbackStatus: PlexPlaybackStatus,
         prepareStartedAt: Long
     ): Player.Listener =
@@ -220,6 +234,30 @@ class PlexPlayerViewModel(
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 Log.d(PLAYBACK_LOG_TAG, "Player isPlaying=$isPlaying")
+                if (isPlaying) {
+                    reportProgress(state = TIMELINE_STATE_PLAYING)
+                    startProgressReporting()
+                } else {
+                    stopProgressReporting()
+                    // Buffering also makes isPlaying false; only report a pause when the user
+                    // (or player controls) has actually disabled playWhenReady.
+                    if (player?.playWhenReady == false) {
+                        reportProgress(state = TIMELINE_STATE_PAUSED)
+                    }
+                }
+            }
+
+            override fun onPositionDiscontinuity(
+                oldPosition: Player.PositionInfo,
+                newPosition: Player.PositionInfo,
+                reason: Int
+            ) {
+                Log.d(PLAYBACK_LOG_TAG, "Player position changed: reason=$reason")
+                reportProgress(state = if (player?.playWhenReady == true) {
+                    TIMELINE_STATE_PLAYING
+                } else {
+                    TIMELINE_STATE_PAUSED
+                })
             }
 
             override fun onRenderedFirstFrame() {
@@ -256,6 +294,51 @@ class PlexPlayerViewModel(
             }
         }
 
+    private fun startProgressReporting() {
+        if (progressReportingJob?.isActive == true) return
+
+        progressReportingJob = viewModelScope.launch {
+            while (player?.isPlaying == true) {
+                delay(PROGRESS_REPORT_INTERVAL_MILLIS)
+                if (player?.isPlaying == true) {
+                    reportProgress(state = TIMELINE_STATE_PLAYING)
+                }
+            }
+        }
+    }
+
+    private fun stopProgressReporting() {
+        progressReportingJob?.cancel()
+        progressReportingJob = null
+    }
+
+    private fun reportProgress(state: String) {
+        val currentPlayer = player ?: return
+        val currentTimeline = timeline ?: return
+        val durationMillis = currentPlayer.duration
+        if (durationMillis == androidx.media3.common.C.TIME_UNSET || durationMillis < 0L) return
+
+        val positionMillis = currentPlayer.currentPosition.coerceIn(0L, durationMillis)
+        viewModelScope.launch {
+            try {
+                api.reportTimeline(
+                    serverUrl = currentTimeline.serverUrl,
+                    accountToken = currentTimeline.accountToken,
+                    ratingKey = currentTimeline.ratingKey,
+                    state = state,
+                    timeMillis = positionMillis,
+                    durationMillis = durationMillis,
+                    sessionIdentifier = currentTimeline.sessionIdentifier
+                )
+            } catch (e: Exception) {
+                Log.w(
+                    PLAYBACK_LOG_TAG,
+                    "Timeline update failed: type=${e.javaClass.simpleName}, message=${e.message.safeForLog()}"
+                )
+            }
+        }
+    }
+
     private fun PlaybackException.findHttpError(): HttpDataSource.InvalidResponseCodeException? {
         var cause: Throwable? = this
         while (cause != null) {
@@ -280,5 +363,15 @@ class PlexPlayerViewModel(
 
     private companion object {
         const val PLAYBACK_LOG_TAG = "PlexPlayback"
+        const val PROGRESS_REPORT_INTERVAL_MILLIS = 5_000L
+        const val TIMELINE_STATE_PLAYING = "playing"
+        const val TIMELINE_STATE_PAUSED = "paused"
     }
 }
+
+private data class PlexTimeline(
+    val serverUrl: String,
+    val accountToken: String,
+    val ratingKey: String,
+    val sessionIdentifier: String
+)

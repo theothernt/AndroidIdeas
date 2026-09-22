@@ -375,6 +375,25 @@ class PlexApi(private val clientIdentifier: String) {
         }
     }
 
+    /** Updates Plex's playback timeline so resume progress stays in sync across clients. */
+    suspend fun reportTimeline(
+        serverUrl: String,
+        accountToken: String,
+        ratingKey: String,
+        state: String,
+        timeMillis: Long,
+        durationMillis: Long,
+        sessionIdentifier: String
+    ) {
+        client.get("${serverUrl.trimEnd('/')}/:/timeline") {
+            parameter("ratingKey", ratingKey)
+            parameter("state", state)
+            parameter("time", timeMillis)
+            parameter("duration", durationMillis)
+            plexHeaders(accountToken = accountToken, sessionIdentifier = sessionIdentifier)
+        }
+    }
+
     fun close() = client.close()
 
     private fun universalPlaybackParameters(
