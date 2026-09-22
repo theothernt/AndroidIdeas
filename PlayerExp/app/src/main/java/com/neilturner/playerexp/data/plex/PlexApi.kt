@@ -394,6 +394,18 @@ class PlexApi(private val clientIdentifier: String) {
         }
     }
 
+    /** Stops the Plex Universal Transcoder session created for this playback session. */
+    suspend fun stopUniversalTranscodeSession(
+        serverUrl: String,
+        accountToken: String,
+        sessionIdentifier: String
+    ) {
+        client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/stop") {
+            parameter("session", sessionIdentifier)
+            plexHeaders(accountToken = accountToken, sessionIdentifier = sessionIdentifier)
+        }
+    }
+
     fun close() = client.close()
 
     private fun universalPlaybackParameters(

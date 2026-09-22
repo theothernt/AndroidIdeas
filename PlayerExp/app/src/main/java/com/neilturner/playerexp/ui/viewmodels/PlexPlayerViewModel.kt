@@ -59,6 +59,7 @@ class PlexPlayerViewModel(
 
     private var progressReportingJob: Job? = null
     private var timeline: PlexTimeline? = null
+    private var stoppedSessionIdentifier: String? = null
 
     init {
         loadAndPlay()
@@ -148,6 +149,7 @@ class PlexPlayerViewModel(
                     ratingKey = requireNotNull(selectedEpisode.ratingKey),
                     sessionIdentifier = sessionIdentifier
                 )
+                stoppedSessionIdentifier = null
 
                 val title = listOfNotNull(selectedEpisode.showTitle, selectedEpisode.episodeTitle)
                     .joinToString(" - ")
@@ -182,6 +184,7 @@ class PlexPlayerViewModel(
     fun releasePlayer() {
         stopProgressReporting()
         reportProgress(state = TIMELINE_STATE_PAUSED)
+        stopPlaybackSession()
         player?.stop()
         player?.release()
         player = null
@@ -229,6 +232,10 @@ class PlexPlayerViewModel(
                     _uiState.value = (_uiState.value as? PlexPlayerUiState.Ready)
                         ?.copy(playbackStatus = playbackStatus)
                         ?: return
+                } else if (playbackState == Player.STATE_ENDED) {
+                    stopProgressReporting()
+                    reportProgress(state = TIMELINE_STATE_PAUSED)
+                    stopPlaybackSession()
                 }
             }
 
@@ -310,6 +317,28 @@ class PlexPlayerViewModel(
     private fun stopProgressReporting() {
         progressReportingJob?.cancel()
         progressReportingJob = null
+    }
+
+    private fun stopPlaybackSession() {
+        val currentTimeline = timeline ?: return
+        if (stoppedSessionIdentifier == currentTimeline.sessionIdentifier) return
+        stoppedSessionIdentifier = currentTimeline.sessionIdentifier
+
+        viewModelScope.launch {
+            try {
+                api.stopUniversalTranscodeSession(
+                    serverUrl = currentTimeline.serverUrl,
+                    accountToken = currentTimeline.accountToken,
+                    sessionIdentifier = currentTimeline.sessionIdentifier
+                )
+            } catch (e: Exception) {
+                Log.w(
+                    PLAYBACK_LOG_TAG,
+                    "Stop playback session failed: type=${e.javaClass.simpleName}, " +
+                        "message=${e.message.safeForLog()}"
+                )
+            }
+        }
     }
 
     private fun reportProgress(state: String) {
