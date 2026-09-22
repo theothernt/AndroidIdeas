@@ -41,9 +41,20 @@ data class PlexResource(
     val connections: List<PlexConnection>? = null
 )
 
+@Serializable
+data class ResourcesResponse(
+    @SerialName("MediaContainer") val mediaContainer: MediaContainer? = null
+)
+
+@Serializable
+data class MediaContainer(
+    @SerialName("Device") val devices: List<PlexResource>? = null
+)
+
 data class PlexServerInfo(
     val name: String,
-    val uri: String?
+    val uri: String?,
+    val accessToken: String? = null
 )
 
 @Serializable
@@ -121,22 +132,36 @@ class PlexApi(private val clientIdentifier: String) {
         plexHeaders()
     }.body()
 
-    suspend fun serverInfo(accountToken: String): PlexServerInfo? = client.get("https://plex.tv/api/resources") {
-        parameter("includeHttps", 1)
-        plexHeaders(accountToken)
-    }.body<List<PlexResource>>()
-        .firstOrNull { it.provides?.contains("server", ignoreCase = true) == true || it.product != null }
-        ?.let { resource ->
-            val validConnections = resource.connections.orEmpty()
-            val bestUri = (validConnections.firstOrNull { it.local && !it.relay }
-                ?: validConnections.firstOrNull { !it.relay }
-                ?: validConnections.firstOrNull())?.let { conn ->
-                    conn.uri ?: if (conn.address != null && conn.port != null) {
-                        "${conn.protocol ?: "http"}://${conn.address}:${conn.port}"
-                    } else null
-                }
-            PlexServerInfo(name = resource.name, uri = bestUri)
+    suspend fun serverInfo(accountToken: String): PlexServerInfo? {
+        val resources = runCatching {
+            client.get("https://plex.tv/api/v2/resources") {
+                parameter("includeHttps", 1)
+                plexHeaders(accountToken)
+            }.body<ResourcesResponse>()
+                .mediaContainer?.devices.orEmpty()
+        }.getOrElse {
+            runCatching {
+                client.get("https://plex.tv/api/resources.json") {
+                    parameter("includeHttps", 1)
+                    plexHeaders(accountToken)
+                }.body<ResourcesResponse>()
+                    .mediaContainer?.devices.orEmpty()
+            }.getOrNull() ?: return null
         }
+        return resources
+            .firstOrNull { it.provides?.contains("server", ignoreCase = true) == true || it.product != null }
+            ?.let { resource ->
+                val validConnections = resource.connections.orEmpty()
+                val bestUri = (validConnections.firstOrNull { it.local && !it.relay }
+                    ?: validConnections.firstOrNull { !it.relay }
+                    ?: validConnections.firstOrNull())?.let { conn ->
+                        conn.uri ?: if (conn.address != null && conn.port != null) {
+                            "${conn.protocol ?: "http"}://${conn.address}:${conn.port}"
+                        } else null
+                    }
+                PlexServerInfo(name = resource.name, uri = bestUri, accessToken = accountToken)
+            }
+    }
 
     suspend fun serverName(accountToken: String): String? = serverInfo(accountToken)?.name
 
