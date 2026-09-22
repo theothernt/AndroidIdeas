@@ -392,7 +392,7 @@ class PlexApi(private val clientIdentifier: String) {
             parameter("time", timeMillis)
             parameter("duration", durationMillis)
             plexHeaders(accountToken = accountToken, sessionIdentifier = sessionIdentifier)
-        } }
+        } }.also { Log.d(PLAYBACK_LOG_TAG, "Timeline response: state=$state, httpStatus=${it.status.value}") }
     }
 
     /** Stops the Plex Universal Transcoder session created for this playback session. */
