@@ -1,7 +1,11 @@
 package com.neilturner.playerexp.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,9 +19,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -30,14 +37,19 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.media3.ui.compose.material3.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.Button
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.playerexp.R
+import com.neilturner.playerexp.data.plex.PlexPlaybackStatus
+import com.neilturner.playerexp.data.plex.PlexStreamPlayback
 import com.neilturner.playerexp.ui.viewmodels.PlexPlayerUiState
 import com.neilturner.playerexp.ui.viewmodels.PlexPlayerViewModel
+import kotlinx.coroutines.delay
 
+@UnstableApi
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PlexPlayerScreen(
@@ -139,22 +151,10 @@ fun PlexPlayerScreen(
         is PlexPlayerUiState.Ready -> {
             val player = viewModel.player
             if (player != null) {
-                Player(
+                PlaybackContent(
                     player = player,
-                    modifier = modifier.fillMaxSize(),
-                    showControls = false,
-                    shutter = {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator(
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    }
+                    playbackStatus = state.playbackStatus,
+                    modifier = modifier
                 )
             } else {
                 Box(
@@ -209,3 +209,75 @@ fun PlexPlayerScreen(
         }
     }
 }
+
+@Composable
+@UnstableApi
+private fun PlaybackContent(
+    player: androidx.media3.common.Player,
+    playbackStatus: PlexPlaybackStatus?,
+    modifier: Modifier = Modifier
+) {
+    var showConnectionStatus by remember { mutableStateOf(false) }
+    LaunchedEffect(playbackStatus) {
+        if (playbackStatus != null) {
+            showConnectionStatus = true
+            delay(CONNECTION_STATUS_DURATION_MILLIS)
+            showConnectionStatus = false
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        Player(
+            player = player,
+            modifier = Modifier.fillMaxSize(),
+            showControls = false,
+            shutter = {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        )
+        AnimatedVisibility(
+            visible = showConnectionStatus && playbackStatus != null,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 48.dp),
+            enter = fadeIn(),
+            exit = fadeOut()
+        ) {
+            ConnectionStatusOverlay(playbackStatus = requireNotNull(playbackStatus))
+        }
+    }
+}
+
+@Composable
+private fun ConnectionStatusOverlay(playbackStatus: PlexPlaybackStatus) {
+    Column(
+        modifier = Modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.92f))
+            .padding(horizontal = 20.dp, vertical = 12.dp)
+    ) {
+        ConnectionStatusRow("Video", playbackStatus.video)
+        ConnectionStatusRow("Audio", playbackStatus.audio)
+    }
+}
+
+@Composable
+private fun ConnectionStatusRow(label: String, status: PlexStreamPlayback) {
+    val codec = status.codec?.uppercase()?.let { " · $it" }.orEmpty()
+    Text(
+        text = "$label  ${status.mode.displayName}$codec",
+        style = MaterialTheme.typography.bodyLarge,
+        color = MaterialTheme.colorScheme.inverseOnSurface
+    )
+}
+
+private const val CONNECTION_STATUS_DURATION_MILLIS = 4_000L

@@ -12,6 +12,7 @@ import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.URLBuilder
 import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -104,6 +105,75 @@ data class PlexEpisode(
     val seasonNumber: Int?,
     val episodeNumber: Int?,
     val partKey: String
+)
+
+sealed interface PlexPlaybackPlan {
+    val url: String
+    val decisionText: String?
+    val playbackStatus: PlexPlaybackStatus
+
+    data class DirectPlay(
+        override val url: String,
+        override val decisionText: String?,
+        override val playbackStatus: PlexPlaybackStatus
+    ) : PlexPlaybackPlan
+
+    data class HlsTranscode(
+        override val url: String,
+        override val decisionText: String?,
+        override val playbackStatus: PlexPlaybackStatus
+    ) : PlexPlaybackPlan
+}
+
+data class PlexPlaybackStatus(
+    val video: PlexStreamPlayback,
+    val audio: PlexStreamPlayback
+)
+
+data class PlexStreamPlayback(
+    val mode: PlexStreamMode,
+    val codec: String? = null
+)
+
+enum class PlexStreamMode(val displayName: String) {
+    Direct("Direct"),
+    Transcoded("Transcoded")
+}
+
+@Serializable
+private data class PlexPlaybackDecisionResponse(
+    @SerialName("MediaContainer") val mediaContainer: PlexPlaybackDecisionContainer? = null
+)
+
+@Serializable
+private data class PlexPlaybackDecisionContainer(
+    val generalDecisionCode: Int? = null,
+    val generalDecisionText: String? = null,
+    val directPlayDecisionCode: Int? = null,
+    val directPlayDecisionText: String? = null,
+    @SerialName("Metadata") val metadata: List<PlexPlaybackDecisionMetadata>? = null
+)
+
+@Serializable
+private data class PlexPlaybackDecisionMetadata(
+    @SerialName("Media") val media: List<PlexPlaybackDecisionMedia>? = null
+)
+
+@Serializable
+private data class PlexPlaybackDecisionMedia(
+    @SerialName("Part") val part: List<PlexPlaybackDecisionPart>? = null
+)
+
+@Serializable
+private data class PlexPlaybackDecisionPart(
+    @SerialName("Stream") val stream: List<PlexPlaybackDecisionStream>? = null
+)
+
+@Serializable
+private data class PlexPlaybackDecisionStream(
+    val streamType: Int? = null,
+    val decision: String? = null,
+    val codec: String? = null
 )
 
 class PlexApi(private val clientIdentifier: String) {
@@ -222,15 +292,146 @@ class PlexApi(private val clientIdentifier: String) {
         }.take(limit)
     }
 
+    /** Asks Plex whether this device can play the selected episode directly or needs an HLS stream. */
+    suspend fun playbackPlan(
+        serverUrl: String,
+        accountToken: String,
+        episode: PlexEpisode,
+        profile: PlexPlaybackProfile,
+        sessionIdentifier: String
+    ): PlexPlaybackPlan {
+        val ratingKey = requireNotNull(episode.ratingKey) { "The selected episode has no Plex rating key." }
+        val requestParameters = universalPlaybackParameters(
+            ratingKey = ratingKey,
+            profile = profile,
+            sessionIdentifier = sessionIdentifier,
+            directPlay = true
+        )
+        val response = client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/decision") {
+            requestParameters.forEach { (name, value) -> parameter(name, value) }
+            plexHeaders(accountToken, profile, sessionIdentifier)
+        }.body<PlexPlaybackDecisionResponse>().mediaContainer
+            ?: error("Plex did not return a playback decision.")
+
+        val decisionText = response.generalDecisionText ?: response.directPlayDecisionText
+        if (response.generalDecisionCode !in SUCCESSFUL_DECISION_CODES) {
+            error(decisionText ?: "Plex cannot play this item on this device.")
+        }
+
+        return if (response.directPlayDecisionCode == DIRECT_PLAY_OK) {
+            val fallbackStatus = PlexPlaybackStatus(
+                video = PlexStreamPlayback(PlexStreamMode.Direct),
+                audio = PlexStreamPlayback(PlexStreamMode.Direct)
+            )
+            PlexPlaybackPlan.DirectPlay(
+                url = "${serverUrl.trimEnd('/')}${episode.partKey}",
+                decisionText = decisionText,
+                playbackStatus = response.playbackStatus(fallbackStatus)
+            )
+        } else {
+            val fallbackStatus = PlexPlaybackStatus(
+                video = PlexStreamPlayback(PlexStreamMode.Transcoded, "h264"),
+                audio = PlexStreamPlayback(PlexStreamMode.Transcoded, "aac")
+            )
+            PlexPlaybackPlan.HlsTranscode(
+                url = universalTranscodeUrl(
+                    serverUrl = serverUrl,
+                    accountToken = accountToken,
+                    ratingKey = ratingKey,
+                    profile = profile,
+                    sessionIdentifier = sessionIdentifier
+                ),
+                decisionText = decisionText,
+                playbackStatus = response.playbackStatus(fallbackStatus)
+            )
+        }
+    }
+
     fun close() = client.close()
 
-    private fun io.ktor.client.request.HttpRequestBuilder.plexHeaders(accountToken: String? = null) {
+    private fun universalPlaybackParameters(
+        ratingKey: String,
+        profile: PlexPlaybackProfile,
+        sessionIdentifier: String,
+        directPlay: Boolean
+    ) = mapOf(
+        "path" to "/library/metadata/$ratingKey",
+        "mediaIndex" to "0",
+        "partIndex" to "0",
+        "protocol" to "hls",
+        "directPlay" to if (directPlay) "1" else "0",
+        "directStream" to "1",
+        "directStreamAudio" to "1",
+        "hasMDE" to "1",
+        "subtitles" to "auto",
+        "videoQuality" to "99",
+        "videoResolution" to "3840x2160",
+        "X-Plex-Client-Identifier" to clientIdentifier,
+        "X-Plex-Client-Profile-Name" to PlexPlaybackProfile.GENERIC_PROFILE_NAME,
+        "X-Plex-Client-Profile-Extra" to profile.clientProfileExtra,
+        "X-Plex-Session-Identifier" to sessionIdentifier,
+        "session" to sessionIdentifier
+    )
+
+    private fun universalTranscodeUrl(
+        serverUrl: String,
+        accountToken: String,
+        ratingKey: String,
+        profile: PlexPlaybackProfile,
+        sessionIdentifier: String
+    ): String = URLBuilder("${serverUrl.trimEnd('/')}/video/:/transcode/universal/start.m3u8").apply {
+        universalPlaybackParameters(ratingKey, profile, sessionIdentifier, directPlay = false)
+            .forEach { (name, value) -> parameters.append(name, value) }
+        parameters.append("X-Plex-Token", accountToken)
+    }.buildString()
+
+    private fun PlexPlaybackDecisionContainer.playbackStatus(
+        fallback: PlexPlaybackStatus
+    ): PlexPlaybackStatus {
+        val streams = metadata.orEmpty().firstOrNull()
+            ?.media.orEmpty().firstOrNull()
+            ?.part.orEmpty().firstOrNull()
+            ?.stream.orEmpty()
+        return PlexPlaybackStatus(
+            video = streams.firstOrNull { it.streamType == VIDEO_STREAM_TYPE }
+                ?.toPlaybackStatus() ?: fallback.video,
+            audio = streams.firstOrNull { it.streamType == AUDIO_STREAM_TYPE }
+                ?.toPlaybackStatus() ?: fallback.audio
+        )
+    }
+
+    private fun PlexPlaybackDecisionStream.toPlaybackStatus() = PlexStreamPlayback(
+        mode = if (decision.equals("transcode", ignoreCase = true)) {
+            PlexStreamMode.Transcoded
+        } else {
+            PlexStreamMode.Direct
+        },
+        codec = codec
+    )
+
+    private fun io.ktor.client.request.HttpRequestBuilder.plexHeaders(
+        accountToken: String? = null,
+        profile: PlexPlaybackProfile? = null,
+        sessionIdentifier: String? = null
+    ) {
         accept(ContentType.Application.Json)
         header("X-Plex-Client-Identifier", clientIdentifier)
         header("X-Plex-Product", "Player Exp")
         header("X-Plex-Version", "1.0")
         header("X-Plex-Platform", "Android TV")
         header(HttpHeaders.Accept, ContentType.Application.Json)
+        profile?.let {
+            header("X-Plex-Client-Profile-Name", PlexPlaybackProfile.GENERIC_PROFILE_NAME)
+            header("X-Plex-Client-Profile-Extra", it.clientProfileExtra)
+        }
+        sessionIdentifier?.let { header("X-Plex-Session-Identifier", it) }
         accountToken?.let { header("X-Plex-Token", it) }
+    }
+
+    private companion object {
+        val SUCCESSFUL_DECISION_CODES = 1000..1999
+        const val DIRECT_PLAY_OK = 1000
+        const val VIDEO_STREAM_TYPE = 1
+        const val AUDIO_STREAM_TYPE = 2
     }
 }

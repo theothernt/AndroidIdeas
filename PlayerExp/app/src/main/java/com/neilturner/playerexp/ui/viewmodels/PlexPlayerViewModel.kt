@@ -8,25 +8,37 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.AudioAttributes
-import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
+import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.neilturner.playerexp.data.plex.PlexAccountStore
 import com.neilturner.playerexp.data.plex.PlexApi
+import com.neilturner.playerexp.data.plex.AndroidPlexCapabilityProbe
+import com.neilturner.playerexp.data.plex.PlexPlaybackProfile
+import com.neilturner.playerexp.data.plex.PlexPlaybackStatus
+import okhttp3.OkHttpClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.util.UUID
 
 @Immutable
 sealed interface PlexPlayerUiState {
     data object NotAuthorised : PlexPlayerUiState
     data object Loading : PlexPlayerUiState
-    data class Ready(val episodeTitle: String) : PlexPlayerUiState
+    data class Ready(
+        val episodeTitle: String,
+        val playbackStatus: PlexPlaybackStatus? = null
+    ) : PlexPlayerUiState
     data class Error(val message: String) : PlexPlayerUiState
 }
 
+@UnstableApi
 class PlexPlayerViewModel(
     application: Application
 ) : AndroidViewModel(application) {
@@ -91,21 +103,51 @@ class PlexPlayerViewModel(
 
                 // Pick one random episode
                 val selectedEpisode = episodes.random()
-                val streamUrl = "${serverUrl.trimEnd('/')}${selectedEpisode.partKey}?X-Plex-Token=$token"
+                val capabilities = AndroidPlexCapabilityProbe.probe()
+                val profile = capabilities.playbackProfile()
+                Log.d(
+                    "PlexApi",
+                    "PlayerViewModel: advertising video=${capabilities.videoCodecs.map { it.plexName }}, " +
+                        "audio=${capabilities.audioCodecs.map { it.plexName }}"
+                )
+                val sessionIdentifier = UUID.randomUUID().toString()
+                val playbackPlan = api.playbackPlan(
+                    serverUrl = serverUrl,
+                    accountToken = token,
+                    episode = selectedEpisode,
+                    profile = profile,
+                    sessionIdentifier = sessionIdentifier
+                )
+                Log.d(
+                    "PlexApi",
+                    "PlayerViewModel: playback mode=${playbackPlan::class.simpleName}, " +
+                        "decision=${playbackPlan.decisionText}"
+                )
 
                 val context = getApplication<Application>().applicationContext
-                val p = player ?: ExoPlayer.Builder(context).build().also { player = it }
-
-                val mediaItem = MediaItem.fromUri(streamUrl)
-                p.setMediaItem(mediaItem)
-                p.prepare()
-                p.playWhenReady = true
+                // A new decision has a new Plex session and profile, so its HTTP headers must not be
+                // inherited from a previous player instance.
+                player?.release()
+                val p = createPlayer(context, token, profile, sessionIdentifier).also { player = it }
 
                 val title = listOfNotNull(selectedEpisode.showTitle, selectedEpisode.episodeTitle)
                     .joinToString(" - ")
                     .ifEmpty { "Plex Episode" }
-
                 _uiState.value = PlexPlayerUiState.Ready(title)
+                p.addListener(object : Player.Listener {
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        if (playbackState == Player.STATE_READY) {
+                            _uiState.value = (_uiState.value as? PlexPlayerUiState.Ready)
+                                ?.copy(playbackStatus = playbackPlan.playbackStatus)
+                                ?: return
+                        }
+                    }
+                })
+
+                val mediaItem = MediaItem.fromUri(playbackPlan.url)
+                p.setMediaItem(mediaItem)
+                p.prepare()
+                p.playWhenReady = true
             } catch (e: Exception) {
                 _uiState.value = PlexPlayerUiState.Error(e.message ?: "Failed to connect to Plex server")
             }
@@ -130,5 +172,29 @@ class PlexPlayerViewModel(
         releasePlayer()
         api.close()
         super.onCleared()
+    }
+
+    private fun createPlayer(
+        context: android.content.Context,
+        accountToken: String,
+        profile: PlexPlaybackProfile,
+        sessionIdentifier: String
+    ): ExoPlayer {
+        val headers = mapOf(
+            "X-Plex-Client-Identifier" to store.clientIdentifier(),
+            "X-Plex-Product" to "Player Exp",
+            "X-Plex-Version" to "1.0",
+            "X-Plex-Platform" to "Android TV",
+            "X-Plex-Token" to accountToken,
+            "X-Plex-Client-Profile-Name" to PlexPlaybackProfile.GENERIC_PROFILE_NAME,
+            "X-Plex-Client-Profile-Extra" to profile.clientProfileExtra,
+            "X-Plex-Session-Identifier" to sessionIdentifier
+        )
+        val upstreamFactory = OkHttpDataSource.Factory(OkHttpClient())
+            .setDefaultRequestProperties(headers)
+        val dataSourceFactory = DefaultDataSource.Factory(context, upstreamFactory)
+        return ExoPlayer.Builder(context)
+            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+            .build()
     }
 }
