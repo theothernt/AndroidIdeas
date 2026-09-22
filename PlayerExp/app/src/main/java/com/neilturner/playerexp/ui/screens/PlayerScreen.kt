@@ -1,6 +1,5 @@
 package com.neilturner.playerexp.ui.screens
 
-import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,46 +8,32 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.media3.ui.PlayerView
+import androidx.media3.ui.compose.material3.Player
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.playerexp.ui.viewmodels.PlayerViewModel
 
 @OptIn(androidx.tv.material3.ExperimentalTvMaterial3Api::class)
-@androidx.media3.common.util.UnstableApi
 @Composable
 fun PlayerScreen(
-    mediaType: String,
+    mediaId: String,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PlayerViewModel = viewModel()
 ) {
-    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
-
-    val mediaUri = when (mediaType) {
-        "hls" -> "https://distro001-gb-hls1-prd.delivery.skycdp.com/easel_cdn/ngrp:weather_loop.stream_all/playlist.m3u8"
-        else -> "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
-    }
-
-    val title = when (mediaType) {
-        "hls" -> "HLS Stream"
-        else -> "Big Buck Bunny"
-    }
 
     BackHandler {
         viewModel.releasePlayer()
         onBack()
     }
 
-    LaunchedEffect(mediaUri) {
-        viewModel.initialize(mediaUri, title)
+    LaunchedEffect(mediaId) {
+        viewModel.initialize(mediaId)
     }
 
     DisposableEffect(lifecycleOwner.lifecycle) {
@@ -71,18 +56,18 @@ fun PlayerScreen(
         }
     }
 
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        val player = viewModel.player
-        if (player != null) {
-            AndroidPlayerView(
-                context = context,
-                player = player,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
+    val player = viewModel.player
+    if (player != null) {
+        Player(
+            player = player,
+            modifier = modifier.fillMaxSize(),
+            showControls = true
+        )
+    } else {
+        Box(
+            modifier = modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) {
             Text(
                 text = "Loading media...",
                 style = MaterialTheme.typography.bodyLarge,
@@ -90,29 +75,4 @@ fun PlayerScreen(
             )
         }
     }
-}
-
-@androidx.media3.common.util.UnstableApi
-@Composable
-private fun AndroidPlayerView(
-    context: Context,
-    player: androidx.media3.common.Player,
-    modifier: Modifier = Modifier
-) {
-    AndroidView(
-        factory = { ctx ->
-            PlayerView(ctx).apply {
-                this.player = player
-                useController = true
-                controllerAutoShow = true
-                controllerShowTimeoutMs = 3000
-            }
-        },
-        update = { playerView ->
-            if (playerView.player != player) {
-                playerView.player = player
-            }
-        },
-        modifier = modifier
-    )
 }

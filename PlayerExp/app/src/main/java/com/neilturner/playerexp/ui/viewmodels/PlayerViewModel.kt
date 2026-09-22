@@ -6,7 +6,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.exoplayer.ExoPlayer
+import com.neilturner.playerexp.data.MediaProvider
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -26,16 +28,15 @@ class PlayerViewModel(
     var player: ExoPlayer? by mutableStateOf(null)
         private set
 
-    fun initialize(mediaUri: String, title: String) {
+    fun initialize(mediaId: String) {
+        val source = MediaProvider.getSource(mediaId) ?: return
         val context = getApplication<Application>().applicationContext
         val p = player ?: ExoPlayer.Builder(context).build().also { player = it }
 
         val mediaItem = MediaItem.Builder()
-            .setUri(mediaUri)
+            .setUri(source.uri)
             .apply {
-                if (mediaUri.contains("m3u8")) {
-                    setMimeType(androidx.media3.common.MimeTypes.APPLICATION_M3U8)
-                }
+                source.mimeType?.let { setMimeType(it) }
             }
             .build()
 
@@ -43,7 +44,7 @@ class PlayerViewModel(
         p.prepare()
         p.playWhenReady = true
 
-        _uiState.value = PlayerUiState.Ready(title)
+        _uiState.value = PlayerUiState.Ready(source.title)
     }
 
     fun pause() {

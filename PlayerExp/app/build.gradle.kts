@@ -54,6 +54,7 @@ dependencies {
 	implementation(libs.androidx.media3.ui)
 	implementation(libs.androidx.media3.datasource.okhttp)
 	implementation(libs.androidx.media3.ui.compose)
+	implementation(libs.androidx.media3.ui.compose.material3)
 	androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 	debugImplementation(libs.androidx.compose.ui.test.manifest)
 	debugImplementation(libs.androidx.compose.ui.tooling)

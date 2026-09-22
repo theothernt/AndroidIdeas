@@ -26,17 +26,17 @@ class MainActivity : ComponentActivity() {
                     shape = RectangleShape
                 ) {
                     val currentScreen = remember { mutableStateOf("home") }
-                    val selectedMediaType = remember { mutableStateOf("") }
+                    val selectedMediaId = remember { mutableStateOf("") }
 
                     when (currentScreen.value) {
                         "home" -> HomeScreen(
-                            onNavigateToPlayer = { mediaType ->
-                                selectedMediaType.value = mediaType
+                            onNavigateToPlayer = { mediaId ->
+                                selectedMediaId.value = mediaId
                                 currentScreen.value = "player"
                             }
                         )
                         "player" -> PlayerScreen(
-                            mediaType = selectedMediaType.value,
+                            mediaId = selectedMediaId.value,
                             onBack = { currentScreen.value = "home" }
                         )
                     }
