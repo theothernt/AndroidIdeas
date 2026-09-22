@@ -61,7 +61,7 @@ fun PlayerScreen(
         Player(
             player = player,
             modifier = modifier.fillMaxSize(),
-            showControls = true
+            showControls = false
         )
     } else {
         Box(
