@@ -8,6 +8,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import com.neilturner.playerexp.data.plex.PlexAccountStore
@@ -80,7 +82,7 @@ class PlexPlayerViewModel(
                 }
 
                 // Query the first TV show section for recently added episodes (up to 10)
-                val sectionKey = showSections.first().key
+                val sectionKey = showSections[1].key
                 val episodes = api.recentEpisodes(serverUrl, token, sectionKey, limit = 10)
                 if (episodes.isEmpty()) {
                     _uiState.value = PlexPlayerUiState.Error("No TV show episodes found in the library.")
