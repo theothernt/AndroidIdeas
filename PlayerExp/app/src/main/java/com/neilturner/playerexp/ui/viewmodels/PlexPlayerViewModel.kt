@@ -24,6 +24,7 @@ import com.neilturner.playerexp.data.plex.PlexApi
 import com.neilturner.playerexp.data.plex.AndroidPlexCapabilityProbe
 import com.neilturner.playerexp.data.plex.PlexPlaybackProfile
 import com.neilturner.playerexp.data.plex.PlexPlaybackStatus
+import com.neilturner.playerexp.PlayerExpApplication
 import okhttp3.OkHttpClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -50,6 +51,7 @@ class PlexPlayerViewModel(
 ) : AndroidViewModel(application) {
     private val store = PlexAccountStore(application.applicationContext)
     private val api = PlexApi(store.clientIdentifier())
+    private val sessionCleanup = (application as PlayerExpApplication).plexSessionCleanup
 
     private val _uiState = MutableStateFlow<PlexPlayerUiState>(PlexPlayerUiState.Loading)
     val uiState: StateFlow<PlexPlayerUiState> = _uiState.asStateFlow()
@@ -324,21 +326,11 @@ class PlexPlayerViewModel(
         if (stoppedSessionIdentifier == currentTimeline.sessionIdentifier) return
         stoppedSessionIdentifier = currentTimeline.sessionIdentifier
 
-        viewModelScope.launch {
-            try {
-                api.stopUniversalTranscodeSession(
-                    serverUrl = currentTimeline.serverUrl,
-                    accountToken = currentTimeline.accountToken,
-                    sessionIdentifier = currentTimeline.sessionIdentifier
-                )
-            } catch (e: Exception) {
-                Log.w(
-                    PLAYBACK_LOG_TAG,
-                    "Stop playback session failed: type=${e.javaClass.simpleName}, " +
-                        "message=${e.message.safeForLog()}"
-                )
-            }
-        }
+        sessionCleanup.stopUniversalTranscodeSession(
+            serverUrl = currentTimeline.serverUrl,
+            accountToken = currentTimeline.accountToken,
+            sessionIdentifier = currentTimeline.sessionIdentifier
+        )
     }
 
     private fun reportProgress(state: String) {

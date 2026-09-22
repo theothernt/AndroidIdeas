@@ -17,6 +17,7 @@ import io.ktor.serialization.kotlinx.json.json
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.coroutines.CancellationException
 
 @Serializable
 data class PlexPin(
@@ -189,13 +190,13 @@ class PlexApi(private val clientIdentifier: String) {
         }
     }
 
-    suspend fun createPin(): PlexPin = client.post("https://plex.tv/api/v2/pins") {
+    suspend fun createPin(): PlexPin = apiCall("Create PIN") { client.post("https://plex.tv/api/v2/pins") {
         plexHeaders()
-    }.body()
+    } }.body()
 
-    suspend fun pin(pinId: Long): PlexPin = client.get("https://plex.tv/api/v2/pins/$pinId") {
+    suspend fun pin(pinId: Long): PlexPin = apiCall("Get PIN") { client.get("https://plex.tv/api/v2/pins/$pinId") {
         plexHeaders()
-    }.body()
+    } }.body()
 
     suspend fun serverInfo(accountToken: String): PlexServerInfo? {
         val plexJson = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -203,10 +204,10 @@ class PlexApi(private val clientIdentifier: String) {
 
         // Primary: /api/v2/resources
         val resourcesFromPrimary = try {
-            val response = client.get("https://plex.tv/api/v2/resources") {
+            val response = apiCall("List Plex resources (v2)") { client.get("https://plex.tv/api/v2/resources") {
                 parameter("includeHttps", 1)
                 plexHeaders(accountToken)
-            }
+            } }
             val contentType = response.headers[HttpHeaders.ContentType] ?: "unknown"
             val bodyString = response.body<String>()
             Log.d("PlexApi", "Resources v2 Content-Type: $contentType")
@@ -222,10 +223,10 @@ class PlexApi(private val clientIdentifier: String) {
 
         // Fallback: /api/resources.json
         val resources = resourcesFromPrimary ?: try {
-            val response = client.get("https://plex.tv/api/resources.json") {
+            val response = apiCall("List Plex resources (fallback)") { client.get("https://plex.tv/api/resources.json") {
                 parameter("includeHttps", 1)
                 plexHeaders(accountToken)
-            }
+            } }
             val bodyString = response.body<String>()
             Log.d("PlexApi", "Resources .json Content-Type: ${response.headers[HttpHeaders.ContentType] ?: "unknown"}")
             Log.d("PlexApi", "Resources .json body: ${bodyString.take(1000)}")
@@ -260,9 +261,9 @@ class PlexApi(private val clientIdentifier: String) {
     suspend fun serverName(accountToken: String): String? = serverInfo(accountToken)?.name
 
     suspend fun tvShowSections(serverUrl: String, accountToken: String): List<PlexSectionDirectory> {
-        val response = client.get("${serverUrl.trimEnd('/')}/library/sections") {
+        val response = apiCall("List library sections") { client.get("${serverUrl.trimEnd('/')}/library/sections") {
             plexHeaders(accountToken)
-        }.body<PlexSectionsResponse>()
+        } }.body<PlexSectionsResponse>()
         return response.mediaContainer?.directory.orEmpty().filter { it.type == "show" }
     }
 
@@ -272,12 +273,12 @@ class PlexApi(private val clientIdentifier: String) {
         sectionKey: String,
         limit: Int = 10
     ): List<PlexEpisode> {
-        val response = client.get("${serverUrl.trimEnd('/')}/library/sections/$sectionKey/recentlyAdded") {
+        val response = apiCall("List recent episodes") { client.get("${serverUrl.trimEnd('/')}/library/sections/$sectionKey/recentlyAdded") {
             parameter("type", 4)
             parameter("X-Plex-Container-Start", 0)
             parameter("X-Plex-Container-Size", limit)
             plexHeaders(accountToken)
-        }.body<PlexMediaContainerResponse>()
+        } }.body<PlexMediaContainerResponse>()
 
         return response.mediaContainer?.metadata.orEmpty().mapNotNull { item ->
             val partKey = item.media.orEmpty().firstNotNullOfOrNull { mediaItem ->
@@ -310,11 +311,11 @@ class PlexApi(private val clientIdentifier: String) {
             sessionIdentifier = sessionIdentifier,
             directPlay = true
         )
-        val decisionHttpResponse = client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/decision") {
+        val decisionHttpResponse = apiCall("Request playback decision") { client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/decision") {
             requestParameters.forEach { (name, value) -> parameter(name, value) }
             parameter("X-Plex-Token", accountToken)
             plexHeaders(accountToken, profile, sessionIdentifier)
-        }
+        } }
         Log.d(PLAYBACK_LOG_TAG, "MDE request URL: ${decisionHttpResponse.call.request.url}")
         Log.d(
             PLAYBACK_LOG_TAG,
@@ -385,13 +386,13 @@ class PlexApi(private val clientIdentifier: String) {
         durationMillis: Long,
         sessionIdentifier: String
     ) {
-        client.get("${serverUrl.trimEnd('/')}/:/timeline") {
+        apiCall("Report playback timeline") { client.get("${serverUrl.trimEnd('/')}/:/timeline") {
             parameter("ratingKey", ratingKey)
             parameter("state", state)
             parameter("time", timeMillis)
             parameter("duration", durationMillis)
             plexHeaders(accountToken = accountToken, sessionIdentifier = sessionIdentifier)
-        }
+        } }
     }
 
     /** Stops the Plex Universal Transcoder session created for this playback session. */
@@ -400,13 +401,29 @@ class PlexApi(private val clientIdentifier: String) {
         accountToken: String,
         sessionIdentifier: String
     ) {
-        client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/stop") {
+        apiCall("Stop universal transcode session") { client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/stop") {
             parameter("session", sessionIdentifier)
             plexHeaders(accountToken = accountToken, sessionIdentifier = sessionIdentifier)
-        }
+        } }
     }
 
     fun close() = client.close()
+
+    private suspend fun <T> apiCall(operation: String, request: suspend () -> T): T {
+        Log.d(API_LOG_TAG, "Request: $operation")
+        return try {
+            request().also { Log.d(API_LOG_TAG, "Completed: $operation") }
+        } catch (e: CancellationException) {
+            Log.d(API_LOG_TAG, "Cancelled: $operation")
+            throw e
+        } catch (e: Exception) {
+            Log.w(
+                API_LOG_TAG,
+                "Failed: $operation; type=${e.javaClass.simpleName}, message=${e.message}"
+            )
+            throw e
+        }
+    }
 
     private fun universalPlaybackParameters(
         ratingKey: String,
@@ -489,6 +506,7 @@ class PlexApi(private val clientIdentifier: String) {
 
     private companion object {
         const val PLAYBACK_LOG_TAG = "PlexPlayback"
+        const val API_LOG_TAG = "PlexApi"
         val SUCCESSFUL_DECISION_CODES = 1000..1999
         const val DIRECT_PLAY_OK = 1000
         const val VIDEO_STREAM_TYPE = 1
