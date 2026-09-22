@@ -307,13 +307,23 @@ class PlexApi(private val clientIdentifier: String) {
             sessionIdentifier = sessionIdentifier,
             directPlay = true
         )
-        val response = client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/decision") {
+        val decisionHttpResponse = client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/decision") {
             requestParameters.forEach { (name, value) -> parameter(name, value) }
             plexHeaders(accountToken, profile, sessionIdentifier)
-        }.body<PlexPlaybackDecisionResponse>().mediaContainer
+        }
+        Log.d(
+            PLAYBACK_LOG_TAG,
+            "MDE response: ratingKey=$ratingKey, httpStatus=${decisionHttpResponse.status.value}"
+        )
+        val response = decisionHttpResponse.body<PlexPlaybackDecisionResponse>().mediaContainer
             ?: error("Plex did not return a playback decision.")
 
         val decisionText = response.generalDecisionText ?: response.directPlayDecisionText
+        Log.d(
+            PLAYBACK_LOG_TAG,
+            "MDE decision: general=${response.generalDecisionCode} (${response.generalDecisionText}), " +
+                "directPlay=${response.directPlayDecisionCode} (${response.directPlayDecisionText})"
+        )
         if (response.generalDecisionCode !in SUCCESSFUL_DECISION_CODES) {
             error(decisionText ?: "Plex cannot play this item on this device.")
         }
@@ -327,7 +337,7 @@ class PlexApi(private val clientIdentifier: String) {
                 url = "${serverUrl.trimEnd('/')}${episode.partKey}",
                 decisionText = decisionText,
                 playbackStatus = response.playbackStatus(fallbackStatus)
-            )
+            ).also { plan -> Log.d(PLAYBACK_LOG_TAG, "MDE plan: DirectPlay, status=${plan.playbackStatus}") }
         } else {
             val fallbackStatus = PlexPlaybackStatus(
                 video = PlexStreamPlayback(PlexStreamMode.Transcoded, "h264"),
@@ -343,7 +353,7 @@ class PlexApi(private val clientIdentifier: String) {
                 ),
                 decisionText = decisionText,
                 playbackStatus = response.playbackStatus(fallbackStatus)
-            )
+            ).also { plan -> Log.d(PLAYBACK_LOG_TAG, "MDE plan: HlsTranscode, status=${plan.playbackStatus}") }
         }
     }
 
@@ -429,6 +439,7 @@ class PlexApi(private val clientIdentifier: String) {
     }
 
     private companion object {
+        const val PLAYBACK_LOG_TAG = "PlexPlayback"
         val SUCCESSFUL_DECISION_CODES = 1000..1999
         const val DIRECT_PLAY_OK = 1000
         const val VIDEO_STREAM_TYPE = 1

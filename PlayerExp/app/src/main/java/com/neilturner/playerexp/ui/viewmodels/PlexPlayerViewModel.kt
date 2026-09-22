@@ -2,6 +2,7 @@ package com.neilturner.playerexp.ui.viewmodels
 
 import android.util.Log
 import android.app.Application
+import android.os.SystemClock
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -10,9 +11,12 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import androidx.media3.common.PlaybackException
+import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.datasource.DefaultDataSource
+import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.neilturner.playerexp.data.plex.PlexAccountStore
@@ -106,10 +110,14 @@ class PlexPlayerViewModel(
                 val capabilities = AndroidPlexCapabilityProbe.probe()
                 val profile = capabilities.playbackProfile()
                 Log.d(
-                    "PlexApi",
-                    "PlayerViewModel: advertising video=${capabilities.videoCodecs.map { it.plexName }}, " +
-                        "audio=${capabilities.audioCodecs.map { it.plexName }}"
+                    PLAYBACK_LOG_TAG,
+                    "Capabilities: video=${capabilities.videoCodecs.joinToString { codec ->
+                        "${codec.plexName}[${codec.maximumWidth}x${codec.maximumHeight}@${codec.maximumFrameRate}]"
+                    }}, audio=${capabilities.audioCodecs.joinToString { codec ->
+                        "${codec.plexName}[channels=${codec.maximumChannelCount}]"
+                    }}"
                 )
+                Log.d(PLAYBACK_LOG_TAG, "Client profile: ${profile.clientProfileExtra}")
                 val sessionIdentifier = UUID.randomUUID().toString()
                 val playbackPlan = api.playbackPlan(
                     serverUrl = serverUrl,
@@ -119,9 +127,9 @@ class PlexPlayerViewModel(
                     sessionIdentifier = sessionIdentifier
                 )
                 Log.d(
-                    "PlexApi",
-                    "PlayerViewModel: playback mode=${playbackPlan::class.simpleName}, " +
-                        "decision=${playbackPlan.decisionText}"
+                    PLAYBACK_LOG_TAG,
+                    "Playback plan: mode=${playbackPlan::class.simpleName}, " +
+                        "status=${playbackPlan.playbackStatus}, decision=${playbackPlan.decisionText}"
                 )
 
                 val context = getApplication<Application>().applicationContext
@@ -134,22 +142,20 @@ class PlexPlayerViewModel(
                     .joinToString(" - ")
                     .ifEmpty { "Plex Episode" }
                 _uiState.value = PlexPlayerUiState.Ready(title)
-                p.addListener(object : Player.Listener {
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        if (playbackState == Player.STATE_READY) {
-                            _uiState.value = (_uiState.value as? PlexPlayerUiState.Ready)
-                                ?.copy(playbackStatus = playbackPlan.playbackStatus)
-                                ?: return
-                        }
-                    }
-                })
+                val prepareStartedAt = SystemClock.elapsedRealtime()
+                p.addListener(playbackDiagnostics(playbackPlan.playbackStatus, prepareStartedAt))
 
                 val mediaItem = MediaItem.fromUri(playbackPlan.url)
                 p.setMediaItem(mediaItem)
+                Log.d(PLAYBACK_LOG_TAG, "Preparing ${playbackPlan::class.simpleName} media source")
                 p.prepare()
                 p.playWhenReady = true
             } catch (e: Exception) {
-                _uiState.value = PlexPlayerUiState.Error(e.message ?: "Failed to connect to Plex server")
+                Log.e(
+                    PLAYBACK_LOG_TAG,
+                    "Playback setup failed: type=${e.javaClass.simpleName}, message=${e.message.safeForLog()}"
+                )
+                _uiState.value = PlexPlayerUiState.Error("Failed to start Plex playback. Check device logs.")
             }
         }
     }
@@ -196,5 +202,83 @@ class PlexPlayerViewModel(
         return ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
             .build()
+    }
+
+    private fun playbackDiagnostics(
+        playbackStatus: PlexPlaybackStatus,
+        prepareStartedAt: Long
+    ): Player.Listener =
+        object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                Log.d(PLAYBACK_LOG_TAG, "Player state=${playbackStateName(playbackState)}")
+                if (playbackState == Player.STATE_READY) {
+                    _uiState.value = (_uiState.value as? PlexPlayerUiState.Ready)
+                        ?.copy(playbackStatus = playbackStatus)
+                        ?: return
+                }
+            }
+
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                Log.d(PLAYBACK_LOG_TAG, "Player isPlaying=$isPlaying")
+            }
+
+            override fun onRenderedFirstFrame() {
+                Log.d(
+                    PLAYBACK_LOG_TAG,
+                    "First video frame rendered after ${SystemClock.elapsedRealtime() - prepareStartedAt}ms"
+                )
+            }
+
+            override fun onTracksChanged(tracks: Tracks) {
+                val selectedFormats = tracks.groups.flatMap { group ->
+                    (0 until group.length)
+                        .filter(group::isTrackSelected)
+                        .map(group::getTrackFormat)
+                }
+                Log.d(
+                    PLAYBACK_LOG_TAG,
+                    "Selected tracks: ${selectedFormats.joinToString { format ->
+                        "mime=${format.sampleMimeType}, codecs=${format.codecs}, " +
+                            "size=${format.width}x${format.height}, channels=${format.channelCount}, " +
+                            "bitrate=${format.bitrate}"
+                    }}"
+                )
+            }
+
+            override fun onPlayerError(error: PlaybackException) {
+                val httpError = error.findHttpError()
+                Log.e(
+                    PLAYBACK_LOG_TAG,
+                    "Player error: code=${error.errorCodeName}, type=${error.javaClass.simpleName}, " +
+                        "cause=${error.cause?.javaClass?.simpleName}, " +
+                        "httpStatus=${httpError?.responseCode}, message=${error.message.safeForLog()}"
+                )
+            }
+        }
+
+    private fun PlaybackException.findHttpError(): HttpDataSource.InvalidResponseCodeException? {
+        var cause: Throwable? = this
+        while (cause != null) {
+            if (cause is HttpDataSource.InvalidResponseCodeException) return cause
+            cause = cause.cause
+        }
+        return null
+    }
+
+    private fun String?.safeForLog(): String = this
+        ?.replace(Regex("\\?[^\\s]+"), "?<query-redacted>")
+        ?.take(500)
+        ?: "<none>"
+
+    private fun playbackStateName(state: Int): String = when (state) {
+        Player.STATE_IDLE -> "IDLE"
+        Player.STATE_BUFFERING -> "BUFFERING"
+        Player.STATE_READY -> "READY"
+        Player.STATE_ENDED -> "ENDED"
+        else -> "UNKNOWN($state)"
+    }
+
+    private companion object {
+        const val PLAYBACK_LOG_TAG = "PlexPlayback"
     }
 }
