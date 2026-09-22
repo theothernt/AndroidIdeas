@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">Player Exp</string>
+    <string name="settings">Plex settings</string>
+    <string name="plex_link_instruction">Visit plex.tv/link on your phone or computer and enter the code below</string>
+    <string name="plex_waiting">Waiting for authorization…</string>
+    <string name="plex_code_refreshed">Code refreshed</string>
+    <string name="plex_connected">Plex account connected</string>
+    <string name="plex_connected_to">Connected to: %1$s</string>
+    <string name="plex_disconnect">Disconnect</string>
+    <string name="plex_retrying">Connection issue. Retrying…</string>
+    <string name="back">Back</string>
 </resources>

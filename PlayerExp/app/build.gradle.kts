@@ -1,6 +1,7 @@
 plugins {
 	alias(libs.plugins.android.application)
 	alias(libs.plugins.kotlin.compose)
+	alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -46,6 +47,8 @@ dependencies {
 	implementation(libs.androidx.compose.ui.tooling.preview)
 	implementation(libs.androidx.core.ktx)
 	implementation(libs.androidx.lifecycle.runtime.ktx)
+	implementation(libs.androidx.lifecycle.runtime.compose)
+	implementation(libs.androidx.security.crypto)
 	implementation(libs.androidx.tv.foundation)
 	implementation(libs.androidx.tv.material)
 	implementation(libs.androidx.lifecycle.viewmodel.compose)
@@ -55,6 +58,12 @@ dependencies {
 	implementation(libs.androidx.media3.datasource.okhttp)
 	implementation(libs.androidx.media3.ui.compose)
 	implementation(libs.androidx.media3.ui.compose.material3)
+	implementation(libs.ktor.client.okhttp)
+	implementation(libs.ktor.client.content.negotiation)
+	implementation(libs.ktor.serialization.kotlinx.json)
+	implementation(libs.androidx.navigation3.runtime)
+	implementation(libs.androidx.navigation3.ui)
+	implementation(libs.androidx.lifecycle.viewmodel.navigation3)
 	androidTestImplementation(libs.androidx.compose.ui.test.junit4)
 	debugImplementation(libs.androidx.compose.ui.test.manifest)
 	debugImplementation(libs.androidx.compose.ui.tooling)
