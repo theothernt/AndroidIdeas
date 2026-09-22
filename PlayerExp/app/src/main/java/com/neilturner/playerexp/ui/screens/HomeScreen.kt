@@ -12,9 +12,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -35,10 +40,17 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel()
 ) {
-    val firstButtonFocus = remember { FocusRequester() }
+    val focusRequesters = remember { List(4) { FocusRequester() } }
+    var hasRequestedInitialFocus by rememberSaveable { mutableStateOf(false) }
+    var lastFocusedIndex by rememberSaveable { mutableStateOf(0) }
 
     LaunchedEffect(Unit) {
-        firstButtonFocus.requestFocus()
+        if (!hasRequestedInitialFocus) {
+            hasRequestedInitialFocus = true
+            focusRequesters[0].requestFocus()
+        } else {
+            focusRequesters[lastFocusedIndex].requestFocus()
+        }
     }
 
     Column(
@@ -64,7 +76,8 @@ fun HomeScreen(
         Button(
             onClick = { onNavigateToPlayer("progressive") },
             modifier = Modifier
-                .focusRequester(firstButtonFocus)
+                .focusRequester(focusRequesters[0])
+                .onFocusChanged { if (it.isFocused) lastFocusedIndex = 0 }
                 .width(360.dp)
                 .height(56.dp)
         ) {
@@ -85,6 +98,8 @@ fun HomeScreen(
         Button(
             onClick = { onNavigateToPlayer("hls") },
             modifier = Modifier
+                .focusRequester(focusRequesters[1])
+                .onFocusChanged { if (it.isFocused) lastFocusedIndex = 1 }
                 .width(360.dp)
                 .height(56.dp)
         ) {
@@ -105,6 +120,8 @@ fun HomeScreen(
         Button(
             onClick = onNavigateToPlexPlayer,
             modifier = Modifier
+                .focusRequester(focusRequesters[2])
+                .onFocusChanged { if (it.isFocused) lastFocusedIndex = 2 }
                 .width(360.dp)
                 .height(56.dp)
         ) {
@@ -125,6 +142,8 @@ fun HomeScreen(
         Button(
             onClick = onNavigateToSettings,
             modifier = Modifier
+                .focusRequester(focusRequesters[3])
+                .onFocusChanged { if (it.isFocused) lastFocusedIndex = 3 }
                 .width(360.dp)
                 .height(56.dp)
         ) {
