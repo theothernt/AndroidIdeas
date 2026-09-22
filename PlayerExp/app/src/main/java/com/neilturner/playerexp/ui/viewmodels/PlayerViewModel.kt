@@ -6,7 +6,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.media3.common.MediaItem
-import androidx.media3.common.MimeTypes
 import androidx.media3.exoplayer.ExoPlayer
 import com.neilturner.playerexp.data.MediaProvider
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,12 +32,7 @@ class PlayerViewModel(
         val context = getApplication<Application>().applicationContext
         val p = player ?: ExoPlayer.Builder(context).build().also { player = it }
 
-        val mediaItem = MediaItem.Builder()
-            .setUri(source.uri)
-            .apply {
-                source.mimeType?.let { setMimeType(it) }
-            }
-            .build()
+        val mediaItem = MediaItem.fromUri(source.uri)
 
         p.setMediaItem(mediaItem)
         p.prepare()

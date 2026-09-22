@@ -12,8 +12,8 @@ class MediaProvider {
         val sources = listOf(
             MediaSource(
                 id = "progressive",
-                title = "Big Buck Bunny",
-                uri = "https://test-videos.co.uk/vids/bigbuckbunny/mp4/h264/720/Big_Buck_Bunny_720_10s_1MB.mp4"
+                title = "MP4/MKV file",
+                uri = "http://192.168.1.3:32400/library/parts/82147/1790059902/file.mkv?X-Plex-Token=nF39pRhsqQBvwZZjyadm"
             ),
             MediaSource(
                 id = "hls",

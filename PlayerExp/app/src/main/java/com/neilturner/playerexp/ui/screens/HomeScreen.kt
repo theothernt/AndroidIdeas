@@ -69,7 +69,7 @@ fun HomeScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Play Progressive MP4",
+                    text = "Play MP4, MKV, etc",
                     style = MaterialTheme.typography.titleMedium,
                     textAlign = TextAlign.Center
                 )
