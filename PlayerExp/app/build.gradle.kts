@@ -20,11 +20,10 @@ android {
 
 	buildTypes {
 		release {
-			isMinifyEnabled = true
-			isShrinkResources = true
 			optimization {
 				enable = true // Enables code and resource optimizations.
 			}
+			//isDebuggable = true
 			signingConfig = signingConfigs.getByName("debug")
 		}
 	}
