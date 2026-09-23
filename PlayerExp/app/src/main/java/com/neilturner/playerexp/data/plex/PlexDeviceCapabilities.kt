@@ -17,7 +17,10 @@ data class PlexDeviceCapabilities(
 ) {
     fun playbackProfile(): PlexPlaybackProfile {
         val videoCodecNames = videoCodecs.map { it.plexName }.distinct().sorted()
-        val audioCodecNames = audioCodecs.map { it.plexName }.distinct().sorted()
+        // EAC3 and FLAC are excluded from direct play because some devices cannot decode them.
+        // EAC3 often produces no audio at all on stereo-only devices.
+        val unsupportedAudioCodecs = setOf("eac3", "flac")
+        val audioCodecNames = audioCodecs.map { it.plexName }.distinct().sorted().filter { it !in unsupportedAudioCodecs }
         require("h264" in videoCodecNames && "aac" in audioCodecNames) {
             "Device is missing the H.264/AAC HLS transcode fallback. " +
                 "Found video: $videoCodecNames, audio: $audioCodecNames"
@@ -46,10 +49,11 @@ data class PlexDeviceCapabilities(
                     )
                 }
             }
-            // This replaces Generic's streaming target with a format bundled Media3 can play.
+            // Include hevc so the server stream-copies HEVC video instead of
+            // re-encoding to h264. Audio is still transcoded to AAC via audioCodec=aac.
             add(
                 "add-transcode-target(type=videoProfile&context=streaming&protocol=hls" +
-                    "&container=mpegts&videoCodec=h264&audioCodec=aac&replace=true)"
+                    "&container=mpegts&videoCodec=h264,hevc&audioCodec=aac&replace=true)"
             )
         }
         return PlexPlaybackProfile(directives.joinToString("+"))

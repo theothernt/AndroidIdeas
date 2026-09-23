@@ -309,7 +309,7 @@ class PlexApi(private val clientIdentifier: String) {
             ratingKey = ratingKey,
             profile = profile,
             sessionIdentifier = sessionIdentifier,
-            directPlay = true
+            directPlay = false
         )
         val decisionHttpResponse = apiCall("Request playback decision") { client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/decision") {
             requestParameters.forEach { (name, value) -> parameter(name, value) }
@@ -437,7 +437,12 @@ class PlexApi(private val clientIdentifier: String) {
         "protocol" to "hls",
         "directPlay" to if (directPlay) "1" else "0",
         "directStream" to "1",
-        "directStreamAudio" to "1",
+        // Prevent EAC3/FLAC from being DirectPlayed. Plex ignores audioCodec
+        // restrictions in the client profile and ignores directStreamAudio,
+        // so directPlay=false is used (set from playbackPlan).
+        // directStreamAudio=0 is a safety hint that audio should be transcoded
+        // to the transcode target codec (AAC).
+        "directStreamAudio" to "0",
         "hasMDE" to "1",
         "subtitles" to "none",
         "videoQuality" to "99",
