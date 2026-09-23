@@ -42,7 +42,7 @@ fun VideoItem(
     val context = LocalContext.current
     val gradientScrim = remember {
         Brush.verticalGradient(
-            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)),
+            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
             startY = 100f
         )
     }
@@ -76,7 +76,7 @@ fun VideoItem(
 
             Text(
                 text = video.getDisplayTitle(),
-                style = MaterialTheme.typography.bodyLarge,
+                style = MaterialTheme.typography.bodySmall,
                 color = Color.White,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
