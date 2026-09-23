@@ -27,7 +27,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import android.widget.Toast
+import android.content.Context
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.Color
+import android.util.Log
+import com.neilturner.playerexp.ui.modifiers.playerDpadControls
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -150,11 +155,45 @@ fun PlexPlayerScreen(
 
         is PlexPlayerUiState.Ready -> {
             val player = viewModel.player
+            val context = LocalContext.current
+            val focusRequester = remember { FocusRequester() }
+            LaunchedEffect(Unit) { focusRequester.requestFocus() }
             if (player != null) {
                 PlaybackContent(
                     player = player,
                     playbackStatus = state.playbackStatus,
                     modifier = modifier
+                        .fillMaxSize()
+                        .focusRequester(focusRequester)
+                        .playerDpadControls(
+                            onSeekBackward = {
+                                val target = maxOf(0L, player.currentPosition - 10_000L)
+                                Log.d("PlexPlayerScreen", "Seeking -10s from ${player.currentPosition} to $target")
+                                player.seekTo(target)
+                                Toast.makeText(context, "Seek -10s", Toast.LENGTH_SHORT).show()
+                            },
+                            onSeekForward = {
+                                val duration = player.duration
+                                val target = player.currentPosition + 30_000L
+                                val newPosition = if (duration != androidx.media3.common.C.TIME_UNSET && duration > 0L) {
+                                    minOf(duration, target)
+                                } else {
+                                    target
+                                }
+                                Log.d("PlexPlayerScreen", "Seeking +30s from ${player.currentPosition} to $newPosition")
+                                player.seekTo(newPosition)
+                                Toast.makeText(context, "Seek +30s", Toast.LENGTH_SHORT).show()
+                            },
+                            onTogglePlayPause = {
+                                if (player.isPlaying) {
+                                    Log.d("PlexPlayerScreen", "Pausing playback")
+                                    viewModel.pause()
+                                } else {
+                                    Log.d("PlexPlayerScreen", "Resuming playback")
+                                    viewModel.resume()
+                                }
+                            }
+                        )
                 )
             } else {
                 Box(
@@ -226,7 +265,7 @@ private fun PlaybackContent(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier) {
         Player(
             player = player,
             modifier = Modifier.fillMaxSize(),
