@@ -24,7 +24,8 @@ import com.neilturner.playerexp.data.plex.PlexApi
 import com.neilturner.playerexp.data.plex.AndroidPlexCapabilityProbe
 import com.neilturner.playerexp.data.plex.PlexPlaybackProfile
 import com.neilturner.playerexp.data.plex.PlexPlaybackStatus
-import com.neilturner.playerexp.PlayerExpApplication
+import com.neilturner.playerexp.data.plex.SessionCleanup
+import com.neilturner.playerexp.data.plex.SessionCleanupManager
 import okhttp3.OkHttpClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -51,7 +52,7 @@ class PlexPlayerViewModel(
 ) : AndroidViewModel(application) {
     private val store = PlexAccountStore(application.applicationContext)
     private val api = PlexApi(store.clientIdentifier())
-    private val sessionCleanup = (application as PlayerExpApplication).plexSessionCleanup
+    private val sessionCleanup: SessionCleanup = SessionCleanupManager.getInstance()
 
     private val _uiState = MutableStateFlow<PlexPlayerUiState>(PlexPlayerUiState.Loading)
     val uiState: StateFlow<PlexPlayerUiState> = _uiState.asStateFlow()
@@ -195,7 +196,6 @@ class PlexPlayerViewModel(
 
     override fun onCleared() {
         releasePlayer()
-        api.close()
         super.onCleared()
     }
 
@@ -326,10 +326,17 @@ class PlexPlayerViewModel(
         if (stoppedSessionIdentifier == currentTimeline.sessionIdentifier) return
         stoppedSessionIdentifier = currentTimeline.sessionIdentifier
 
-        sessionCleanup.stopUniversalTranscodeSession(
+        val player = player ?: return
+        val finalPosition = player.currentPosition.coerceIn(0L, player.duration)
+        val duration = player.duration
+
+        sessionCleanup.enqueueFullCleanup(
             serverUrl = currentTimeline.serverUrl,
             accountToken = currentTimeline.accountToken,
-            sessionIdentifier = currentTimeline.sessionIdentifier
+            sessionIdentifier = currentTimeline.sessionIdentifier,
+            ratingKey = currentTimeline.ratingKey,
+            finalPositionMillis = finalPosition,
+            durationMillis = duration
         )
     }
 

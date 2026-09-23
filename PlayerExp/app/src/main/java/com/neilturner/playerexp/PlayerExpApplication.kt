@@ -2,15 +2,17 @@ package com.neilturner.playerexp
 
 import android.app.Application
 import com.neilturner.playerexp.data.plex.PlexAccountStore
-import com.neilturner.playerexp.data.plex.PlexSessionCleanup
+import com.neilturner.playerexp.data.plex.SessionCleanupManager
 
 class PlayerExpApplication : Application() {
-    val plexSessionCleanup: PlexSessionCleanup by lazy {
-        PlexSessionCleanup(PlexAccountStore(applicationContext).clientIdentifier())
+
+    override fun onCreate() {
+        super.onCreate()
+        SessionCleanupManager.initialize(PlexAccountStore(applicationContext).clientIdentifier())
     }
 
     override fun onTerminate() {
-        plexSessionCleanup.close()
+        SessionCleanupManager.shutdown()
         super.onTerminate()
     }
 }
