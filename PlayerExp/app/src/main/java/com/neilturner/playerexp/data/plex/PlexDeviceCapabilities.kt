@@ -155,7 +155,7 @@ object AndroidPlexCapabilityProbe {
             (!codecInfo.isAlias && (codecInfo.isHardwareAccelerated || isEmulator()))
 
     private fun isUsableAudioDecoder(codecInfo: MediaCodecInfo): Boolean =
-        !codecInfo.isAlias
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || !codecInfo.isAlias
 
     private fun isEmulator(): Boolean =
         Build.FINGERPRINT.startsWith("generic") ||
