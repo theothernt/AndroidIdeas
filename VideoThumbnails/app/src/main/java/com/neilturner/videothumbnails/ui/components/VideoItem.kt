@@ -53,17 +53,19 @@ fun VideoItem(
         shape = CardDefaults.shape(RoundedCornerShape(12.dp))
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Show pre-generated thumbnail
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(video.thumbnailDrawableId)
-                    .size(Size.ORIGINAL)
-                    .crossfade(false)
-                    .build(),
-                contentDescription = video.getDisplayTitle(),
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
+            val assetPath = video.thumbnailAssetPath
+            if (assetPath != null) {
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data("file:///android_asset/$assetPath")
+                        .size(Size.ORIGINAL)
+                        .crossfade(false)
+                        .build(),
+                    contentDescription = video.getDisplayTitle(),
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
 
             // Gradient scrim for better text readability
             Box(

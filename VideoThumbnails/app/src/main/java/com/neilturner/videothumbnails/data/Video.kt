@@ -34,7 +34,7 @@ data class Video(
     val url4KSDR: String? = null,
     @SerialName("pointsOfInterest")
     val pointsOfInterest: Map<String, String>? = null,
-    val thumbnailDrawableId: Int = 0,
+    val thumbnailAssetPath: String? = null,
 ) {
     // Get the preferred video URL: H264 first, then H265/HEVC as fallback
     fun getPreferredVideoUrl(): String =
@@ -60,6 +60,6 @@ data class Video(
     // Get display title (use accessibilityLabel if title is empty)
     fun getDisplayTitle(): String = if (title.isBlank()) accessibilityLabel else title
 
-    // Get the drawable resource name for the pre-generated thumbnail
-    fun getThumbnailDrawableName(): String = "thumb_${id.lowercase().replace('-', '_')}"
+    // Get the default asset file path for the pre-generated thumbnail
+    fun getDefaultThumbnailAssetPath(): String = "thumbnails/$id.webp"
 }

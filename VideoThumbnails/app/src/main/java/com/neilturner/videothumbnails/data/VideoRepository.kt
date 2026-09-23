@@ -21,7 +21,7 @@ class RawResourceVideoRepository(
                     R.raw.comm1,
                     R.raw.comm2,
                     R.raw.fireos8,
-                    R.raw.tvos15,
+                    R.raw.tvos26,
                 )
 
             val allVideos = mutableListOf<Video>()
@@ -34,17 +34,11 @@ class RawResourceVideoRepository(
                             .bufferedReader()
                             .use { it.readText() }
                     val videoResponse = json.decodeFromString<VideoResponse>(jsonString)
-                    // Pre-resolve drawable IDs for all videos
-                    val videosWithDrawableIds = videoResponse.assets.map { video ->
-                        val drawableName = video.getThumbnailDrawableName()
-                        val drawableId = context.resources.getIdentifier(
-                            drawableName,
-                            "drawable",
-                            context.packageName
-                        )
-                        video.copy(thumbnailDrawableId = drawableId)
-                    }
-                    allVideos.addAll(videosWithDrawableIds)
+                    val videosWithAssetPaths =
+                        videoResponse.assets.map { video ->
+                            video.copy(thumbnailAssetPath = video.thumbnailAssetPath ?: video.getDefaultThumbnailAssetPath())
+                        }
+                    allVideos.addAll(videosWithAssetPaths)
                 } catch (e: Exception) {
                     // Log error but continue with other files
                     println("Error loading video resource $resourceId: ${e.message}")
