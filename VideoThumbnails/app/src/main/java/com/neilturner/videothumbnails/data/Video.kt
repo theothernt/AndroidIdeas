@@ -54,7 +54,7 @@ data class Video(
             url1080HDR,
             url1080SDR,
             url4KHDR,
-            url4KSDR
+            url4KSDR,
         )
 
     // Get display title (use accessibilityLabel if title is empty)

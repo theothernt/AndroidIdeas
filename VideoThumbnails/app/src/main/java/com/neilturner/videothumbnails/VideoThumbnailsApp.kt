@@ -13,10 +13,12 @@ import org.koin.android.ext.koin.androidContext
 import org.koin.android.ext.koin.androidLogger
 import org.koin.core.context.startKoin
 
-class VideoThumbnailsApp : Application(), SingletonImageLoader.Factory {
-    
+class VideoThumbnailsApp :
+    Application(),
+    SingletonImageLoader.Factory {
     private val okHttpClient by lazy {
-        OkHttpClient.Builder()
+        OkHttpClient
+            .Builder()
             .followRedirects(true)
             .followSslRedirects(true)
             .build()
@@ -31,15 +33,14 @@ class VideoThumbnailsApp : Application(), SingletonImageLoader.Factory {
         }
     }
 
-    override fun newImageLoader(context: PlatformContext): ImageLoader {
-        return ImageLoader.Builder(context)
+    override fun newImageLoader(context: PlatformContext): ImageLoader =
+        ImageLoader
+            .Builder(context)
             .components {
                 // Prepend the VideoFrameDecoder so it's tested before the default image decoders
                 add(VideoFrameDecoder.Factory())
                 add(OkHttpNetworkFetcherFactory(callFactory = okHttpClient))
-            }
-            .diskCache(null)
+            }.diskCache(null)
             .logger(DebugLogger())
             .build()
-    }
 }

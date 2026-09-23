@@ -25,13 +25,13 @@ class MainActivity : ComponentActivity() {
     @OptIn(ExperimentalTvMaterial3Api::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         setContent {
             var showDarkGrey by remember { mutableStateOf(false) }
             val backgroundColor by animateColorAsState(
                 targetValue = if (showDarkGrey) DarkGray else Color.Black,
                 animationSpec = tween(durationMillis = 1000),
-                label = "backgroundColorTransition"
+                label = "backgroundColorTransition",
             )
 
             LaunchedEffect(Unit) {
@@ -42,7 +42,7 @@ class MainActivity : ComponentActivity() {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     shape = RectangleShape,
-                    colors = SurfaceDefaults.colors(containerColor = backgroundColor)
+                    colors = SurfaceDefaults.colors(containerColor = backgroundColor),
                 ) {
                     HomeScreen()
                 }
@@ -50,4 +50,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-

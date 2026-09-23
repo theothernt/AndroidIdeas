@@ -40,38 +40,42 @@ fun VideoItem(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val gradientScrim = remember {
-        Brush.verticalGradient(
-            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
-            startY = 100f
-        )
-    }
+    val gradientScrim =
+        remember {
+            Brush.verticalGradient(
+                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
+                startY = 100f,
+            )
+        }
 
     Card(
         onClick = { onClick(video) },
         modifier = modifier.aspectRatio(16f / 9f),
-        shape = CardDefaults.shape(RoundedCornerShape(12.dp))
+        shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             val assetPath = video.thumbnailAssetPath
             if (assetPath != null) {
                 AsyncImage(
-                    model = ImageRequest.Builder(context)
-                        .data("file:///android_asset/$assetPath")
-                        .size(Size.ORIGINAL)
-                        .crossfade(false)
-                        .build(),
+                    model =
+                        ImageRequest
+                            .Builder(context)
+                            .data("file:///android_asset/$assetPath")
+                            .size(Size.ORIGINAL)
+                            .crossfade(false)
+                            .build(),
                     contentDescription = video.getDisplayTitle(),
                     contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
 
             // Gradient scrim for better text readability
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(gradientScrim)
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .background(gradientScrim),
             )
 
             Text(
@@ -79,10 +83,11 @@ fun VideoItem(
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White,
                 textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
-                    .padding(8.dp)
+                modifier =
+                    Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(8.dp),
             )
         }
     }
@@ -93,15 +98,16 @@ fun VideoItem(
 private fun VideoItemPreview() {
     VideoThumbnailsTheme {
         VideoItem(
-            video = Video(
-                id = "preview_video",
-                title = "Sample Video",
-                accessibilityLabel = "Sample Video Location",
-                timeOfDay = "day",
-                scene = "nature",
-                url1080H264 = "https://example.com/video.mp4"
-            ),
-            onClick = {}
+            video =
+                Video(
+                    id = "preview_video",
+                    title = "Sample Video",
+                    accessibilityLabel = "Sample Video Location",
+                    timeOfDay = "day",
+                    scene = "nature",
+                    url1080H264 = "https://example.com/video.mp4",
+                ),
+            onClick = {},
         )
     }
 }

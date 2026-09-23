@@ -11,14 +11,24 @@ import kotlinx.coroutines.launch
 
 sealed interface VideoUiState {
     data object Loading : VideoUiState
-    data class Success(val videos: List<Video>) : VideoUiState
-    data class Error(val message: String) : VideoUiState
+
+    data class Success(
+        val videos: List<Video>,
+    ) : VideoUiState
+
+    data class Error(
+        val message: String,
+    ) : VideoUiState
 }
 
-class HomeViewModel(private val repository: VideoRepository) : ViewModel() {
-
+class HomeViewModel(
+    private val repository: VideoRepository,
+) : ViewModel() {
     private val _uiState = MutableStateFlow<VideoUiState>(VideoUiState.Loading)
     val uiState: StateFlow<VideoUiState> = _uiState.asStateFlow()
+
+    private val _selectedVideo = MutableStateFlow<Video?>(null)
+    val selectedVideo: StateFlow<Video?> = _selectedVideo.asStateFlow()
 
     init {
         loadVideos()
@@ -33,5 +43,13 @@ class HomeViewModel(private val repository: VideoRepository) : ViewModel() {
                 _uiState.value = VideoUiState.Error(e.message ?: "Unknown error")
             }
         }
+    }
+
+    fun selectVideo(video: Video) {
+        _selectedVideo.value = video
+    }
+
+    fun clearSelectedVideo() {
+        _selectedVideo.value = null
     }
 }

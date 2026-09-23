@@ -11,10 +11,11 @@ import org.koin.core.qualifier.named
 import org.koin.dsl.module
 import java.util.concurrent.Executors
 
-val appModule = module {
-    single<VideoRepository> { RawResourceVideoRepository(androidContext()) }
-    single<CoroutineDispatcher>(named("ThumbnailDispatcher")) {
-        Executors.newFixedThreadPool(2).asCoroutineDispatcher()
+val appModule =
+    module {
+        single<VideoRepository> { RawResourceVideoRepository(androidContext()) }
+        single<CoroutineDispatcher>(named("ThumbnailDispatcher")) {
+            Executors.newFixedThreadPool(2).asCoroutineDispatcher()
+        }
+        viewModel { HomeViewModel(get()) }
     }
-    viewModel { HomeViewModel(get()) }
-}
