@@ -11,7 +11,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
 import androidx.tv.material3.ClickableSurfaceDefaults
@@ -59,7 +61,15 @@ fun ChannelItem(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(channel.color),
+                .background(
+                    Brush.horizontalGradient(
+                        colors = listOf(
+                            channel.color,
+                            channel.color.copy(alpha = 0.6f),
+                        ),
+                        tileMode = TileMode.Mirror
+                    )
+                ),
             contentAlignment = Alignment.Center
         ) {
             Text(
