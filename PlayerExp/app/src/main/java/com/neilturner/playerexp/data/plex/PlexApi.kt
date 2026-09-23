@@ -271,7 +271,7 @@ class PlexApi(private val clientIdentifier: String) {
         serverUrl: String,
         accountToken: String,
         sectionKey: String,
-        limit: Int = 10
+        limit: Int = 30
     ): List<PlexEpisode> {
         val response = apiCall("List recent episodes") { client.get("${serverUrl.trimEnd('/')}/library/sections/$sectionKey/recentlyAdded") {
             parameter("type", 4)
