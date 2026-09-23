@@ -35,6 +35,17 @@ data class PlexDeviceCapabilities(
                 addVideoUpperBound(codec.plexName, "video.height", codec.maximumHeight)
                 addVideoUpperBound(codec.plexName, "video.frameRate", codec.maximumFrameRate)
             }
+            // Audio channel limitations - so Plex knows not to send multi-channel audio
+            // that the device can't handle (e.g. EAC3 7.1 on a stereo TV)
+            audioCodecs.forEach { codec ->
+                if (codec.maximumChannelCount > 0) {
+                    add(
+                        "add-limitation(scope=audioCodec&scopeName=${codec.plexName}" +
+                        "&type=upperBound&name=audio.channel&value=${codec.maximumChannelCount}" +
+                        "&isRequired=false)"
+                    )
+                }
+            }
             // This replaces Generic's streaming target with a format bundled Media3 can play.
             add(
                 "add-transcode-target(type=videoProfile&context=streaming&protocol=hls" +
