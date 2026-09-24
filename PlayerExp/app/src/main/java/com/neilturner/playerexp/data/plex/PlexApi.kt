@@ -386,8 +386,9 @@ class PlexApi(private val clientIdentifier: String) {
         durationMillis: Long,
         sessionIdentifier: String
     ) {
-        apiCall("Report playback timeline") { client.get("${serverUrl.trimEnd('/')}/:/timeline") {
+        apiCall("Report playback timeline ($state)") { client.get("${serverUrl.trimEnd('/')}/:/timeline") {
             parameter("ratingKey", ratingKey)
+            parameter("key", "/library/metadata/$ratingKey")
             parameter("state", state)
             parameter("time", timeMillis)
             parameter("duration", durationMillis)
@@ -404,7 +405,7 @@ class PlexApi(private val clientIdentifier: String) {
         apiCall("Stop universal transcode session") { client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/stop") {
             parameter("session", sessionIdentifier)
             plexHeaders(accountToken = accountToken, sessionIdentifier = sessionIdentifier)
-        } }
+        } }.also { Log.d(PLAYBACK_LOG_TAG, "Stop transcode session response: httpStatus=${it.status.value}") }
     }
 
     fun close() = client.close()

@@ -63,6 +63,8 @@ class PlexPlayerViewModel(
     private var progressReportingJob: Job? = null
     private var timeline: PlexTimeline? = null
     private var stoppedSessionIdentifier: String? = null
+    private var lastKnownPositionMillis: Long = 0L
+    private var lastKnownDurationMillis: Long = 0L
 
     init {
         loadAndPlay()
@@ -153,6 +155,8 @@ class PlexPlayerViewModel(
                     sessionIdentifier = sessionIdentifier
                 )
                 stoppedSessionIdentifier = null
+                lastKnownPositionMillis = 0L
+                lastKnownDurationMillis = 0L
 
                 val title = listOfNotNull(selectedEpisode.showTitle, selectedEpisode.episodeTitle)
                     .joinToString(" - ")
@@ -185,11 +189,12 @@ class PlexPlayerViewModel(
     }
 
     fun releasePlayer() {
+        val currentPlayer = player
         stopProgressReporting()
         reportProgress(state = TIMELINE_STATE_PAUSED)
-        stopPlaybackSession()
-        player?.stop()
-        player?.release()
+        stopPlaybackSession(currentPlayer)
+        currentPlayer?.stop()
+        currentPlayer?.release()
         player = null
         timeline = null
     }
@@ -230,19 +235,20 @@ class PlexPlayerViewModel(
         object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 Log.d(PLAYBACK_LOG_TAG, "Player state=${playbackStateName(playbackState)}")
+                updateLastKnownTime(player)
                 if (playbackState == Player.STATE_READY) {
                     _uiState.value = (_uiState.value as? PlexPlayerUiState.Ready)
                         ?.copy(playbackStatus = playbackStatus)
                         ?: return
                 } else if (playbackState == Player.STATE_ENDED) {
                     stopProgressReporting()
-                    reportProgress(state = TIMELINE_STATE_PAUSED)
-                    stopPlaybackSession()
+                    stopPlaybackSession(player)
                 }
             }
 
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 Log.d(PLAYBACK_LOG_TAG, "Player isPlaying=$isPlaying")
+                updateLastKnownTime(player)
                 if (isPlaying) {
                     reportProgress(state = TIMELINE_STATE_PLAYING)
                     startProgressReporting()
@@ -262,6 +268,7 @@ class PlexPlayerViewModel(
                 reason: Int
             ) {
                 Log.d(PLAYBACK_LOG_TAG, "Player position changed: reason=$reason")
+                updateLastKnownTime(player)
                 reportProgress(state = if (player?.playWhenReady == true) {
                     TIMELINE_STATE_PLAYING
                 } else {
@@ -321,14 +328,43 @@ class PlexPlayerViewModel(
         progressReportingJob = null
     }
 
-    private fun stopPlaybackSession() {
+    private fun updateLastKnownTime(player: Player?) {
+        if (player == null) return
+        val dur = player.duration
+        if (dur != androidx.media3.common.C.TIME_UNSET && dur > 0L) {
+            lastKnownDurationMillis = dur
+        }
+        val pos = player.currentPosition
+        if (pos >= 0L) {
+            lastKnownPositionMillis = pos
+        }
+    }
+
+    private fun stopPlaybackSession(playerInstance: ExoPlayer? = player) {
         val currentTimeline = timeline ?: return
         if (stoppedSessionIdentifier == currentTimeline.sessionIdentifier) return
         stoppedSessionIdentifier = currentTimeline.sessionIdentifier
 
-        val player = player ?: return
-        val finalPosition = player.currentPosition.coerceIn(0L, player.duration)
-        val duration = player.duration
+        updateLastKnownTime(playerInstance)
+
+        val duration = when {
+            playerInstance != null && playerInstance.duration != androidx.media3.common.C.TIME_UNSET && playerInstance.duration > 0L ->
+                playerInstance.duration
+            lastKnownDurationMillis > 0L ->
+                lastKnownDurationMillis
+            else ->
+                -1L
+        }
+
+        val rawPosition = playerInstance?.currentPosition ?: lastKnownPositionMillis
+        val finalPosition = when {
+            playerInstance?.playbackState == Player.STATE_ENDED && duration > 0L ->
+                duration
+            duration > 0L ->
+                rawPosition.coerceIn(0L, duration)
+            else ->
+                maxOf(0L, rawPosition)
+        }
 
         sessionCleanup.enqueueFullCleanup(
             serverUrl = currentTimeline.serverUrl,
@@ -343,8 +379,16 @@ class PlexPlayerViewModel(
     private fun reportProgress(state: String) {
         val currentPlayer = player ?: return
         val currentTimeline = timeline ?: return
-        val durationMillis = currentPlayer.duration
-        if (durationMillis == androidx.media3.common.C.TIME_UNSET || durationMillis < 0L) return
+        updateLastKnownTime(currentPlayer)
+
+        val durationMillis = when {
+            currentPlayer.duration != androidx.media3.common.C.TIME_UNSET && currentPlayer.duration > 0L ->
+                currentPlayer.duration
+            lastKnownDurationMillis > 0L ->
+                lastKnownDurationMillis
+            else ->
+                return
+        }
 
         val positionMillis = currentPlayer.currentPosition.coerceIn(0L, durationMillis)
         viewModelScope.launch {

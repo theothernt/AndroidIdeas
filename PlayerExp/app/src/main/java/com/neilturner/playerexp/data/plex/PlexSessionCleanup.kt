@@ -104,20 +104,31 @@ object SessionCleanupManager {
             var attempt = 0
             while (attempt < MAX_RETRIES) {
                 try {
-                    api.stopUniversalTranscodeSession(
-                        request.serverUrl,
-                        request.accountToken,
-                        request.sessionIdentifier
-                    )
+                    // Try stopping the universal transcode session if one was active.
+                    // For DirectPlay there is no active transcode session, so this may 404 or fail;
+                    // do not let that prevent reporting timeline state = "stopped".
+                    try {
+                        api.stopUniversalTranscodeSession(
+                            request.serverUrl,
+                            request.accountToken,
+                            request.sessionIdentifier
+                        )
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.d(LOG_TAG, "Transcode stop request returned error or not applicable: ${e.message}")
+                    }
 
-                    if (request.ratingKey != null && request.finalPositionMillis >= 0 && request.durationMillis > 0) {
+                    if (request.ratingKey != null) {
+                        val duration = if (request.durationMillis > 0L) request.durationMillis else 0L
+                        val position = if (request.finalPositionMillis >= 0L) request.finalPositionMillis else duration
                         api.reportTimeline(
                             serverUrl = request.serverUrl,
                             accountToken = request.accountToken,
                             ratingKey = request.ratingKey,
                             state = "stopped",
-                            timeMillis = request.finalPositionMillis,
-                            durationMillis = request.durationMillis,
+                            timeMillis = position,
+                            durationMillis = duration,
                             sessionIdentifier = request.sessionIdentifier
                         )
                     }
