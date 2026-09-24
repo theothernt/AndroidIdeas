@@ -5,6 +5,8 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -31,16 +34,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
+import androidx.compose.material3.CircularProgressIndicator
+import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import coil3.size.Size
 import com.neilturner.videothumbnails.data.Video
 import com.neilturner.videothumbnails.ui.components.VideoItem
 import org.koin.androidx.compose.koinViewModel
@@ -129,30 +139,51 @@ private fun VideoPreviewOverlay(
     video: Video?,
     onDismiss: () -> Unit,
 ) {
+    val safeVideo = video ?: return
+    val context = LocalContext.current
+
+    val exoPlayer = remember(context) {
+        ExoPlayer.Builder(context).build()
+    }
+
+    DisposableEffect(exoPlayer) {
+        onDispose { exoPlayer.release() }
+    }
+
+    val preferredUrl = safeVideo.getPreferredVideoUrl()
+    LaunchedEffect(preferredUrl, exoPlayer) {
+        val mediaItem = MediaItem.fromUri(preferredUrl)
+        exoPlayer.setMediaItem(mediaItem)
+        exoPlayer.prepare()
+        exoPlayer.playWhenReady = true
+    }
+
+    var isLoading by remember { mutableStateOf(true) }
+
+    // Observe player state to hide loading when playback starts
+    LaunchedEffect(exoPlayer) {
+        val snapshot = exoPlayer.playbackState
+        // We'll use a coroutine to observe state changes
+        exoPlayer.addListener(object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                if (playbackState == Player.STATE_READY && exoPlayer.playWhenReady) {
+                    isLoading = false
+                }
+            }
+        })
+    }
+
     AnimatedVisibility(
-        visible = video != null,
-        enter = fadeIn(tween(600)),
-        exit = fadeOut(tween(600)),
+        visible = true,
+        enter = fadeIn(tween(300)) + scaleIn(
+            initialScale = 0.9f,
+            animationSpec = tween(300)
+        ),
+        exit = fadeOut(tween(200)) + scaleOut(
+            targetScale = 0.9f,
+            animationSpec = tween(200)
+        ),
     ) {
-        val safeVideo = video ?: return@AnimatedVisibility
-        val context = LocalContext.current
-
-        val exoPlayer = remember(context) {
-            ExoPlayer.Builder(context).build()
-        }
-
-        DisposableEffect(exoPlayer) {
-            onDispose { exoPlayer.release() }
-        }
-
-        val preferredUrl = safeVideo.getPreferredVideoUrl()
-        LaunchedEffect(preferredUrl, exoPlayer) {
-            val mediaItem = MediaItem.fromUri(preferredUrl)
-            exoPlayer.setMediaItem(mediaItem)
-            exoPlayer.prepare()
-            exoPlayer.playWhenReady = true
-        }
-
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -163,22 +194,54 @@ private fun VideoPreviewOverlay(
             Card(
                 onClick = {},
                 modifier = Modifier
-                    .fillMaxWidth(0.8f)
+                    .fillMaxWidth(0.6f)
                     .aspectRatio(16f / 9f),
                 shape = CardDefaults.shape(RoundedCornerShape(16.dp)),
             ) {
-                AndroidView(
-                    factory = { ctx ->
-                        PlayerView(ctx).apply {
-                            player = exoPlayer
-                            useController = false
+                Box(modifier = Modifier.fillMaxSize()) {
+                    val assetPath = safeVideo.thumbnailAssetPath
+                    if (assetPath != null) {
+                        AsyncImage(
+                            model =
+                                ImageRequest
+                                    .Builder(context)
+                                    .data("file:///android_asset/$assetPath")
+                                    .size(Size.ORIGINAL)
+                                    .crossfade(false)
+                                    .build(),
+                            contentDescription = safeVideo.getDisplayTitle(),
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize(),
+                        )
+                    }
+
+                    AndroidView(
+                        factory = { ctx ->
+                            PlayerView(ctx).apply {
+                                player = exoPlayer
+                                useController = false
+                            }
+                        },
+                        update = { playerView ->
+                            playerView.player = exoPlayer
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    )
+
+                    if (isLoading) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.5f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                modifier = Modifier.size(48.dp)
+                            )
                         }
-                    },
-                    update = { playerView ->
-                        playerView.player = exoPlayer
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
+                    }
+                }
             }
         }
     }
