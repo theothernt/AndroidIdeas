@@ -2,6 +2,8 @@ package com.neilturner.playerexp.ui.viewmodels
 
 import android.util.Log
 import android.app.Application
+import android.content.Context
+import android.os.Build
 import android.os.SystemClock
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
@@ -15,6 +17,10 @@ import androidx.media3.common.PlaybackException
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.DefaultRenderersFactory
+import androidx.media3.exoplayer.audio.AudioCapabilities
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
 import androidx.media3.datasource.okhttp.OkHttpDataSource
@@ -129,6 +135,10 @@ class PlexPlayerViewModel(
                     }}"
                 )
                 Log.d(PLAYBACK_LOG_TAG, "Client profile: ${profile.clientProfileExtra}")
+                Log.d(
+                    PLAYBACK_LOG_TAG,
+                    "EAC3 direct play profile: ${profile.supportsEac3Directly}"
+                )
                 val sessionIdentifier = UUID.randomUUID().toString()
                 val playbackPlan = api.playbackPlan(
                     serverUrl = serverUrl,
@@ -223,9 +233,40 @@ class PlexPlayerViewModel(
         val upstreamFactory = OkHttpDataSource.Factory(OkHttpClient())
             .setDefaultRequestProperties(headers)
         val dataSourceFactory = DefaultDataSource.Factory(context, upstreamFactory)
-        return ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(dataSourceFactory))
+        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
+        val forcePcmAudio = shouldForcePcmAudio()
+        Log.d(
+            PLAYBACK_LOG_TAG,
+            "Audio sink: forcePcmAudio=$forcePcmAudio, device=${Build.DEVICE}, " +
+                "product=${Build.PRODUCT}, model=${Build.MODEL}"
+        )
+        if (!forcePcmAudio) {
+            return ExoPlayer.Builder(context)
+                .setMediaSourceFactory(mediaSourceFactory)
+                .build()
+        }
+
+        val renderersFactory = object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioOutputPlaybackParams: Boolean
+            ): AudioSink = DefaultAudioSink.Builder()
+                .setAudioCapabilities(AudioCapabilities.DEFAULT_AUDIO_CAPABILITIES)
+                .setEnableFloatOutput(enableFloatOutput)
+                .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
+                .build()
+        }.setEnableDecoderFallback(true)
+        return ExoPlayer.Builder(context, renderersFactory)
+            .setMediaSourceFactory(mediaSourceFactory)
             .build()
+    }
+
+    private fun shouldForcePcmAudio(): Boolean {
+        val identifiers = listOf(Build.DEVICE, Build.PRODUCT, Build.MODEL)
+            .joinToString(" ")
+            .lowercase()
+        return identifiers.contains("sabrina") || identifiers.contains("boreal")
     }
 
     private fun playbackListener(

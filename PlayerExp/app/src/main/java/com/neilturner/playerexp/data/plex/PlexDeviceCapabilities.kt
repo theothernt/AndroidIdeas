@@ -13,13 +13,17 @@ import android.os.Build
  */
 data class PlexDeviceCapabilities(
     val videoCodecs: List<PlexVideoCodecCapability>,
-    val audioCodecs: List<PlexAudioCodecCapability>
+    val audioCodecs: List<PlexAudioCodecCapability>,
+    val supportsEac3Directly: Boolean = false,
+    val supportsAc3Directly: Boolean = false
 ) {
     fun playbackProfile(): PlexPlaybackProfile {
         val videoCodecNames = videoCodecs.map { it.plexName }.distinct().sorted()
-        // EAC3 and FLAC are excluded from direct play because some devices cannot decode them.
-        // EAC3 often produces no audio at all on stereo-only devices.
-        val unsupportedAudioCodecs = setOf("eac3", "flac")
+        val unsupportedAudioCodecs = buildSet {
+            add("flac")
+            if (!supportsEac3Directly) add("eac3")
+            if (!supportsAc3Directly) add("ac3")
+        }
         val audioCodecNames = audioCodecs.map { it.plexName }.distinct().sorted().filter { it !in unsupportedAudioCodecs }
         require("h264" in videoCodecNames && "aac" in audioCodecNames) {
             "Device is missing the H.264/AAC HLS transcode fallback. " +
@@ -56,7 +60,11 @@ data class PlexDeviceCapabilities(
                     "&container=mpegts&videoCodec=h264,hevc&audioCodec=aac&replace=true)"
             )
         }
-        return PlexPlaybackProfile(directives.joinToString("+"))
+        return PlexPlaybackProfile(
+            clientProfileExtra = directives.joinToString("+"),
+            supportsEac3Directly = supportsEac3Directly,
+            directPlayAudioCodecs = audioCodecNames.toSet()
+        )
     }
 
     private fun MutableList<String>.addVideoUpperBound(codec: String, name: String, value: Int) {
@@ -81,7 +89,11 @@ data class PlexAudioCodecCapability(
     val maximumChannelCount: Int
 )
 
-data class PlexPlaybackProfile(val clientProfileExtra: String) {
+data class PlexPlaybackProfile(
+    val clientProfileExtra: String,
+    val supportsEac3Directly: Boolean = false,
+    val directPlayAudioCodecs: Set<String> = emptySet()
+) {
     companion object {
         const val GENERIC_PROFILE_NAME = "Generic"
     }
@@ -146,7 +158,9 @@ object AndroidPlexCapabilityProbe {
 
         return PlexDeviceCapabilities(
             videoCodecs = video.values.sortedBy(PlexVideoCodecCapability::plexName),
-            audioCodecs = audio.values.sortedBy(PlexAudioCodecCapability::plexName)
+            audioCodecs = audio.values.sortedBy(PlexAudioCodecCapability::plexName),
+            supportsEac3Directly = isGoogleTvStreamer4k(),
+            supportsAc3Directly = isGoogleTvStreamer4k()
         )
     }
 
@@ -156,6 +170,11 @@ object AndroidPlexCapabilityProbe {
 
     private fun isUsableAudioDecoder(codecInfo: MediaCodecInfo): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.Q || !codecInfo.isAlias
+
+    private fun isGoogleTvStreamer4k(): Boolean =
+        Build.DEVICE.equals("kirkwood", ignoreCase = true) ||
+            Build.PRODUCT.contains("kirkwood", ignoreCase = true) ||
+            Build.MODEL.contains("Google TV Streamer", ignoreCase = true)
 
     private fun isEmulator(): Boolean =
         Build.FINGERPRINT.startsWith("generic") ||

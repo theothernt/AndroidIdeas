@@ -180,6 +180,13 @@ private data class PlexPlaybackDecisionStream(
     val codec: String? = null
 )
 
+private data class PlaybackDecisionResult(
+    val response: PlexPlaybackDecisionContainer,
+    val generalCode: Int?,
+    val directPlayCode: Int?,
+    val decisionText: String?
+)
+
 class PlexApi(private val clientIdentifier: String) {
     private val client = HttpClient(OkHttp) {
         install(ContentNegotiation) {
@@ -305,47 +312,48 @@ class PlexApi(private val clientIdentifier: String) {
         sessionIdentifier: String
     ): PlexPlaybackPlan {
         val ratingKey = requireNotNull(episode.ratingKey) { "The selected episode has no Plex rating key." }
-        val requestParameters = universalPlaybackParameters(
+        var decision = requestPlaybackDecision(
+            serverUrl = serverUrl,
+            accountToken = accountToken,
             ratingKey = ratingKey,
             profile = profile,
             sessionIdentifier = sessionIdentifier,
-            directPlay = false
+            directPlay = true,
+            directStreamAudio = true
         )
-        val decisionHttpResponse = apiCall("Request playback decision") { client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/decision") {
-            requestParameters.forEach { (name, value) -> parameter(name, value) }
-            parameter("X-Plex-Token", accountToken)
-            plexHeaders(accountToken, profile, sessionIdentifier)
-        } }
-        Log.d(PLAYBACK_LOG_TAG, "MDE request URL: ${decisionHttpResponse.call.request.url}")
-        Log.d(
-            PLAYBACK_LOG_TAG,
-            "MDE response: ratingKey=$ratingKey, httpStatus=${decisionHttpResponse.status.value}"
-        )
-        if (decisionHttpResponse.status.value !in 200..299) {
-            val errorBody = decisionHttpResponse.body<String>()
-            Log.e(PLAYBACK_LOG_TAG, "MDE error body: $errorBody")
-            error("Plex MDE returned ${decisionHttpResponse.status}: $errorBody")
+        var forceAudioTranscode = decision.hasUnsupportedDirectPlayAudio(profile)
+        if (forceAudioTranscode && decision.isMdeDirectPlay()) {
+            Log.w(
+                PLAYBACK_LOG_TAG,
+                "MDE returned direct play for audio the current profile excludes; forcing a transcode decision"
+            )
+            decision = requestPlaybackDecision(
+                serverUrl = serverUrl,
+                accountToken = accountToken,
+                ratingKey = ratingKey,
+                profile = profile,
+                sessionIdentifier = sessionIdentifier,
+                directPlay = false,
+                directStreamAudio = false
+            )
         }
-        val response = decisionHttpResponse.body<PlexPlaybackDecisionResponse>().mediaContainer
-            ?: error("Plex did not return a playback decision.")
 
-        val generalCode = response.generalDecisionCode ?: response.mdeDecisionCode
-        val directPlayCode = response.directPlayDecisionCode
-            ?: if (response.mdeDecisionCode == DIRECT_PLAY_OK) DIRECT_PLAY_OK else null
-        val decisionText = response.generalDecisionText
-            ?: response.mdeDecisionText
-            ?: response.directPlayDecisionText
-        Log.d(
-            PLAYBACK_LOG_TAG,
-            "MDE decision: general=$generalCode (${response.generalDecisionText ?: response.mdeDecisionText}), " +
-                "directPlay=$directPlayCode (${response.directPlayDecisionText})"
-        )
+        val response = decision.response
+        val generalCode = decision.generalCode
+        val directPlayCode = decision.directPlayCode
+        val decisionText = decision.decisionText
         if (generalCode !in SUCCESSFUL_DECISION_CODES) {
             error(decisionText ?: "Plex cannot play this item on this device.")
         }
 
-        val partDecision = response.metadata?.firstOrNull()?.media?.firstOrNull()?.part?.firstOrNull()?.decision
-        val isDirectPlay = directPlayCode == DIRECT_PLAY_OK || partDecision.equals("directplay", ignoreCase = true)
+        val audioStreams = decision.audioStreams()
+        val mdeDirectPlay = decision.isMdeDirectPlay()
+        val isDirectPlay = !forceAudioTranscode && mdeDirectPlay
+        Log.d(
+            PLAYBACK_LOG_TAG,
+            "MDE audio streams: ${audioStreams.map { it.codec }}, " +
+                "forceAudioTranscode=$forceAudioTranscode"
+        )
 
         return if (isDirectPlay) {
             val fallbackStatus = PlexPlaybackStatus(
@@ -368,7 +376,8 @@ class PlexApi(private val clientIdentifier: String) {
                     accountToken = accountToken,
                     ratingKey = ratingKey,
                     profile = profile,
-                    sessionIdentifier = sessionIdentifier
+                    sessionIdentifier = sessionIdentifier,
+                    directStreamAudio = !forceAudioTranscode
                 ),
                 decisionText = decisionText,
                 playbackStatus = response.playbackStatus(fallbackStatus)
@@ -426,11 +435,94 @@ class PlexApi(private val clientIdentifier: String) {
         }
     }
 
+    private suspend fun requestPlaybackDecision(
+        serverUrl: String,
+        accountToken: String,
+        ratingKey: String,
+        profile: PlexPlaybackProfile,
+        sessionIdentifier: String,
+        directPlay: Boolean,
+        directStreamAudio: Boolean
+    ): PlaybackDecisionResult {
+        val requestParameters = universalPlaybackParameters(
+            ratingKey = ratingKey,
+            profile = profile,
+            sessionIdentifier = sessionIdentifier,
+            directPlay = directPlay,
+            directStreamAudio = directStreamAudio
+        )
+        val decisionHttpResponse = apiCall("Request playback decision") {
+            client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/decision") {
+                requestParameters.forEach { (name, value) -> parameter(name, value) }
+                parameter("X-Plex-Token", accountToken)
+                plexHeaders(accountToken, profile, sessionIdentifier)
+            }
+        }
+        Log.d(PLAYBACK_LOG_TAG, "MDE request URL: ${decisionHttpResponse.call.request.url}")
+        Log.d(
+            PLAYBACK_LOG_TAG,
+            "MDE response: ratingKey=$ratingKey, httpStatus=${decisionHttpResponse.status.value}"
+        )
+        if (decisionHttpResponse.status.value !in 200..299) {
+            val errorBody = decisionHttpResponse.body<String>()
+            Log.e(PLAYBACK_LOG_TAG, "MDE error body: $errorBody")
+            error("Plex MDE returned ${decisionHttpResponse.status}: $errorBody")
+        }
+        val response = decisionHttpResponse.body<PlexPlaybackDecisionResponse>().mediaContainer
+            ?: error("Plex did not return a playback decision.")
+        val generalCode = response.generalDecisionCode ?: response.mdeDecisionCode
+        val directPlayCode = response.directPlayDecisionCode
+            ?: if (response.mdeDecisionCode == DIRECT_PLAY_OK) DIRECT_PLAY_OK else null
+        val decisionText = response.generalDecisionText
+            ?: response.mdeDecisionText
+            ?: response.directPlayDecisionText
+        Log.d(
+            PLAYBACK_LOG_TAG,
+            "MDE decision: general=$generalCode (${response.generalDecisionText ?: response.mdeDecisionText}), " +
+                "directPlay=$directPlayCode (${response.directPlayDecisionText})"
+        )
+        val result = PlaybackDecisionResult(response, generalCode, directPlayCode, decisionText)
+        Log.d(
+            PLAYBACK_LOG_TAG,
+            "MDE response audio streams: ${result.audioStreams().map { it.codec }}"
+        )
+        return result
+    }
+
+    private fun PlaybackDecisionResult.audioStreams(): List<PlexPlaybackDecisionStream> =
+        response.metadata.orEmpty().firstOrNull()
+            ?.media.orEmpty().firstOrNull()
+            ?.part.orEmpty().firstOrNull()
+            ?.stream.orEmpty()
+            .filter { it.streamType == AUDIO_STREAM_TYPE }
+
+    private fun PlaybackDecisionResult.hasUnsupportedDirectPlayAudio(
+        profile: PlexPlaybackProfile
+    ): Boolean = audioStreams().any { stream ->
+        val codec = stream.codec.normalizedAudioCodec()
+        if (profile.directPlayAudioCodecs.isNotEmpty() && codec != null) {
+            codec !in profile.directPlayAudioCodecs
+        } else {
+            codec.equals("flac", ignoreCase = true) ||
+                (!profile.supportsEac3Directly && codec.isEac3Codec())
+        }
+    }
+
+    private fun PlaybackDecisionResult.isMdeDirectPlay(): Boolean {
+        val partDecision = response.metadata.orEmpty().firstOrNull()
+            ?.media.orEmpty().firstOrNull()
+            ?.part.orEmpty().firstOrNull()
+            ?.decision
+        return directPlayCode == DIRECT_PLAY_OK ||
+            (directPlayCode == null && partDecision.equals("directplay", ignoreCase = true))
+    }
+
     private fun universalPlaybackParameters(
         ratingKey: String,
         profile: PlexPlaybackProfile,
         sessionIdentifier: String,
-        directPlay: Boolean
+        directPlay: Boolean,
+        directStreamAudio: Boolean
     ) = mapOf(
         "path" to "/library/metadata/$ratingKey",
         "mediaIndex" to "0",
@@ -438,12 +530,7 @@ class PlexApi(private val clientIdentifier: String) {
         "protocol" to "hls",
         "directPlay" to if (directPlay) "1" else "0",
         "directStream" to "1",
-        // Prevent EAC3/FLAC from being DirectPlayed. Plex ignores audioCodec
-        // restrictions in the client profile and ignores directStreamAudio,
-        // so directPlay=false is used (set from playbackPlan).
-        // directStreamAudio=0 is a safety hint that audio should be transcoded
-        // to the transcode target codec (AAC).
-        "directStreamAudio" to "0",
+        "directStreamAudio" to if (directStreamAudio) "1" else "0",
         "hasMDE" to "1",
         "subtitles" to "none",
         "videoQuality" to "99",
@@ -460,9 +547,16 @@ class PlexApi(private val clientIdentifier: String) {
         accountToken: String,
         ratingKey: String,
         profile: PlexPlaybackProfile,
-        sessionIdentifier: String
+        sessionIdentifier: String,
+        directStreamAudio: Boolean
     ): String = URLBuilder("${serverUrl.trimEnd('/')}/video/:/transcode/universal/start.m3u8").apply {
-        universalPlaybackParameters(ratingKey, profile, sessionIdentifier, directPlay = false)
+        universalPlaybackParameters(
+            ratingKey = ratingKey,
+            profile = profile,
+            sessionIdentifier = sessionIdentifier,
+            directPlay = false,
+            directStreamAudio = directStreamAudio
+        )
             .forEach { (name, value) -> parameters.append(name, value) }
         parameters.append("X-Plex-Token", accountToken)
     }.buildString()
@@ -481,6 +575,17 @@ class PlexApi(private val clientIdentifier: String) {
                 ?.toPlaybackStatus() ?: fallback.audio
         )
     }
+
+    private fun String?.normalizedAudioCodec(): String? = when {
+        isEac3Codec() -> "eac3"
+        equals("flac", ignoreCase = true) -> "flac"
+        else -> this?.lowercase()
+    }
+
+    private fun String?.isEac3Codec(): Boolean =
+        equals("eac3", ignoreCase = true) ||
+            equals("e-ac-3", ignoreCase = true) ||
+            equals("ec-3", ignoreCase = true)
 
     private fun PlexPlaybackDecisionStream.toPlaybackStatus() = PlexStreamPlayback(
         mode = if (decision.equals("transcode", ignoreCase = true)) {
