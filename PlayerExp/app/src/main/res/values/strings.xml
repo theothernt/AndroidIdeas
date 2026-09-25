@@ -7,6 +7,11 @@
     <string name="plex_connected">Plex account connected</string>
     <string name="plex_connected_to">Connected to: %1$s</string>
     <string name="plex_disconnect">Disconnect</string>
+    <string name="plex_disconnect_confirm_title">Disconnect from Plex?</string>
+    <string name="plex_disconnect_confirm_message">You will need to authorise again before you can play Plex media.</string>
+    <string name="plex_disconnect_confirm_message_named">You will be disconnected from %1$s and will need to authorise again before you can play Plex media.</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
     <string name="plex_retrying">Connection issue. Retrying…</string>
     <string name="back">Back</string>
     <string name="plex_player_button">Play random Plex episode</string>
