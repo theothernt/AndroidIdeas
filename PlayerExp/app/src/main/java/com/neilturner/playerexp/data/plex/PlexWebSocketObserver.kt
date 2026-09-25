@@ -9,10 +9,12 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.coroutines.coroutineContext
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Process-scoped observer for Plex's notification firehose. Observation only: frames are logged raw,
@@ -55,7 +57,7 @@ object PlexWebSocketObserver {
     }
 
     private suspend fun observe(store: PlexAccountStore, api: PlexApi) {
-        while (coroutineContext.isActive) {
+        while (currentCoroutineContext().isActive) {
             try {
                 val serverUrl = store.serverUrl()
                 val accountToken = store.accountToken()
@@ -81,7 +83,7 @@ object PlexWebSocketObserver {
                 Log.w(LOG_TAG, "Connection failed: type=${e.javaClass.simpleName}, message=${e.message}", e)
             }
             Log.d(LOG_TAG, "Reconnecting in ${RECONNECT_DELAY_MS}ms")
-            delay(RECONNECT_DELAY_MS)
+            delay(RECONNECT_DELAY_MS.milliseconds)
         }
     }
 

@@ -19,4 +19,7 @@
     <string name="plex_no_episodes">No TV show episodes found on your Plex server</string>
     <string name="plex_player_error">Could not load Plex episode: %1$s</string>
     <string name="plex_loading_episode">Finding random episode…</string>
+    <string name="plex_on_deck_title">Plex On Deck</string>
+    <string name="plex_on_deck_placeholder">On Deck content will appear here.</string>
+    <string name="plex_on_deck_button">Plex On Deck</string>
 </resources>

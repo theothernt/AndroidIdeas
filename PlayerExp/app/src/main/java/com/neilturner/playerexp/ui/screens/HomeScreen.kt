@@ -36,11 +36,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 fun HomeScreen(
     onNavigateToPlayer: (String) -> Unit,
     onNavigateToPlexPlayer: () -> Unit,
+    onNavigateToPlexOnDeck: () -> Unit,
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel()
 ) {
-    val focusRequesters = remember { List(4) { FocusRequester() } }
+    val focusRequesters = remember { List(5) { FocusRequester() } }
     var hasRequestedInitialFocus by rememberSaveable { mutableStateOf(false) }
     var lastFocusedIndex by rememberSaveable { mutableStateOf(0) }
 
@@ -140,10 +141,32 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(20.dp))
 
         Button(
-            onClick = onNavigateToSettings,
+            onClick = onNavigateToPlexOnDeck,
             modifier = Modifier
                 .focusRequester(focusRequesters[3])
                 .onFocusChanged { if (it.isFocused) lastFocusedIndex = 3 }
+                .width(360.dp)
+                .height(56.dp)
+        ) {
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = stringResource(R.string.plex_on_deck_button),
+                    style = MaterialTheme.typography.titleMedium,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Button(
+            onClick = onNavigateToSettings,
+            modifier = Modifier
+                .focusRequester(focusRequesters[4])
+                .onFocusChanged { if (it.isFocused) lastFocusedIndex = 4 }
                 .width(360.dp)
                 .height(56.dp)
         ) {
