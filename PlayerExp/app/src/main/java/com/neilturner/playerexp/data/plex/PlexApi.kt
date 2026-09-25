@@ -5,6 +5,8 @@ import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.contentnegotiation.ContentNegotiation
+import io.ktor.client.plugins.websocket.WebSockets
+import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -13,7 +15,11 @@ import io.ktor.client.request.post
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.URLBuilder
+import io.ktor.http.URLProtocol
 import io.ktor.serialization.kotlinx.json.json
+import io.ktor.websocket.CloseReason
+import io.ktor.websocket.Frame
+import io.ktor.websocket.close
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
@@ -194,6 +200,9 @@ class PlexApi(private val clientIdentifier: String) {
                 ignoreUnknownKeys = true
                 isLenient = true
             })
+        }
+        install(WebSockets) {
+            pingIntervalMillis = 20_000L
         }
     }
 
@@ -417,6 +426,34 @@ class PlexApi(private val clientIdentifier: String) {
         } }.also { Log.d(PLAYBACK_LOG_TAG, "Stop transcode session response: httpStatus=${it.status.value}") }
     }
 
+    /**
+     * Opens Plex's notification firehose and hands every raw frame to [onFrame]. Returns the close
+     * reason when the server ends the stream, and null when it ended without one.
+     */
+    suspend fun observeNotificationFrames(
+        serverUrl: String,
+        accountToken: String,
+        onFrame: suspend (Frame) -> Unit
+    ): CloseReason? {
+        val url = URLBuilder("${serverUrl.trimEnd('/')}$NOTIFICATIONS_PATH").apply {
+            protocol = if (serverUrl.startsWith("https://", ignoreCase = true)) {
+                URLProtocol.WSS
+            } else {
+                URLProtocol.WS
+            }
+            parameters.append("X-Plex-Token", accountToken)
+        }.buildString()
+        Log.d(API_LOG_TAG, "WebSocket connecting to ${url.replace(accountToken, "<token>")}")
+        val session = client.webSocketSession(urlString = url)
+        Log.d(API_LOG_TAG, "WebSocket connected")
+        return try {
+            for (frame in session.incoming) onFrame(frame)
+            session.closeReason.await()
+        } finally {
+            session.close()
+        }
+    }
+
     fun close() = client.close()
 
     private suspend fun <T> apiCall(operation: String, request: suspend () -> T): T {
@@ -618,6 +655,7 @@ class PlexApi(private val clientIdentifier: String) {
     private companion object {
         const val PLAYBACK_LOG_TAG = "PlexPlayback"
         const val API_LOG_TAG = "PlexApi"
+        const val NOTIFICATIONS_PATH = "/:/websockets/notifications"
         val SUCCESSFUL_DECISION_CODES = 1000..1999
         const val DIRECT_PLAY_OK = 1000
         const val VIDEO_STREAM_TYPE = 1

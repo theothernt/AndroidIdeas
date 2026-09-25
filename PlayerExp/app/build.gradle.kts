@@ -59,6 +59,7 @@ dependencies {
 	implementation(libs.androidx.media3.ui.compose.material3)
 	implementation(libs.ktor.client.okhttp)
 	implementation(libs.ktor.client.content.negotiation)
+	implementation(libs.ktor.client.websockets)
 	implementation(libs.ktor.serialization.kotlinx.json)
 	implementation(libs.androidx.navigation3.runtime)
 	implementation(libs.androidx.navigation3.ui)
