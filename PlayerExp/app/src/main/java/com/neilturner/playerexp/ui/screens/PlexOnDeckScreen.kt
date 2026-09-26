@@ -66,6 +66,7 @@ import com.neilturner.playerexp.R
 import com.neilturner.playerexp.data.plex.OnDeckItem
 import com.neilturner.playerexp.ui.modifiers.dpadSelectable
 import com.neilturner.playerexp.ui.modifiers.rememberLeftEdgeSpec
+import com.neilturner.playerexp.ui.theme.PlexAmber
 import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckUiState
 import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckViewModel
 
@@ -209,7 +210,7 @@ private fun OnDeckCard(
         label = "posterFadeIn"
     )
     val focusBorder = SolidColor(
-        if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+        if (isFocused) CARD_BORDER_COLOR else Color.Transparent
     )
     val placeholder = MaterialTheme.colorScheme.surfaceVariant
 
@@ -298,14 +299,14 @@ private fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
         modifier = modifier
             .height(PROGRESS_BAR_HEIGHT)
             .clip(PROGRESS_BAR_SHAPE)
-            .background(Color.White.copy(alpha = TRACK_ALPHA))
+            .background(PROGRESS_TRACK_COLOR)
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth(fraction.coerceAtLeast(MIN_PROGRESS_FRACTION))
                 .fillMaxHeight()
                 .clip(PROGRESS_BAR_SHAPE)
-                .background(MaterialTheme.colorScheme.primary)
+                .background(PlexAmber)
         )
     }
 }
@@ -352,11 +353,13 @@ private val FOCUS_SCALE_SPRING: SpringSpec<Float> = spring(
 private const val PRESSED_POSTER_SCALE = 0.94f
 private const val PRESS_DOWN_MILLIS = 90
 private val FOCUS_BORDER_WIDTH = 3.dp
+private val CARD_BORDER_COLOR = Color.White
 private val POSTER_BAR_INSET = 10.dp
 private val PROGRESS_BAR_HEIGHT = 4.dp
 private val PROGRESS_BAR_RADIUS = 2.dp
 private val PROGRESS_BAR_SHAPE = RoundedCornerShape(PROGRESS_BAR_RADIUS)
-private const val TRACK_ALPHA = 0.3f
+/** Unwatched part of the bar: solid black, so it reads on pale artwork. */
+private val PROGRESS_TRACK_COLOR = Color.Black
 
 /** How long a poster takes to fade in over its placeholder. */
 private const val POSTER_FADE_IN_MILLIS = 250
