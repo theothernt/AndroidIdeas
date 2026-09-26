@@ -2,6 +2,7 @@ package com.neilturner.playerexp.ui.viewmodels
 
 import androidx.compose.ui.unit.IntSize
 import com.neilturner.playerexp.data.plex.OnDeckItem
+import com.neilturner.playerexp.data.plex.PlexLibraryChanges
 
 /**
  * On Deck outlives the screen that shows it.
@@ -13,6 +14,11 @@ import com.neilturner.playerexp.data.plex.OnDeckItem
  *
  * Entries are keyed by the poster size they were built for, because the image URLs carry it: a
  * cached row served after the screen resolution changes would otherwise be drawn at the old size.
+ *
+ * A copy is also treated as stale as soon as the notification socket says the library changed, even
+ * if it is younger than [MAX_AGE_MILLIS], so a row that is painted while the real copy is on its way
+ * is visibly the older one rather than quietly presented as current. Freshness only decides how
+ * quickly something appears on screen: a visit to the screen always asks the server again.
  */
 object PlexOnDeckCache {
     private const val MAX_AGE_MILLIS = 60_000L
@@ -25,9 +31,15 @@ object PlexOnDeckCache {
 
     private var entry: Entry? = null
 
-    /** The cached queue, or null when there is nothing to show or it has gone stale. */
+    /**
+     * The cached queue, or null when there is nothing to show or it has gone stale. A stale result is
+     * not an error: the screen paints the old copy from [readStale] and then asks the server again.
+     */
     fun read(pixels: IntSize, nowMillis: Long = System.currentTimeMillis()): List<OnDeckItem>? =
         synchronized(this) {
+            if (PlexLibraryChanges.isDirty.value) {
+                return@synchronized null
+            }
             entry
                 ?.takeIf { it.pixels == pixels && nowMillis - it.fetchedAtMillis < MAX_AGE_MILLIS }
                 ?.items
