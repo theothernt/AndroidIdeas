@@ -1,10 +1,12 @@
 package com.neilturner.playerexp.ui.screens
 
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +25,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -56,6 +59,7 @@ import coil3.size.Size as CoilSize
 import kotlin.math.roundToInt
 import com.neilturner.playerexp.R
 import com.neilturner.playerexp.data.plex.OnDeckItem
+import com.neilturner.playerexp.ui.modifiers.dpadSelectable
 import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckUiState
 import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckViewModel
 
@@ -171,25 +175,33 @@ private fun OnDeckCard(
     modifier: Modifier = Modifier
 ) {
     var isFocused by remember(item.ratingKey) { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (isFocused) FOCUSED_POSTER_SCALE else 1f,
-        label = "posterScale"
-    )
+    var selectCount by remember(item.ratingKey) { mutableIntStateOf(0) }
+    val pressScale = remember { Animatable(1f) }
+    val focusScale = if (isFocused) FOCUSED_POSTER_SCALE else 1f
     val posterRequest = rememberPosterRequest(item.thumb, posterSize.pixels)
     val focusBorder = SolidColor(
         if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
     )
     val placeholder = MaterialTheme.colorScheme.surfaceVariant
 
+    // Nothing is wired up behind OK yet, so the press itself is the feedback. Only reading
+    // pressScale inside the layer keeps this to a redraw instead of a recomposition per frame.
+    LaunchedEffect(selectCount) {
+        if (selectCount > 0) {
+            pressScale.animateTo(PRESSED_POSTER_SCALE, tween(PRESS_DOWN_MILLIS))
+            pressScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+        }
+    }
+
     Box(
         modifier = modifier
             .size(width = posterSize.height * POSTER_ASPECT_RATIO, height = posterSize.height)
             .onFocusChanged { isFocused = it.isFocused }
-            .focusable()
+            .dpadSelectable { selectCount++ }
             // Scale and rounded clip share one layer: a separate clip would add a second one.
             .graphicsLayer {
-                scaleX = scale
-                scaleY = scale
+                scaleX = focusScale * pressScale.value
+                scaleY = focusScale * pressScale.value
                 shape = POSTER_SHAPE
                 clip = true
             }
@@ -278,6 +290,8 @@ private const val POSTER_HEIGHT_FRACTION = 0.33f
 private val POSTER_CORNER_RADIUS = 12.dp
 private val POSTER_SHAPE = RoundedCornerShape(POSTER_CORNER_RADIUS)
 private const val FOCUSED_POSTER_SCALE = 1.06f
+private const val PRESSED_POSTER_SCALE = 0.94f
+private const val PRESS_DOWN_MILLIS = 90
 private val FOCUS_BORDER_WIDTH = 3.dp
 private val POSTER_BAR_INSET = 10.dp
 private val PROGRESS_BAR_HEIGHT = 4.dp
