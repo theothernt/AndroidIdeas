@@ -87,7 +87,7 @@ fun PlexOnDeckScreen(
             text = stringResource(R.string.plex_on_deck_title),
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = 48.dp)
+            modifier = Modifier.padding(horizontal = SCREEN_HORIZONTAL_PADDING)
         )
         Spacer(Modifier.height(24.dp))
 
@@ -95,7 +95,9 @@ fun PlexOnDeckScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            contentAlignment = Alignment.Center
+            // The row sits under the title rather than floating in the middle of the screen, so the
+            // heading and the first poster share a top edge.
+            contentAlignment = Alignment.TopCenter
         ) {
             when (val current = state) {
                 is PlexOnDeckUiState.Loading -> CircularProgressIndicator(
@@ -151,7 +153,14 @@ private fun OnDeckRow(items: List<OnDeckItem>, posterSize: PosterSize) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+        // 48.dp lines the first poster up with the title; the vertical padding is headroom for the
+        // focused card, which grows by 6% and would otherwise be clipped at the top.
+        contentPadding = PaddingValues(
+            start = SCREEN_HORIZONTAL_PADDING,
+            end = SCREEN_HORIZONTAL_PADDING,
+            top = FOCUSED_POSTER_OVERHANG,
+            bottom = POSTER_ROW_BOTTOM_PADDING
+        )
     ) {
         // Keyed by ratingKey so focus and the remembered request follow the item, not the index.
         itemsIndexed(items, key = { _, item -> item.ratingKey }) { index, item ->
@@ -293,6 +302,13 @@ private fun StatusMessage(text: String) {
 }
 
 private const val POSTER_ASPECT_RATIO = 2f / 3f
+
+/** Shared left and right inset so the title and the first poster start on the same line. */
+private val SCREEN_HORIZONTAL_PADDING = 48.dp
+
+/** Room for the focused card to grow past its laid-out height without being clipped. */
+private val FOCUSED_POSTER_OVERHANG = 12.dp
+private val POSTER_ROW_BOTTOM_PADDING = 8.dp
 
 /** Posters are sized relative to the screen so the row looks the same on any TV. */
 private const val POSTER_HEIGHT_FRACTION = 0.33f
