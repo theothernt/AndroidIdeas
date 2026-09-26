@@ -55,17 +55,11 @@ fun PlexOnDeckScreen(
         viewModel.loadOnDeck(posterSize.pixels)
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(vertical = 24.dp)
-    ) {
+    Column(modifier = modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            // The shelves sit under the title rather than floating in the middle of the screen, so
-            // the heading and the first poster share a top edge.
+                .fillMaxSize(),
+            // The shelves start at the top rather than floating in the middle of the screen.
             contentAlignment = Alignment.TopCenter
         ) {
             when (val current = state) {
@@ -106,9 +100,15 @@ private fun LatestShelves(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            // A focused card grows past the height it is laid out at, so the page needs room at the
-            // end or the last shelf is clipped once it is scrolled all the way down.
-            .padding(bottom = FOCUSED_POSTER_OVERHANG),
+            // The shelves run to the edges of the screen, so the padding that keeps a row and its
+            // focused card clear of the top and bottom edges lives inside the scroll rather than
+            // around it. A focused card grows past the height it is laid out at and would otherwise
+            // be clipped, and an inset outside the scroll draws a visible edge across the screen that
+            // content is cut off at.
+            .padding(
+                top = SHELF_EDGE_PADDING,
+                bottom = SHELF_EDGE_PADDING
+            ),
         verticalArrangement = Arrangement.spacedBy(SHELF_SPACING)
     ) {
         if (shelves.continueWatching.isNotEmpty()) {
@@ -227,6 +227,9 @@ private fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
 }
 
 private val SHELF_SPACING = 12.dp
+
+/** Room at the top and bottom of the scrolling page for a shelf and its focused card. */
+private val SHELF_EDGE_PADDING = 16.dp
 private val SHELF_TITLE_GAP = 8.dp
 private val POSTER_BAR_INSET = 10.dp
 private val PROGRESS_BAR_HEIGHT = 4.dp
