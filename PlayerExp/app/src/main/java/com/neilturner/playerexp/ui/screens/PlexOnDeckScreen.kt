@@ -236,7 +236,11 @@ private fun rememberPosterRequest(url: String, posterSize: IntSize): ImageReques
     }
 }
 
-/** Thin bar drawn inside the poster bounds, inset from the bottom and sides. */
+/**
+ * Thin bar drawn inside the poster bounds, inset from the bottom and sides. Everything in this row
+ * is something worth resuming, so the bar always draws. A position of a few seconds is too small a
+ * sliver to read as progress, so the fill has a floor.
+ */
 @Composable
 private fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
     Box(
@@ -245,15 +249,13 @@ private fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
             .clip(PROGRESS_BAR_SHAPE)
             .background(Color.White.copy(alpha = TRACK_ALPHA))
     ) {
-        if (fraction > 0f) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth(fraction)
-                    .fillMaxHeight()
-                    .clip(PROGRESS_BAR_SHAPE)
-                    .background(MaterialTheme.colorScheme.primary)
-            )
-        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth(fraction.coerceAtLeast(MIN_PROGRESS_FRACTION))
+                .fillMaxHeight()
+                .clip(PROGRESS_BAR_SHAPE)
+                .background(MaterialTheme.colorScheme.primary)
+        )
     }
 }
 
@@ -272,7 +274,7 @@ private fun StatusMessage(text: String) {
 private const val POSTER_ASPECT_RATIO = 2f / 3f
 
 /** Posters are sized relative to the screen so the row looks the same on any TV. */
-private const val POSTER_HEIGHT_FRACTION = 0.30f
+private const val POSTER_HEIGHT_FRACTION = 0.33f
 private val POSTER_CORNER_RADIUS = 12.dp
 private val POSTER_SHAPE = RoundedCornerShape(POSTER_CORNER_RADIUS)
 private const val FOCUSED_POSTER_SCALE = 1.06f
@@ -282,3 +284,6 @@ private val PROGRESS_BAR_HEIGHT = 4.dp
 private val PROGRESS_BAR_RADIUS = 2.dp
 private val PROGRESS_BAR_SHAPE = RoundedCornerShape(PROGRESS_BAR_RADIUS)
 private const val TRACK_ALPHA = 0.3f
+
+/** Smallest fill the bar will draw, so a barely-started item still reads as in progress. */
+private const val MIN_PROGRESS_FRACTION = 0.05f

@@ -43,18 +43,18 @@ class PlexOnDeckViewModel(application: Application) : AndroidViewModel(applicati
         if (requestedPosterSize == posterSize) return
         requestedPosterSize = posterSize
 
-        PlexOnDeckCache.read()?.let {
+        PlexOnDeckCache.read(posterSize)?.let {
             _uiState.value = PlexOnDeckUiState.Success(it)
             return
         }
-        _uiState.value = PlexOnDeckCache.readStale()
+        _uiState.value = PlexOnDeckCache.readStale(posterSize)
             ?.let { PlexOnDeckUiState.Success(it) }
             ?: PlexOnDeckUiState.Loading
 
         viewModelScope.launch {
             when (val result = withContext(Dispatchers.IO) { fetchOnDeck(posterSize) }) {
                 is LoadResult.Authorised -> {
-                    PlexOnDeckCache.write(result.items)
+                    PlexOnDeckCache.write(result.items, posterSize)
                     _uiState.value = PlexOnDeckUiState.Success(result.items)
                 }
 

@@ -1,5 +1,6 @@
 package com.neilturner.playerexp.ui.viewmodels
 
+import androidx.compose.ui.unit.IntSize
 import com.neilturner.playerexp.data.plex.OnDeckItem
 
 /**
@@ -9,28 +10,39 @@ import com.neilturner.playerexp.data.plex.OnDeckItem
  * used to mean a fresh Plex client and a fresh request every time. Holding the queue here lets the
  * screen paint immediately and only re-asks the server once the cached copy has had time to go
  * stale, which is as long as a Continue Watching row is worth trusting.
+ *
+ * Entries are keyed by the poster size they were built for, because the image URLs carry it: a
+ * cached row served after the screen resolution changes would otherwise be drawn at the old size.
  */
 object PlexOnDeckCache {
     private const val MAX_AGE_MILLIS = 60_000L
 
-    private var items: List<OnDeckItem>? = null
-    private var fetchedAtMillis = 0L
+    private class Entry(
+        val items: List<OnDeckItem>,
+        val pixels: IntSize,
+        val fetchedAtMillis: Long
+    )
+
+    private var entry: Entry? = null
 
     /** The cached queue, or null when there is nothing to show or it has gone stale. */
-    fun read(nowMillis: Long = System.currentTimeMillis()): List<OnDeckItem>? = synchronized(this) {
-        items?.takeIf { nowMillis - fetchedAtMillis < MAX_AGE_MILLIS }
-    }
+    fun read(pixels: IntSize, nowMillis: Long = System.currentTimeMillis()): List<OnDeckItem>? =
+        synchronized(this) {
+            entry
+                ?.takeIf { it.pixels == pixels && nowMillis - it.fetchedAtMillis < MAX_AGE_MILLIS }
+                ?.items
+        }
 
     /** The cached queue whatever its age, so a stale refresh can still paint something first. */
-    fun readStale(): List<OnDeckItem>? = synchronized(this) { items }
-
-    fun write(items: List<OnDeckItem>, nowMillis: Long = System.currentTimeMillis()) = synchronized(this) {
-        this.items = items
-        fetchedAtMillis = nowMillis
+    fun readStale(pixels: IntSize): List<OnDeckItem>? = synchronized(this) {
+        entry?.takeIf { it.pixels == pixels }?.items
     }
 
-    fun clear() = synchronized(this) {
-        items = null
-        fetchedAtMillis = 0L
+    fun write(
+        items: List<OnDeckItem>,
+        pixels: IntSize,
+        nowMillis: Long = System.currentTimeMillis()
+    ) = synchronized(this) {
+        entry = Entry(items, pixels, nowMillis)
     }
 }
