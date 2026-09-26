@@ -10,13 +10,19 @@ import com.neilturner.playerexp.R
 import com.neilturner.playerexp.data.plex.OnDeckItem
 import com.neilturner.playerexp.data.plex.PlexAccountStore
 import com.neilturner.playerexp.data.plex.PlexApi
+import com.neilturner.playerexp.data.plex.PLEX_ITEM_TYPE_EPISODE
+import com.neilturner.playerexp.data.plex.PLEX_ITEM_TYPE_MOVIE
 import com.neilturner.playerexp.data.plex.PlexLibraryChanges
+import com.neilturner.playerexp.data.plex.PlexLibraryItem
+import com.neilturner.playerexp.data.plex.PlexLibrarySections
 import com.neilturner.playerexp.data.plex.PlexLibraryEvent
 import com.neilturner.playerexp.data.plex.PlexWebSocketObserver
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -49,11 +55,28 @@ private const val REVALIDATE_INTERVAL_MILLIS = 60_000L
 /** How long a burst of play positions for an item we do not hold waits before asking again. */
 private const val MEMBERSHIP_HINT_QUIET_MILLIS = 3_000L
 
+/** How many items each of the added-later shelves holds. A shelf is a starting point, not a library. */
+private const val SHELF_ITEM_LIMIT = 30
+
+
+/**
+ * The three shelves on the screen: what is being watched, and the newest additions on the server.
+ */
+@Immutable
+data class PlexOnDeckShelves(
+    val continueWatching: List<OnDeckItem>,
+    val latestEpisodes: List<PlexLibraryItem>,
+    val latestMovies: List<PlexLibraryItem>
+) {
+    val isEmpty: Boolean
+        get() = continueWatching.isEmpty() && latestEpisodes.isEmpty() && latestMovies.isEmpty()
+}
+
 @Immutable
 sealed interface PlexOnDeckUiState {
     data object NotAuthorised : PlexOnDeckUiState
     data object Loading : PlexOnDeckUiState
-    data class Success(val items: List<OnDeckItem>) : PlexOnDeckUiState
+    data class Success(val shelves: PlexOnDeckShelves) : PlexOnDeckUiState
     data class Error(val message: String) : PlexOnDeckUiState
 }
 
@@ -161,11 +184,16 @@ class PlexOnDeckViewModel(application: Application) : AndroidViewModel(applicati
         val posterSize = requestedPosterSize ?: return
         when (val result = withContext(Dispatchers.IO) { fetchOnDeck(posterSize) }) {
             is LoadResult.Authorised -> {
-                PlexOnDeckCache.write(result.items, posterSize)
+                PlexOnDeckCache.write(result.shelves, posterSize)
                 // The copy on screen now matches the server, so the socket's stale mark is spent.
                 PlexLibraryChanges.clear()
-                _uiState.value = PlexOnDeckUiState.Success(result.items)
-                Log.d(LOG_TAG, "Refreshed ${result.items.size} On Deck items")
+                _uiState.value = PlexOnDeckUiState.Success(result.shelves)
+                Log.d(
+                    LOG_TAG,
+                    "Refreshed shelves: continueWatching=${result.shelves.continueWatching.size}, " +
+                        "latestEpisodes=${result.shelves.latestEpisodes.size}, " +
+                        "latestMovies=${result.shelves.latestMovies.size}"
+                )
             }
 
             LoadResult.NotAuthorised -> _uiState.value = PlexOnDeckUiState.NotAuthorised
@@ -187,18 +215,18 @@ class PlexOnDeckViewModel(application: Application) : AndroidViewModel(applicati
      */
     private fun applyProgress(event: PlexLibraryEvent.ProgressChanged): Boolean {
         val current = _uiState.value as? PlexOnDeckUiState.Success ?: return false
-        val index = current.items.indexOfFirst { it.ratingKey == event.ratingKey }
+        val index = current.shelves.continueWatching.indexOfFirst { it.ratingKey == event.ratingKey }
         if (index < 0) return false
 
-        val items = current.items.toMutableList()
+        val items = current.shelves.continueWatching.toMutableList()
         val item = items[index]
-        val updated = item.copy(
+        val patched = item.copy(
             viewOffset = event.viewOffset,
             duration = event.duration?.takeIf { it > 0L } ?: item.duration
         )
-        if (updated == item) return true
-        items[index] = updated
-        Log.d(LOG_TAG, "Progress for ${event.ratingKey}: ${updated.viewOffset}/${updated.duration}")
+        if (patched == item) return true
+        items[index] = patched
+        Log.d(LOG_TAG, "Progress for ${event.ratingKey}: ${patched.viewOffset}/${patched.duration}")
 
         // Plex orders On Deck by most recently viewed, so picking an episode up again moves it to
         // the front of the row. Doing it here means the card the user just started is where Plex
@@ -206,12 +234,13 @@ class PlexOnDeckViewModel(application: Application) : AndroidViewModel(applicati
         // disagreement with the server's own ordering.
         if (index > 0) {
             items.removeAt(index)
-            items.add(0, updated)
+            items.add(0, patched)
             Log.d(LOG_TAG, "Moved ${event.ratingKey} to the front of the row")
         }
 
-        _uiState.value = PlexOnDeckUiState.Success(items)
-        requestedPosterSize?.let { PlexOnDeckCache.write(items, it) }
+        val updated = current.shelves.copy(continueWatching = items)
+        _uiState.value = PlexOnDeckUiState.Success(updated)
+        requestedPosterSize?.let { PlexOnDeckCache.write(updated, it) }
         return true
     }
 
@@ -234,8 +263,47 @@ class PlexOnDeckViewModel(application: Application) : AndroidViewModel(applicati
             }
 
             val items = api.onDeck(serverUrl, token, posterSize.width, posterSize.height)
-            Log.d(LOG_TAG, "Loaded ${items.size} On Deck items")
-            LoadResult.Authorised(items)
+            Log.d(LOG_TAG, "Loaded ${items.size} Continue Watching items")
+
+            val sections = api.librarySections(serverUrl, token)
+            val tvSection = PlexLibrarySections.pickTvShows(sections)?.key
+            val movieSection = PlexLibrarySections.pickMovies(sections)?.key
+            coroutineScope {
+                // The two shelves do not depend on each other, so they are asked for at once.
+                val episodes = async {
+                    tvSection?.let { key ->
+                        api.recentlyAddedInSection(
+                            serverUrl = serverUrl,
+                            accountToken = token,
+                            sectionKey = key,
+                            type = PLEX_ITEM_TYPE_EPISODE,
+                            limit = SHELF_ITEM_LIMIT,
+                            posterWidthPx = posterSize.width,
+                            posterHeightPx = posterSize.height
+                        )
+                    }.orEmpty()
+                }
+                val movies = async {
+                    movieSection?.let { key ->
+                        api.recentlyAddedInSection(
+                            serverUrl = serverUrl,
+                            accountToken = token,
+                            sectionKey = key,
+                            type = PLEX_ITEM_TYPE_MOVIE,
+                            limit = SHELF_ITEM_LIMIT,
+                            posterWidthPx = posterSize.width,
+                            posterHeightPx = posterSize.height
+                        )
+                    }.orEmpty()
+                }
+                LoadResult.Authorised(
+                    PlexOnDeckShelves(
+                        continueWatching = items,
+                        latestEpisodes = episodes.await(),
+                        latestMovies = movies.await()
+                    )
+                )
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -254,7 +322,7 @@ class PlexOnDeckViewModel(application: Application) : AndroidViewModel(applicati
 
     private sealed interface LoadResult {
         data object NotAuthorised : LoadResult
-        data class Authorised(val items: List<OnDeckItem>) : LoadResult
+        data class Authorised(val shelves: PlexOnDeckShelves) : LoadResult
         data class Failed(val message: String) : LoadResult
     }
 }

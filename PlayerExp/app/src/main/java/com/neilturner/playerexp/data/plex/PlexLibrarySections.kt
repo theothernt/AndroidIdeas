@@ -88,6 +88,10 @@ object PlexLibrarySections {
     private fun normalise(title: String): String = title.trim().lowercase()
 }
 
+/** Plex's own item type numbers, which the `type` query parameter wants as digits. */
+const val PLEX_ITEM_TYPE_MOVIE = 1
+const val PLEX_ITEM_TYPE_EPISODE = 4
+
 @Serializable
 internal data class PlexSectionItemsResponse(
     @SerialName("MediaContainer") val mediaContainer: PlexSectionItemsContainer? = null

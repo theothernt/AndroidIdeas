@@ -89,20 +89,34 @@ fun rememberPosterSize(): PosterSize {
  * A horizontal shelf of poster cards.
  *
  * The focused card stops at a fixed inset from the left edge as the row scrolls rather than against
- * whichever edge it happened to run out of room at. Each item is handed the modifier its card should
- * carry; passing [initialFocusRequester] attaches the caller's requester to the first card, which is
- * how the screen decides which shelf the user lands on. Leaving it null keeps this row out of the
- * initial focus race entirely, which matters when a screen stacks several of them.
+ * whichever edge it happened to run out of room at.
+ *
+ * The first card takes focus so the row is usable the moment it appears, and only then: the request
+ * is made once per composition, because the list behind this row is replaced while the user is
+ * looking at it. Refreshing it, or a play position arriving for a card, produces a new list, and
+ * asking for focus again on that would yank the user back while they browse. A screen stacking
+ * several rows leaves [claimsInitialFocus] false on all but the one the user should land on, so two
+ * rows never ask at once.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PlexPosterRow(
     itemCount: Int,
     modifier: Modifier = Modifier,
-    initialFocusRequester: FocusRequester? = null,
-    key: (index: Int) -> Any,
+    claimsInitialFocus: Boolean = true,
+    key: (index: Int) -> String,
     content: @Composable (index: Int, itemModifier: Modifier) -> Unit
 ) {
+    val focusRequester = remember { FocusRequester() }
+    var focusRequested by remember { mutableStateOf(false) }
+
+    LaunchedEffect(claimsInitialFocus, itemCount > 0) {
+        if (claimsInitialFocus && itemCount > 0 && !focusRequested) {
+            focusRequested = true
+            focusRequester.requestFocus()
+        }
+    }
+
     val leftEdgeSpec = rememberLeftEdgeSpec(leadingInset = FOCUSED_CARD_LEADING_INSET)
     CompositionLocalProvider(LocalBringIntoViewSpec provides leftEdgeSpec) {
         LazyRow(
@@ -122,8 +136,8 @@ fun PlexPosterRow(
                 // rather than applied to a wrapper here.
                 content(
                     index,
-                    if (index == 0 && initialFocusRequester != null) {
-                        Modifier.focusRequester(initialFocusRequester)
+                    if (index == 0) {
+                        Modifier.focusRequester(focusRequester)
                     } else {
                         Modifier
                     }

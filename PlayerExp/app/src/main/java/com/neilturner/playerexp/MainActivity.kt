@@ -33,8 +33,12 @@ data object HomeRoute : PlayerExpRoute
 @Serializable
 data class PlayerRoute(val mediaId: String) : PlayerExpRoute
 
+/** [ratingKey] is the card that was pressed; without one the screen plays a random episode. */
 @Serializable
-data object PlexPlayerRoute : PlayerExpRoute
+data class PlexPlayerRoute(
+    val ratingKey: String? = null,
+    val title: String? = null
+) : PlayerExpRoute
 
 @Serializable
 data object PlexSettingsRoute : PlayerExpRoute
@@ -71,7 +75,7 @@ class MainActivity : ComponentActivity() {
                                     onNavigateToPlayer = { mediaId ->
                                         backStack.add(PlayerRoute(mediaId))
                                     },
-                                    onNavigateToPlexPlayer = { backStack.add(PlexPlayerRoute) },
+                                    onNavigateToPlexPlayer = { backStack.add(PlexPlayerRoute()) },
                                     onNavigateToPlexOnDeck = { backStack.add(PlexOnDeckRoute) },
                                     onNavigateToPlexLibraries = { backStack.add(PlexLibrariesRoute) },
                                     onNavigateToSettings = { backStack.add(PlexSettingsRoute) }
@@ -83,14 +87,22 @@ class MainActivity : ComponentActivity() {
                                     onBack = { backStack.removeLastOrNull() }
                                 )
                             }
-                            entry<PlexPlayerRoute> {
-                                PlexPlayerScreen(onBack = { backStack.removeLastOrNull() })
+                            entry<PlexPlayerRoute> { route ->
+                                PlexPlayerScreen(
+                                    onBack = { backStack.removeLastOrNull() },
+                                    ratingKey = route.ratingKey,
+                                    title = route.title
+                                )
                             }
                             entry<PlexSettingsRoute> {
                                 PlexSettingsScreen(onBack = { backStack.removeLastOrNull() })
                             }
                             entry<PlexOnDeckRoute> {
-                                PlexOnDeckScreen()
+                                PlexOnDeckScreen(
+                                    onPlay = { ratingKey, title ->
+                                        backStack.add(PlexPlayerRoute(ratingKey, title))
+                                    }
+                                )
                             }
                             entry<PlexLibrariesRoute> {
                                 PlexLibrariesScreen()

@@ -60,10 +60,23 @@ import kotlinx.coroutines.delay
 fun PlexPlayerScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    ratingKey: String? = null,
+    title: String? = null,
     viewModel: PlexPlayerViewModel = viewModel()
 ) {
     val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // A card on a shelf says what to play; with no card behind it, this is the home screen's
+    // button and plays something from a TV library instead. Keyed on the item so a change of target
+    // restarts rather than keeping the previous one.
+    LaunchedEffect(ratingKey) {
+        if (ratingKey != null) {
+            viewModel.playItem(ratingKey, title)
+        } else {
+            viewModel.loadAndPlay()
+        }
+    }
 
     BackHandler {
         viewModel.releasePlayer()

@@ -15,7 +15,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -80,15 +79,6 @@ fun PlexLibrariesScreen(
  */
 @Composable
 private fun LibrariesShelves(shelves: List<PlexLibraryShelf>, posterSize: PosterSize) {
-    // One requester for the whole screen, handed to the first shelf: two shelves asking for focus at
-    // once race, and the screen ends up with focus on the wrong one and the other row pre-scrolled.
-    val firstShelfFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(shelves) {
-        if (shelves.any { it.items.isNotEmpty() }) {
-            firstShelfFocusRequester.requestFocus()
-        }
-    }
-
     // Both shelves are drawn at the same card size, which means the lower one runs past the bottom
     // of the screen rather than being shrunk to fit. The column scrolls instead, so moving down to
     // the Movies shelf brings it fully into view.
@@ -121,11 +111,7 @@ private fun LibrariesShelves(shelves: List<PlexLibraryShelf>, posterSize: Poster
                     PlexPosterRow(
                         itemCount = shelf.items.size,
                         // Focus lands on the first shelf; moving down reaches the others.
-                        initialFocusRequester = if (shelfIndex == 0) {
-                            firstShelfFocusRequester
-                        } else {
-                            null
-                        },
+                        claimsInitialFocus = shelfIndex == 0,
                         key = { index -> shelf.items[index].ratingKey }
                     ) { index, itemModifier ->
                         PlexPosterCard(

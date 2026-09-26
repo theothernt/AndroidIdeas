@@ -107,7 +107,8 @@ val OnDeckItem.displayTitle: String
 
 @Serializable
 data class PlexEpisodesContainer(
-    @SerialName("Metadata") val metadata: List<PlexEpisodeMetadata>? = null
+    @SerialName("Metadata") val metadata: List<PlexEpisodeMetadata>? = null,
+    val totalSize: Int? = null
 )
 
 @Serializable
@@ -117,6 +118,9 @@ data class PlexEpisodeMetadata(
     val grandparentTitle: String? = null,
     val parentIndex: Int? = null,
     val index: Int? = null,
+    val thumb: String? = null,
+    val grandparentThumb: String? = null,
+    val addedAt: Long? = null,
     @SerialName("Media") val media: List<PlexMediaItem>? = null
 )
 
@@ -409,6 +413,88 @@ class PlexApi(private val clientIdentifier: String) {
                 partKey = partKey
             )
         }.take(limit)
+    }
+
+    /**
+     * The most recently added items in a library, newest first, which is what the server's
+     * `recentlyAdded` endpoint means.
+     *
+     * [type] is Plex's item type filter, one of the `PLEX_ITEM_TYPE_*` numbers.
+     *
+     * Which image a card shows depends on what the row is: an episode carries a still frame of
+     * itself, and a row of those reads as a row of noise, so episodes borrow the show's cover art.
+     * A movie is its own artwork already.
+     */
+    suspend fun recentlyAddedInSection(
+        serverUrl: String,
+        accountToken: String,
+        sectionKey: String,
+        type: Int?,
+        limit: Int,
+        posterWidthPx: Int,
+        posterHeightPx: Int
+    ): List<PlexLibraryItem> {
+        val response = apiCall("Recently added") {
+            client.get("${serverUrl.trimEnd('/')}/library/sections/${sectionKey.trimStart('/')}/recentlyAdded") {
+                type?.let { parameter("type", it) }
+                parameter("X-Plex-Container-Start", 0)
+                parameter("X-Plex-Container-Size", limit)
+                plexHeaders(accountToken)
+            }
+        }.body<PlexMediaContainerResponse>()
+
+        val items = response.mediaContainer?.metadata.orEmpty().mapNotNull { item ->
+            val ratingKey = item.ratingKey ?: return@mapNotNull null
+            val poster = if (type == PLEX_ITEM_TYPE_EPISODE) {
+                item.grandparentThumb ?: item.thumb
+            } else {
+                item.thumb ?: item.grandparentThumb
+            } ?: return@mapNotNull null
+            PlexLibraryItem(
+                ratingKey = ratingKey,
+                title = listOfNotNull(item.grandparentTitle, item.title)
+                    .joinToString(" - ")
+                    .ifEmpty { null },
+                thumb = PlexImageUrl.build(serverUrl, accountToken, poster, posterWidthPx, posterHeightPx),
+                addedAt = item.addedAt
+            )
+        }
+        Log.d(API_LOG_TAG, "Recently added in $sectionKey (type=$type): ${items.size} of ${response.mediaContainer?.totalSize ?: items.size}")
+        return items
+    }
+
+    /**
+     * The part to play for any library item, episode or movie, by rating key.
+     *
+     * On Deck and the library shelves know which item a card stands for, but playback needs the
+     * media and part behind it, which only the item's own metadata carries. Returns null when the
+     * item has nothing playable behind it.
+     */
+    suspend fun mediaForRatingKey(
+        serverUrl: String,
+        accountToken: String,
+        ratingKey: String
+    ): PlexEpisode? {
+        val response = apiCall("Item metadata") {
+            client.get("${serverUrl.trimEnd('/')}/library/metadata/${ratingKey.trimStart('/')}") {
+                plexHeaders(accountToken)
+            }
+        }.body<PlexMediaContainerResponse>()
+
+        return response.mediaContainer?.metadata.orEmpty().firstNotNullOfOrNull { item ->
+            val partKey = item.media.orEmpty().firstNotNullOfOrNull { mediaItem ->
+                mediaItem.part.orEmpty().firstNotNullOfOrNull { it.key }
+            } ?: return@firstNotNullOfOrNull null
+
+            PlexEpisode(
+                ratingKey = item.ratingKey,
+                showTitle = item.grandparentTitle,
+                episodeTitle = item.title,
+                seasonNumber = item.parentIndex,
+                episodeNumber = item.index,
+                partKey = partKey
+            )
+        }
     }
 
     /** Asks Plex whether this device can play the selected episode directly or needs an HLS stream. */

@@ -1,11 +1,10 @@
 package com.neilturner.playerexp.ui.viewmodels
 
 import androidx.compose.ui.unit.IntSize
-import com.neilturner.playerexp.data.plex.OnDeckItem
 import com.neilturner.playerexp.data.plex.PlexLibraryChanges
 
 /**
- * On Deck outlives the screen that shows it.
+ * The shelves on the Latest screen outlive the screen that shows them.
  *
  * The Nav3 entry owns the ViewModel, so popping the screen and coming back builds a new one, which
  * used to mean a fresh Plex client and a fresh request every time. Holding the queue here lets the
@@ -24,7 +23,7 @@ object PlexOnDeckCache {
     private const val MAX_AGE_MILLIS = 60_000L
 
     private class Entry(
-        val items: List<OnDeckItem>,
+        val shelves: PlexOnDeckShelves,
         val pixels: IntSize,
         val fetchedAtMillis: Long
     )
@@ -35,26 +34,26 @@ object PlexOnDeckCache {
      * The cached queue, or null when there is nothing to show or it has gone stale. A stale result is
      * not an error: the screen paints the old copy from [readStale] and then asks the server again.
      */
-    fun read(pixels: IntSize, nowMillis: Long = System.currentTimeMillis()): List<OnDeckItem>? =
+    fun read(pixels: IntSize, nowMillis: Long = System.currentTimeMillis()): PlexOnDeckShelves? =
         synchronized(this) {
             if (PlexLibraryChanges.isDirty.value) {
                 return@synchronized null
             }
             entry
                 ?.takeIf { it.pixels == pixels && nowMillis - it.fetchedAtMillis < MAX_AGE_MILLIS }
-                ?.items
+                ?.shelves
         }
 
-    /** The cached queue whatever its age, so a stale refresh can still paint something first. */
-    fun readStale(pixels: IntSize): List<OnDeckItem>? = synchronized(this) {
-        entry?.takeIf { it.pixels == pixels }?.items
+    /** The cached shelves whatever their age, so a stale refresh can still paint something first. */
+    fun readStale(pixels: IntSize): PlexOnDeckShelves? = synchronized(this) {
+        entry?.takeIf { it.pixels == pixels }?.shelves
     }
 
     fun write(
-        items: List<OnDeckItem>,
+        shelves: PlexOnDeckShelves,
         pixels: IntSize,
         nowMillis: Long = System.currentTimeMillis()
     ) = synchronized(this) {
-        entry = Entry(items, pixels, nowMillis)
+        entry = Entry(shelves, pixels, nowMillis)
     }
 }

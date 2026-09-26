@@ -1,10 +1,13 @@
 package com.neilturner.playerexp.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,7 +22,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -31,13 +33,17 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.playerexp.R
 import com.neilturner.playerexp.data.plex.OnDeckItem
+import com.neilturner.playerexp.data.plex.PlexLibraryItem
+import com.neilturner.playerexp.data.plex.displayTitle
 import com.neilturner.playerexp.ui.theme.PlexAmber
+import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckShelves
 import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckUiState
 import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckViewModel
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PlexOnDeckScreen(
+    onPlay: (ratingKey: String, title: String) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PlexOnDeckViewModel = viewModel()
 ) {
@@ -54,20 +60,12 @@ fun PlexOnDeckScreen(
             .fillMaxSize()
             .padding(vertical = 24.dp)
     ) {
-        Text(
-            text = stringResource(R.string.plex_on_deck_title),
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            modifier = Modifier.padding(horizontal = SCREEN_HORIZONTAL_PADDING)
-        )
-        Spacer(Modifier.height(24.dp))
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            // The row sits under the title rather than floating in the middle of the screen, so the
-            // heading and the first poster share a top edge.
+            // The shelves sit under the title rather than floating in the middle of the screen, so
+            // the heading and the first poster share a top edge.
             contentAlignment = Alignment.TopCenter
         ) {
             when (val current = state) {
@@ -81,29 +79,105 @@ fun PlexOnDeckScreen(
 
                 is PlexOnDeckUiState.Error -> StatusMessage(text = current.message)
 
-                is PlexOnDeckUiState.Success -> if (current.items.isEmpty()) {
+                is PlexOnDeckUiState.Success -> if (current.shelves.isEmpty) {
                     StatusMessage(text = stringResource(R.string.plex_on_deck_empty))
                 } else {
-                    OnDeckRow(current.items, posterSize)
+                    LatestShelves(current.shelves, posterSize, onPlay)
                 }
             }
         }
     }
 }
 
-@OptIn(ExperimentalFoundationApi::class)
+/**
+ * The shelves, one under another, scrolling as a page.
+ *
+ * All three are drawn at the same card size, so the lower ones run past the bottom of the screen
+ * rather than being shrunk to fit, and the page scrolls to bring them into view. A shelf with nothing
+ * in it is left out rather than showing an empty heading.
+ */
 @Composable
-private fun OnDeckRow(items: List<OnDeckItem>, posterSize: PosterSize) {
-    val firstPosterFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(items) {
-        if (items.isNotEmpty()) {
-            firstPosterFocusRequester.requestFocus()
+private fun LatestShelves(
+    shelves: PlexOnDeckShelves,
+    posterSize: PosterSize,
+    onPlay: (ratingKey: String, title: String) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            // A focused card grows past the height it is laid out at, so the page needs room at the
+            // end or the last shelf is clipped once it is scrolled all the way down.
+            .padding(bottom = FOCUSED_POSTER_OVERHANG),
+        verticalArrangement = Arrangement.spacedBy(SHELF_SPACING)
+    ) {
+        if (shelves.continueWatching.isNotEmpty()) {
+            Shelf(stringResource(R.string.plex_on_deck_continue_watching)) {
+                OnDeckRow(shelves.continueWatching, posterSize, onPlay)
+            }
+        }
+        if (shelves.latestEpisodes.isNotEmpty()) {
+            Shelf(stringResource(R.string.plex_on_deck_latest_episodes)) {
+                LibraryShelfRow(shelves.latestEpisodes, posterSize, onPlay)
+            }
+        }
+        if (shelves.latestMovies.isNotEmpty()) {
+            Shelf(stringResource(R.string.plex_on_deck_latest_movies)) {
+                LibraryShelfRow(shelves.latestMovies, posterSize, onPlay)
+            }
         }
     }
+}
 
+@Composable
+private fun Shelf(heading: String, content: @Composable () -> Unit) {
+    Column {
+        Text(
+            text = heading,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(
+                start = SCREEN_HORIZONTAL_PADDING,
+                end = SCREEN_HORIZONTAL_PADDING,
+                bottom = SHELF_TITLE_GAP
+            )
+        )
+        content()
+    }
+}
+
+/** A row of library items, which play the same way Continue Watching items do. */
+@Composable
+private fun LibraryShelfRow(
+    items: List<PlexLibraryItem>,
+    posterSize: PosterSize,
+    onPlay: (ratingKey: String, title: String) -> Unit
+) {
     PlexPosterRow(
         itemCount = items.size,
-        initialFocusRequester = firstPosterFocusRequester,
+        // Only the first shelf claims the initial focus; the others are reached by moving down.
+        claimsInitialFocus = false,
+        key = { index -> items[index].ratingKey }
+    ) { index, itemModifier ->
+        val item = items[index]
+        PlexPosterCard(
+            imageUrl = item.thumb,
+            posterSize = posterSize,
+            modifier = itemModifier,
+            onPressed = { onPlay(item.ratingKey, item.title.orEmpty()) }
+        )
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun OnDeckRow(
+    items: List<OnDeckItem>,
+    posterSize: PosterSize,
+    onPlay: (ratingKey: String, title: String) -> Unit
+) {
+    PlexPosterRow(
+        itemCount = items.size,
         // Keyed by ratingKey so focus and the remembered request follow the item, not the index.
         key = { index -> items[index].ratingKey }
     ) { index, itemModifier ->
@@ -111,7 +185,8 @@ private fun OnDeckRow(items: List<OnDeckItem>, posterSize: PosterSize) {
         PlexPosterCard(
             imageUrl = item.thumb,
             posterSize = posterSize,
-            modifier = itemModifier
+            modifier = itemModifier,
+            onPressed = { onPlay(item.ratingKey, item.displayTitle) }
         ) {
             ProgressOverlay(
                 fraction = item.progressFraction,
@@ -151,6 +226,8 @@ private fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
     }
 }
 
+private val SHELF_SPACING = 12.dp
+private val SHELF_TITLE_GAP = 8.dp
 private val POSTER_BAR_INSET = 10.dp
 private val PROGRESS_BAR_HEIGHT = 4.dp
 private val PROGRESS_BAR_RADIUS = 2.dp
