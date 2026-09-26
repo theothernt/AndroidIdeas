@@ -57,6 +57,8 @@ dependencies {
 	implementation(libs.androidx.media3.datasource.okhttp)
 	implementation(libs.androidx.media3.ui.compose)
 	implementation(libs.androidx.media3.ui.compose.material3)
+	implementation(libs.coil.compose)
+	implementation(libs.coil.network.okhttp)
 	implementation(libs.ktor.client.okhttp)
 	implementation(libs.ktor.client.content.negotiation)
 	implementation(libs.ktor.client.websockets)

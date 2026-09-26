@@ -79,6 +79,32 @@ data class PlexMediaContainerResponse(
     @SerialName("MediaContainer") val mediaContainer: PlexEpisodesContainer? = null
 )
 
+private const val EPISODE_TYPE = "episode"
+
+/** One Continue Watching item. [thumb] is an absolute URL the UI can load directly. */
+data class OnDeckItem(
+    val ratingKey: String,
+    val title: String?,
+    val grandparentTitle: String?,
+    val thumb: String,
+    val viewOffset: Long,
+    val duration: Long,
+    val type: String?
+) {
+    val progressFraction: Float
+        get() = if (duration > 0L) (viewOffset.toFloat() / duration).coerceIn(0f, 1f) else 0f
+
+    val isEpisode: Boolean get() = type == EPISODE_TYPE
+}
+
+/** Title to show on a card: episodes read better as "Show — Episode". */
+val OnDeckItem.displayTitle: String
+    get() = if (isEpisode) {
+        listOfNotNull(grandparentTitle, title).joinToString(" — ")
+    } else {
+        title ?: grandparentTitle.orEmpty()
+    }
+
 @Serializable
 data class PlexEpisodesContainer(
     @SerialName("Metadata") val metadata: List<PlexEpisodeMetadata>? = null
@@ -92,6 +118,38 @@ data class PlexEpisodeMetadata(
     val parentIndex: Int? = null,
     val index: Int? = null,
     @SerialName("Media") val media: List<PlexMediaItem>? = null
+)
+
+@Serializable
+private data class PlexOnDeckResponse(
+    @SerialName("MediaContainer") val mediaContainer: PlexOnDeckContainer? = null
+)
+
+@Serializable
+private data class PlexOnDeckContainer(
+    @SerialName("Metadata") val metadata: List<PlexOnDeckMetadata>? = null
+)
+
+@Serializable
+private data class PlexOnDeckMetadata(
+    val ratingKey: String? = null,
+    val title: String? = null,
+    val type: String? = null,
+    val thumb: String? = null,
+    val grandparentTitle: String? = null,
+    val grandparentThumb: String? = null,
+    val viewOffset: Long? = null,
+    val duration: Long? = null,
+    @SerialName("UserState") val userState: PlexOnDeckUserState? = null
+)
+
+/** Plex reports per-user progress here on current servers; older ones only set the metadata fields. */
+@Serializable
+private data class PlexOnDeckUserState(
+    val viewOffset: Long? = null,
+    val duration: Long? = null,
+    val viewCount: Int? = null,
+    val played: Boolean? = null
 )
 
 @Serializable
@@ -282,6 +340,40 @@ class PlexApi(private val clientIdentifier: String) {
         } }.body<PlexSectionsResponse>()
         return response.mediaContainer?.directory.orEmpty().filter { it.type == "show" }
     }
+
+    /** Continue Watching. Progress comes from [PlexOnDeckUserState] where the server provides it. */
+    suspend fun onDeck(serverUrl: String, accountToken: String): List<OnDeckItem> {
+        val response = apiCall("On Deck") { client.get("${serverUrl.trimEnd('/')}/library/onDeck") {
+            plexHeaders(accountToken)
+        } }.body<PlexOnDeckResponse>()
+
+        return response.mediaContainer?.metadata.orEmpty().mapNotNull { item ->
+            val ratingKey = item.ratingKey ?: return@mapNotNull null
+            // Episodes carry a show poster on grandparentThumb; their own thumb is a still frame.
+            val posterPath = item.grandparentThumb ?: item.thumb
+            OnDeckItem(
+                ratingKey = ratingKey,
+                title = item.title,
+                grandparentTitle = item.grandparentTitle,
+                thumb = posterPath?.let { imageUrl(serverUrl, accountToken, it) }.orEmpty(),
+                viewOffset = item.userState?.viewOffset ?: item.viewOffset ?: 0L,
+                duration = item.userState?.duration ?: item.duration ?: 0L,
+                type = item.type
+            ).also { onDeckItem ->
+                Log.d(
+                    API_LOG_TAG,
+                    "On Deck item: $ratingKey, type=${item.type}, title=${onDeckItem.displayTitle}, " +
+                        "offset=${onDeckItem.viewOffset}/${onDeckItem.duration}"
+                )
+            }
+        }
+    }
+
+    /** Plex image paths are server-relative, and image loaders cannot send the token header. */
+    private fun imageUrl(serverUrl: String, accountToken: String, imagePath: String): String =
+        URLBuilder("${serverUrl.trimEnd('/')}$imagePath").apply {
+            parameters.append("X-Plex-Token", accountToken)
+        }.buildString()
 
     suspend fun recentEpisodes(
         serverUrl: String,

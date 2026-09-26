@@ -20,6 +20,9 @@
     <string name="plex_player_error">Could not load Plex episode: %1$s</string>
     <string name="plex_loading_episode">Finding random episode…</string>
     <string name="plex_on_deck_title">Plex On Deck</string>
-    <string name="plex_on_deck_placeholder">On Deck content will appear here.</string>
     <string name="plex_on_deck_button">Plex On Deck</string>
+    <string name="plex_on_deck_empty">Nothing to continue watching</string>
+    <string name="plex_on_deck_not_authorised">Authorise Plex in settings to see what you are watching</string>
+    <string name="plex_on_deck_no_server">No Plex server URL found. Please check Plex settings.</string>
+    <string name="plex_on_deck_error">Could not load On Deck: %1$s</string>
 </resources>
