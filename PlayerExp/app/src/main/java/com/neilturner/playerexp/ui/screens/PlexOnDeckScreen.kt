@@ -2,6 +2,7 @@ package com.neilturner.playerexp.ui.screens
 
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -177,15 +178,22 @@ private fun OnDeckCard(
     var isFocused by remember(item.ratingKey) { mutableStateOf(false) }
     var selectCount by remember(item.ratingKey) { mutableIntStateOf(0) }
     val pressScale = remember { Animatable(1f) }
-    val focusScale = if (isFocused) FOCUSED_POSTER_SCALE else 1f
+    val focusScale = remember { Animatable(1f) }
     val posterRequest = rememberPosterRequest(item.thumb, posterSize.pixels)
     val focusBorder = SolidColor(
         if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
     )
     val placeholder = MaterialTheme.colorScheme.surfaceVariant
 
-    // Nothing is wired up behind OK yet, so the press itself is the feedback. Only reading
-    // pressScale inside the layer keeps this to a redraw instead of a recomposition per frame.
+    // Focus grows the card and OK dips it, each on its own spring so neither has to wait for the
+    // other. Only reading both values inside the layer keeps this to a redraw per frame instead of
+    // a recomposition.
+    LaunchedEffect(isFocused) {
+        focusScale.animateTo(
+            targetValue = if (isFocused) FOCUSED_POSTER_SCALE else 1f,
+            animationSpec = FOCUS_SCALE_SPRING
+        )
+    }
     LaunchedEffect(selectCount) {
         if (selectCount > 0) {
             pressScale.animateTo(PRESSED_POSTER_SCALE, tween(PRESS_DOWN_MILLIS))
@@ -200,8 +208,9 @@ private fun OnDeckCard(
             .dpadSelectable { selectCount++ }
             // Scale and rounded clip share one layer: a separate clip would add a second one.
             .graphicsLayer {
-                scaleX = focusScale * pressScale.value
-                scaleY = focusScale * pressScale.value
+                val scale = focusScale.value * pressScale.value
+                scaleX = scale
+                scaleY = scale
                 shape = POSTER_SHAPE
                 clip = true
             }
@@ -290,6 +299,12 @@ private const val POSTER_HEIGHT_FRACTION = 0.33f
 private val POSTER_CORNER_RADIUS = 12.dp
 private val POSTER_SHAPE = RoundedCornerShape(POSTER_CORNER_RADIUS)
 private const val FOCUSED_POSTER_SCALE = 1.06f
+
+/** Focus moves on a spring so a card grows and settles instead of snapping to size. */
+private val FOCUS_SCALE_SPRING: SpringSpec<Float> = spring(
+    dampingRatio = Spring.DampingRatioLowBouncy,
+    stiffness = Spring.StiffnessMediumLow
+)
 private const val PRESSED_POSTER_SCALE = 0.94f
 private const val PRESS_DOWN_MILLIS = 90
 private val FOCUS_BORDER_WIDTH = 3.dp
