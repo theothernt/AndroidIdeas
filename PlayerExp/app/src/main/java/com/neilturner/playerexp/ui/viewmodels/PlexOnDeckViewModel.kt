@@ -55,6 +55,13 @@ private const val REVALIDATE_INTERVAL_MILLIS = 60_000L
 /** How long a burst of play positions for an item we do not hold waits before asking again. */
 private const val MEMBERSHIP_HINT_QUIET_MILLIS = 3_000L
 
+/**
+ * How many cards the Continue Watching shelf holds, the same handful Plex's own clients show there.
+ * The server is asked for just these rather than trimming the answer, so the response is the size the
+ * shelf is drawn at.
+ */
+private const val CONTINUE_WATCHING_ITEM_LIMIT = 4
+
 /** How many items each of the added-later shelves holds. A shelf is a starting point, not a library. */
 private const val SHELF_ITEM_LIMIT = 30
 
@@ -262,7 +269,13 @@ class PlexOnDeckViewModel(application: Application) : AndroidViewModel(applicati
                 )
             }
 
-            val items = api.onDeck(serverUrl, token, posterSize.width, posterSize.height)
+            val items = api.onDeck(
+                serverUrl = serverUrl,
+                accountToken = token,
+                posterWidthPx = posterSize.width,
+                posterHeightPx = posterSize.height,
+                limit = CONTINUE_WATCHING_ITEM_LIMIT
+            )
             Log.d(LOG_TAG, "Loaded ${items.size} Continue Watching items")
 
             val sections = api.librarySections(serverUrl, token)

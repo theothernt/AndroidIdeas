@@ -131,7 +131,9 @@ private data class PlexOnDeckResponse(
 
 @Serializable
 private data class PlexOnDeckContainer(
-    @SerialName("Metadata") val metadata: List<PlexOnDeckMetadata>? = null
+    @SerialName("Metadata") val metadata: List<PlexOnDeckMetadata>? = null,
+    val size: Int? = null,
+    val totalSize: Int? = null
 )
 
 @Serializable
@@ -354,11 +356,21 @@ class PlexApi(private val clientIdentifier: String) {
         serverUrl: String,
         accountToken: String,
         posterWidthPx: Int,
-        posterHeightPx: Int
+        posterHeightPx: Int,
+        limit: Int
     ): List<OnDeckItem> {
         val response = apiCall("On Deck") { client.get("${serverUrl.trimEnd('/')}/library/onDeck") {
+            // Plex's own clients cap the row in the request rather than trimming it after the fact,
+            // so the Continue Watching shelf holds as many cards as it is meant to show.
+            parameter("X-Plex-Container-Start", 0)
+            parameter("X-Plex-Container-Size", limit)
             plexHeaders(accountToken)
         } }.body<PlexOnDeckResponse>()
+
+        Log.d(
+            API_LOG_TAG,
+            "On Deck: ${response.mediaContainer?.size} of ${response.mediaContainer?.totalSize} items requested"
+        )
 
         return response.mediaContainer?.metadata.orEmpty().mapNotNull { item ->
             val ratingKey = item.ratingKey ?: return@mapNotNull null
