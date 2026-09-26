@@ -137,6 +137,7 @@ private data class PlexOnDeckMetadata(
     val type: String? = null,
     val thumb: String? = null,
     val grandparentTitle: String? = null,
+    val parentThumb: String? = null,
     val grandparentThumb: String? = null,
     val viewOffset: Long? = null,
     val duration: Long? = null,
@@ -357,8 +358,10 @@ class PlexApi(private val clientIdentifier: String) {
 
         return response.mediaContainer?.metadata.orEmpty().mapNotNull { item ->
             val ratingKey = item.ratingKey ?: return@mapNotNull null
-            // Episodes carry a show poster on grandparentThumb; their own thumb is a still frame.
-            val posterPath = item.grandparentThumb ?: item.thumb
+            // Episodes carry a show poster on grandparentThumb and a season poster on parentThumb;
+            // their own thumb is only a still frame. The show poster is what Plex's own clients
+            // lead with, so it wins here too.
+            val posterPath = item.grandparentThumb ?: item.parentThumb ?: item.thumb
             OnDeckItem(
                 ratingKey = ratingKey,
                 title = item.title,

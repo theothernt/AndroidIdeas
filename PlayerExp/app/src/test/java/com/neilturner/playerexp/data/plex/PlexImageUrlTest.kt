@@ -4,6 +4,7 @@ import io.ktor.http.URLBuilder
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -21,7 +22,7 @@ class PlexImageUrlTest {
 
     @Test
     fun `keeps the transcode path unencoded`() {
-        val url = PlexImageUrl.build(serverUrl, token, thumbPath, 432, 648)
+        val url = PlexImageUrl.resized(serverUrl, token, thumbPath, 432, 648)
 
         assertTrue(url, url.contains("/photo/:/transcode?"))
         assertFalse(url, url.contains("%3A"))
@@ -29,7 +30,7 @@ class PlexImageUrlTest {
 
     @Test
     fun `asks for the size the card draws at`() {
-        val builder = URLBuilder(PlexImageUrl.build(serverUrl, token, thumbPath, 432, 648))
+        val builder = URLBuilder(PlexImageUrl.resized(serverUrl, token, thumbPath, 432, 648))
 
         assertEquals("432", builder.parameters["width"])
         assertEquals("648", builder.parameters["height"])
@@ -39,7 +40,7 @@ class PlexImageUrlTest {
 
     @Test
     fun `carries the original thumb path and token`() {
-        val builder = URLBuilder(PlexImageUrl.build(serverUrl, token, thumbPath, 432, 648))
+        val builder = URLBuilder(PlexImageUrl.resized(serverUrl, token, thumbPath, 432, 648))
 
         assertEquals(thumbPath, builder.parameters[PlexImageUrl.ORIGINAL_PATH_PARAM])
         assertEquals(token, builder.parameters[PlexImageUrl.TOKEN_PARAM])
@@ -47,14 +48,14 @@ class PlexImageUrlTest {
 
     @Test
     fun `targets the server the same however it is written`() {
-        val withSlash = PlexImageUrl.build("$serverUrl/", token, thumbPath, 432, 648)
+        val withSlash = PlexImageUrl.resized("$serverUrl/", token, thumbPath, 432, 648)
 
-        assertEquals(PlexImageUrl.build(serverUrl, token, thumbPath, 432, 648), withSlash)
+        assertEquals(PlexImageUrl.resized(serverUrl, token, thumbPath, 432, 648), withSlash)
     }
 
     @Test
     fun `is a url OkHttp can load, which is how Coil reads it`() {
-        val url = PlexImageUrl.build(serverUrl, token, thumbPath, 432, 648).toHttpUrl()
+        val url = PlexImageUrl.resized(serverUrl, token, thumbPath, 432, 648).toHttpUrl()
 
         assertEquals(PlexImageUrl.TRANSCODE_PATH, url.encodedPath)
         assertEquals(thumbPath, url.queryParameter(PlexImageUrl.ORIGINAL_PATH_PARAM))
@@ -65,7 +66,7 @@ class PlexImageUrlTest {
 
     @Test
     fun `falls back to a loadable url when the server refuses the resize`() {
-        val url = PlexImageUrl.build(serverUrl, token, thumbPath, 432, 648).toHttpUrl()
+        val url = PlexImageUrl.resized(serverUrl, token, thumbPath, 432, 648).toHttpUrl()
 
         val fullSizeUrl = url.newBuilder()
             .encodedPath(requireNotNull(url.queryParameter(PlexImageUrl.ORIGINAL_PATH_PARAM)))
@@ -75,5 +76,25 @@ class PlexImageUrlTest {
 
         assertEquals(thumbPath, fullSizeUrl.encodedPath)
         assertEquals(token, fullSizeUrl.queryParameter(PlexImageUrl.TOKEN_PARAM))
+    }
+
+    @Test
+    fun `asks for the stored image with no size when the resize switch is off`() {
+        val url = PlexImageUrl.asStored(serverUrl, token, thumbPath).toHttpUrl()
+
+        assertEquals(thumbPath, url.encodedPath)
+        assertEquals(token, url.queryParameter(PlexImageUrl.TOKEN_PARAM))
+        assertNull(url.queryParameter("width"))
+        assertNull(url.queryParameter("height"))
+    }
+
+    @Test
+    fun `keeps an already absolute image url as it is`() {
+        val absolute = "https://images.plex.tv/photo?height=336&width=225&url=https%3A%2F%2Fexample.com%2Fa.jpg"
+        val url = PlexImageUrl.asStored(serverUrl, token, absolute).toHttpUrl()
+
+        assertEquals("images.plex.tv", url.host)
+        assertEquals("336", url.queryParameter("height"))
+        assertEquals(token, url.queryParameter(PlexImageUrl.TOKEN_PARAM))
     }
 }

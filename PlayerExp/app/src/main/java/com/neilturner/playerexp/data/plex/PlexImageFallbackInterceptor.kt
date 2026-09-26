@@ -19,7 +19,11 @@ class PlexImageFallbackInterceptor : Interceptor {
         val request = chain.request()
         val originalPath = request.url.queryParameter(PlexImageUrl.ORIGINAL_PATH_PARAM)
         if (request.url.encodedPath != PlexImageUrl.TRANSCODE_PATH || originalPath == null) {
-            return chain.proceed(request)
+            // Not a resize request: with PlexImageUrl.USE_SERVER_SIDE_RESIZE off the card is getting
+            // the stored image, so log what arrived to keep the byte counts comparable.
+            val stored = chain.proceed(request)
+            Log.d(LOG_TAG, "As stored ${request.url.encodedPath}: ${describe(stored)}")
+            return stored
         }
 
         val requestedSize = "${request.url.queryParameter("width")}x" +

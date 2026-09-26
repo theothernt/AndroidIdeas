@@ -24,7 +24,26 @@ object PlexImageUrl {
     const val ORIGINAL_PATH_PARAM = "url"
     const val TOKEN_PARAM = "X-Plex-Token"
 
+    /**
+     * TEMPORARY test switch. Off means a card loads the image Plex has stored, untouched, and Coil
+     * does the downscaling itself, which is the way to see exactly what the server holds. It costs
+     * the full-size download per poster, so it belongs on only while artwork is being checked.
+     */
+    const val USE_SERVER_SIDE_RESIZE = false
+
     fun build(
+        serverUrl: String,
+        accountToken: String,
+        imagePath: String,
+        widthPx: Int,
+        heightPx: Int
+    ): String = if (USE_SERVER_SIDE_RESIZE) {
+        resized(serverUrl, accountToken, imagePath, widthPx, heightPx)
+    } else {
+        asStored(serverUrl, accountToken, imagePath)
+    }
+
+    fun resized(
         serverUrl: String,
         accountToken: String,
         imagePath: String,
@@ -38,6 +57,14 @@ object PlexImageUrl {
         builder.parameters.append("height", heightPx.toString())
         builder.parameters.append("minSize", "1")
         builder.parameters.append("upscale", "1")
+        builder.parameters.append(TOKEN_PARAM, accountToken)
+        return builder.buildString()
+    }
+
+    /** The stored image itself, still token-authenticated, with no size asked of Plex. */
+    fun asStored(serverUrl: String, accountToken: String, imagePath: String): String {
+        val base = if (imagePath.startsWith("http")) imagePath else serverUrl.trimEnd('/') + imagePath
+        val builder = URLBuilder(base)
         builder.parameters.append(TOKEN_PARAM, accountToken)
         return builder.buildString()
     }
