@@ -594,18 +594,29 @@ class PlexApi(private val clientIdentifier: String) {
             }
         }.body<PlexSectionItemsResponse>()
 
-        val items = response.mediaContainer?.metadata.orEmpty().mapNotNull { item ->
-            val ratingKey = item.ratingKey ?: return@mapNotNull null
-            val thumb = item.thumb ?: return@mapNotNull null
-            PlexLibraryItem(
-                ratingKey = ratingKey,
-                title = item.title,
-                thumb = PlexImageUrl.build(serverUrl, accountToken, thumb, posterWidthPx, posterHeightPx)
-            )
-        }
+        val items = PlexLibrarySections.orderByRecentlyAdded(
+            response.mediaContainer?.metadata.orEmpty().mapNotNull { item ->
+                val ratingKey = item.ratingKey ?: return@mapNotNull null
+                val thumb = item.thumb ?: return@mapNotNull null
+                PlexLibraryItem(
+                    ratingKey = ratingKey,
+                    title = item.title,
+                    thumb = PlexImageUrl.build(
+                        serverUrl,
+                        accountToken,
+                        thumb,
+                        posterWidthPx,
+                        posterHeightPx
+                    ),
+                    addedAt = item.addedAt
+                )
+            }
+        )
+        val newest = items.firstOrNull()
         Log.d(
             API_LOG_TAG,
-            "Library $sectionKey: ${items.size} items of ${response.mediaContainer?.totalSize ?: items.size}"
+            "Library $sectionKey: ${items.size} items of ${response.mediaContainer?.totalSize ?: items.size}, " +
+                "newest first: ${newest?.title} addedAt=${newest?.addedAt}"
         )
         return items
     }

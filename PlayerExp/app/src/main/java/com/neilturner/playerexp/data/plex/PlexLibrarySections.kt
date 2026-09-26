@@ -14,7 +14,9 @@ import kotlinx.serialization.Serializable
 data class PlexLibraryItem(
     val ratingKey: String,
     val title: String?,
-    val thumb: String
+    val thumb: String,
+    /** When Plex added it, which is what the shelves are ordered by. */
+    val addedAt: Long?
 )
 
 /** A library and its contents, as the screen needs it. */
@@ -66,6 +68,20 @@ object PlexLibrarySections {
             .filterNot { looksAlternate(it.title.orEmpty()) }
             .minByOrNull { canonicalRank(it.title.orEmpty(), canonicalNames) }
 
+    /**
+     * Newest additions first.
+     *
+     * Plex's own ordering for a library is whatever the section was configured with, and asking it to
+     * sort with `sort=addedAt:desc` is not honoured everywhere, so the order is settled here where it
+     * is the same on every server. Items Plex gave no date for keep the server's order at the end
+     * rather than jumping to the top.
+     */
+    fun orderByRecentlyAdded(items: List<PlexLibraryItem>): List<PlexLibraryItem> =
+        items.sortedWith(
+            compareByDescending<PlexLibraryItem> { it.addedAt != null }
+                .thenByDescending { it.addedAt ?: Long.MIN_VALUE }
+        )
+
     private fun canonicalRank(title: String, canonicalNames: Set<String>): Int =
         if (normalise(title) in canonicalNames) 0 else 1
 
@@ -90,5 +106,6 @@ internal data class PlexSectionItem(
     val title: String? = null,
     val type: String? = null,
     val thumb: String? = null,
-    val year: Int? = null
+    val year: Int? = null,
+    val addedAt: Long? = null
 )

@@ -81,6 +81,40 @@ class PlexLibrarySectionsTest {
         assertEquals("4", PlexLibrarySections.pickTvShows(sections)?.key)
     }
 
+    @Test
+    fun `orders a library by most recently added`() {
+        val items = listOf(
+            item("1", "Older", addedAt = 1_000L),
+            item("2", "Newest", addedAt = 3_000L),
+            item("3", "Middle", addedAt = 2_000L)
+        )
+
+        val ordered = PlexLibrarySections.orderByRecentlyAdded(items)
+
+        assertEquals(listOf("Newest", "Middle", "Older"), ordered.map { it.title })
+    }
+
+    @Test
+    fun `items with no date keep the server order at the end of the shelf`() {
+        val items = listOf(
+            item("1", "No date one", addedAt = null),
+            item("2", "Dated", addedAt = 500L),
+            item("3", "No date two", addedAt = null)
+        )
+
+        val ordered = PlexLibrarySections.orderByRecentlyAdded(items)
+
+        assertEquals(listOf("Dated", "No date one", "No date two"), ordered.map { it.title })
+    }
+
+    private fun item(ratingKey: String, title: String, addedAt: Long?) =
+        PlexLibraryItem(
+            ratingKey = ratingKey,
+            title = title,
+            thumb = "/library/metadata/$ratingKey/thumb/1",
+            addedAt = addedAt
+        )
+
     private fun section(key: String, title: String, type: String) =
         PlexSectionDirectory(key = key, type = type, title = title)
 }
