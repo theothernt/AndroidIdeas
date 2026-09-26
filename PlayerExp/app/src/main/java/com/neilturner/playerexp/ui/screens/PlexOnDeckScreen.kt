@@ -67,17 +67,20 @@ fun PlexOnDeckScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(horizontal = 48.dp, vertical = 24.dp)
+            .padding(vertical = 24.dp)
     ) {
         Text(
             text = stringResource(R.string.plex_on_deck_title),
             style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.onSurface
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = 48.dp)
         )
         Spacer(Modifier.height(24.dp))
 
         Box(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f),
             contentAlignment = Alignment.Center
         ) {
             when (val current = state) {
@@ -114,7 +117,7 @@ private fun OnDeckRow(items: List<OnDeckItem>) {
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(vertical = 8.dp)
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
     ) {
         itemsIndexed(items) { index, item ->
             OnDeckCard(
@@ -155,10 +158,16 @@ private fun OnDeckCard(
                 scaleY = scale
             }
             .clip(RoundedCornerShape(POSTER_CORNER_RADIUS))
-            .border(
-                width = if (isFocused) FOCUS_BORDER_WIDTH else 0.dp,
-                color = MaterialTheme.colorScheme.primary,
-                shape = RoundedCornerShape(POSTER_CORNER_RADIUS)
+            .then(
+                if (isFocused) {
+                    Modifier.border(
+                        width = FOCUS_BORDER_WIDTH,
+                        color = MaterialTheme.colorScheme.primary,
+                        shape = RoundedCornerShape(POSTER_CORNER_RADIUS)
+                    )
+                } else {
+                    Modifier
+                }
             ),
         contentAlignment = Alignment.BottomCenter
     ) {
@@ -233,7 +242,8 @@ private fun StatusMessage(text: String) {
         text = text,
         style = MaterialTheme.typography.headlineSmall,
         textAlign = TextAlign.Center,
-        color = MaterialTheme.colorScheme.onSurface
+        color = MaterialTheme.colorScheme.onSurface,
+        modifier = Modifier.padding(horizontal = 48.dp)
     )
 }
 
