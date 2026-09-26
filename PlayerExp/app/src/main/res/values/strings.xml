@@ -25,4 +25,9 @@
     <string name="plex_on_deck_not_authorised">Authorise Plex in settings to see what you are watching</string>
     <string name="plex_on_deck_no_server">No Plex server URL found. Please check Plex settings.</string>
     <string name="plex_on_deck_error">Could not load On Deck: %1$s</string>
+    <string name="plex_libraries_button">Plex Libraries</string>
+    <string name="plex_libraries_tv_shows">TV Shows</string>
+    <string name="plex_libraries_movies">Movies</string>
+    <string name="plex_libraries_empty">Nothing in this library</string>
+    <string name="plex_libraries_none_found">No TV show or movie library found on this server</string>
 </resources>

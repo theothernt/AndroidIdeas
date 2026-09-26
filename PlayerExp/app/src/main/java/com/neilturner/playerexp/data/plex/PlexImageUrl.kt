@@ -25,11 +25,12 @@ object PlexImageUrl {
     const val TOKEN_PARAM = "X-Plex-Token"
 
     /**
-     * TEMPORARY test switch. Off means a card loads the image Plex has stored, untouched, and Coil
-     * does the downscaling itself, which is the way to see exactly what the server holds. It costs
-     * the full-size download per poster, so it belongs on only while artwork is being checked.
+     * On means a card asks Plex for an image already at card size, which is the difference between a
+     * 30 KB poster and a 6 MB one. Off means a card loads the image Plex has stored, untouched, and
+     * Coil does the downscaling itself: that is the way to see exactly what the server holds, at the
+     * cost of the full-size download per poster, so it belongs on only while artwork is being checked.
      */
-    const val USE_SERVER_SIDE_RESIZE = false
+    const val USE_SERVER_SIDE_RESIZE = true
 
     fun build(
         serverUrl: String,

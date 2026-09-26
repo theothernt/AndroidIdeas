@@ -16,6 +16,7 @@ import androidx.navigation3.ui.NavDisplay
 import androidx.tv.material3.Surface
 import com.neilturner.playerexp.ui.screens.HomeScreen
 import com.neilturner.playerexp.ui.screens.PlayerScreen
+import com.neilturner.playerexp.ui.screens.PlexLibrariesScreen
 import com.neilturner.playerexp.ui.screens.PlexOnDeckScreen
 import com.neilturner.playerexp.ui.screens.PlexPlayerScreen
 import com.neilturner.playerexp.ui.screens.PlexSettingsScreen
@@ -40,6 +41,9 @@ data object PlexSettingsRoute : PlayerExpRoute
 
 @Serializable
 data object PlexOnDeckRoute : PlayerExpRoute
+
+@Serializable
+data object PlexLibrariesRoute : PlayerExpRoute
 
 class MainActivity : ComponentActivity() {
     @UnstableApi
@@ -69,6 +73,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onNavigateToPlexPlayer = { backStack.add(PlexPlayerRoute) },
                                     onNavigateToPlexOnDeck = { backStack.add(PlexOnDeckRoute) },
+                                    onNavigateToPlexLibraries = { backStack.add(PlexLibrariesRoute) },
                                     onNavigateToSettings = { backStack.add(PlexSettingsRoute) }
                                 )
                             }
@@ -86,6 +91,9 @@ class MainActivity : ComponentActivity() {
                             }
                             entry<PlexOnDeckRoute> {
                                 PlexOnDeckScreen()
+                            }
+                            entry<PlexLibrariesRoute> {
+                                PlexLibrariesScreen()
                             }
                         }
                     )

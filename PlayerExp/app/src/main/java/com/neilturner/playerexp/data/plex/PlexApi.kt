@@ -555,6 +555,61 @@ class PlexApi(private val clientIdentifier: String) {
 
     fun close() = client.close()
 
+    /**
+     * Every library on the server. Which of them a screen shows is a naming decision rather than an
+     * API one, so it lives in [PlexLibrarySections].
+     */
+    suspend fun librarySections(serverUrl: String, accountToken: String): List<PlexSectionDirectory> {
+        val response = apiCall("Libraries") {
+            client.get("${serverUrl.trimEnd('/')}/library/sections") {
+                plexHeaders(accountToken)
+            }
+        }.body<PlexSectionsResponse>()
+
+        val sections = response.mediaContainer?.directory.orEmpty()
+        Log.d(API_LOG_TAG, "Libraries: ${sections.size}")
+        sections.forEach { section ->
+            Log.d(
+                API_LOG_TAG,
+                "  section key=${section.key}, title=${section.title}, type=${section.type}"
+            )
+        }
+        return sections
+    }
+
+    /**
+     * Everything in one library, newest additions first as Plex orders them. Posters are requested at
+     * the size the shelf draws them, the same as On Deck.
+     */
+    suspend fun libraryItems(
+        serverUrl: String,
+        accountToken: String,
+        sectionKey: String,
+        posterWidthPx: Int,
+        posterHeightPx: Int
+    ): List<PlexLibraryItem> {
+        val response = apiCall("Library items") {
+            client.get("${serverUrl.trimEnd('/')}/library/sections/${sectionKey.trimStart('/')}/all") {
+                plexHeaders(accountToken)
+            }
+        }.body<PlexSectionItemsResponse>()
+
+        val items = response.mediaContainer?.metadata.orEmpty().mapNotNull { item ->
+            val ratingKey = item.ratingKey ?: return@mapNotNull null
+            val thumb = item.thumb ?: return@mapNotNull null
+            PlexLibraryItem(
+                ratingKey = ratingKey,
+                title = item.title,
+                thumb = PlexImageUrl.build(serverUrl, accountToken, thumb, posterWidthPx, posterHeightPx)
+            )
+        }
+        Log.d(
+            API_LOG_TAG,
+            "Library $sectionKey: ${items.size} items of ${response.mediaContainer?.totalSize ?: items.size}"
+        )
+        return items
+    }
+
     private suspend fun <T> apiCall(operation: String, request: suspend () -> T): T {
         Log.d(API_LOG_TAG, "Request: $operation")
         return try {
