@@ -1,6 +1,7 @@
 package com.neilturner.playerexp.ui.screens
 
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -9,13 +10,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,10 +29,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
@@ -41,6 +43,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -63,6 +66,12 @@ fun PlexOnDeckScreen(
     viewModel: PlexOnDeckViewModel = viewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val posterSize = rememberPosterSize()
+
+    // Keyed on the size so a resolution change re-asks Plex for posters at the new size.
+    LaunchedEffect(posterSize) {
+        viewModel.loadOnDeck(posterSize.pixels)
+    }
 
     Column(
         modifier = modifier
@@ -97,17 +106,37 @@ fun PlexOnDeckScreen(
                 is PlexOnDeckUiState.Success -> if (current.items.isEmpty()) {
                     StatusMessage(text = stringResource(R.string.plex_on_deck_empty))
                 } else {
-                    OnDeckRow(current.items)
+                    OnDeckRow(current.items, posterSize)
                 }
             }
         }
     }
 }
 
+/**
+ * The card size, kept as both the dp the layout draws at and the pixels that land on screen. Only
+ * the pixel figure is meaningful to Plex and to Coil: handing layout a dp value derived from pixels
+ * would scale it by the density a second time and draw the card at twice the size it fetched.
+ */
+private class PosterSize(val height: Dp, val pixels: IntSize)
+
 @Composable
-private fun OnDeckRow(items: List<OnDeckItem>) {
+private fun rememberPosterSize(): PosterSize {
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val density = LocalDensity.current
+    return remember(screenHeightDp, density) {
+        val height = (screenHeightDp * POSTER_HEIGHT_FRACTION).dp
+        val heightPx = with(density) { height.roundToPx() }
+        PosterSize(
+            height = height,
+            pixels = IntSize((heightPx * POSTER_ASPECT_RATIO).roundToInt(), heightPx)
+        )
+    }
+}
+
+@Composable
+private fun OnDeckRow(items: List<OnDeckItem>, posterSize: PosterSize) {
     val firstPosterFocusRequester = remember { FocusRequester() }
-    val posterHeight = LocalConfiguration.current.screenHeightDp.dp * POSTER_HEIGHT_FRACTION
     LaunchedEffect(items) {
         if (items.isNotEmpty()) {
             firstPosterFocusRequester.requestFocus()
@@ -119,10 +148,11 @@ private fun OnDeckRow(items: List<OnDeckItem>) {
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        itemsIndexed(items) { index, item ->
+        // Keyed by ratingKey so focus and the remembered request follow the item, not the index.
+        itemsIndexed(items, key = { _, item -> item.ratingKey }) { index, item ->
             OnDeckCard(
                 item = item,
-                posterHeight = posterHeight,
+                posterSize = posterSize,
                 modifier = if (index == 0) {
                     Modifier.focusRequester(firstPosterFocusRequester)
                 } else {
@@ -137,38 +167,35 @@ private fun OnDeckRow(items: List<OnDeckItem>) {
 @Composable
 private fun OnDeckCard(
     item: OnDeckItem,
-    posterHeight: Dp,
+    posterSize: PosterSize,
     modifier: Modifier = Modifier
 ) {
-    var isFocused by remember { mutableStateOf(false) }
+    var isFocused by remember(item.ratingKey) { mutableStateOf(false) }
     val scale by animateFloatAsState(
         targetValue = if (isFocused) FOCUSED_POSTER_SCALE else 1f,
         label = "posterScale"
     )
-    val posterRequest = rememberPosterRequest(item.thumb, posterHeight)
+    val posterRequest = rememberPosterRequest(item.thumb, posterSize.pixels)
+    val focusBorder = SolidColor(
+        if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
+    )
+    val placeholder = MaterialTheme.colorScheme.surfaceVariant
 
     Box(
         modifier = modifier
-            .width(posterHeight * POSTER_ASPECT_RATIO)
-            .aspectRatio(POSTER_ASPECT_RATIO)
+            .size(width = posterSize.height * POSTER_ASPECT_RATIO, height = posterSize.height)
             .onFocusChanged { isFocused = it.isFocused }
             .focusable()
+            // Scale and rounded clip share one layer: a separate clip would add a second one.
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
+                shape = POSTER_SHAPE
+                clip = true
             }
-            .clip(RoundedCornerShape(POSTER_CORNER_RADIUS))
-            .then(
-                if (isFocused) {
-                    Modifier.border(
-                        width = FOCUS_BORDER_WIDTH,
-                        color = MaterialTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(POSTER_CORNER_RADIUS)
-                    )
-                } else {
-                    Modifier
-                }
-            ),
+            // Painted under the poster so cards hold their space while Coil is still fetching.
+            .drawBehind { drawRect(placeholder) }
+            .border(BorderStroke(FOCUS_BORDER_WIDTH, focusBorder), POSTER_SHAPE),
         contentAlignment = Alignment.BottomCenter
     ) {
         if (item.thumb.isNotBlank()) {
@@ -194,22 +221,17 @@ private fun OnDeckCard(
 }
 
 /**
- * Plex serves the poster at whatever size its thumb token points at, usually far larger than the
- * card. Stating the size the card is drawn at lets Coil sample the bitmap down during decode rather
- * than decoding the full image and scaling it afterwards.
+ * Plex serves the poster at whatever size its thumb token points at, which is usually far larger
+ * than the card. [PlexImageUrl] asks for a resized copy and states the size the card is drawn at,
+ * so what arrives over the network and what Coil decodes are the same dimensions.
  */
 @Composable
-private fun rememberPosterRequest(url: String, posterHeight: Dp): ImageRequest {
+private fun rememberPosterRequest(url: String, posterSize: IntSize): ImageRequest {
     val context = LocalContext.current
-    val density = LocalDensity.current
-    val sizePx = with(density) {
-        val heightPx = posterHeight.roundToPx()
-        CoilSize((heightPx * POSTER_ASPECT_RATIO).roundToInt(), heightPx)
-    }
-    return remember(url, sizePx) {
+    return remember(url, posterSize) {
         ImageRequest.Builder(context)
             .data(url)
-            .size(sizePx)
+            .size(CoilSize(posterSize.width, posterSize.height))
             .build()
     }
 }
@@ -220,7 +242,7 @@ private fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .height(PROGRESS_BAR_HEIGHT)
-            .clip(RoundedCornerShape(PROGRESS_BAR_RADIUS))
+            .clip(PROGRESS_BAR_SHAPE)
             .background(Color.White.copy(alpha = TRACK_ALPHA))
     ) {
         if (fraction > 0f) {
@@ -228,7 +250,7 @@ private fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
                 modifier = Modifier
                     .fillMaxWidth(fraction)
                     .fillMaxHeight()
-                    .clip(RoundedCornerShape(PROGRESS_BAR_RADIUS))
+                    .clip(PROGRESS_BAR_SHAPE)
                     .background(MaterialTheme.colorScheme.primary)
             )
         }
@@ -252,9 +274,11 @@ private const val POSTER_ASPECT_RATIO = 2f / 3f
 /** Posters are sized relative to the screen so the row looks the same on any TV. */
 private const val POSTER_HEIGHT_FRACTION = 0.30f
 private val POSTER_CORNER_RADIUS = 12.dp
+private val POSTER_SHAPE = RoundedCornerShape(POSTER_CORNER_RADIUS)
 private const val FOCUSED_POSTER_SCALE = 1.06f
 private val FOCUS_BORDER_WIDTH = 3.dp
 private val POSTER_BAR_INSET = 10.dp
 private val PROGRESS_BAR_HEIGHT = 4.dp
 private val PROGRESS_BAR_RADIUS = 2.dp
+private val PROGRESS_BAR_SHAPE = RoundedCornerShape(PROGRESS_BAR_RADIUS)
 private const val TRACK_ALPHA = 0.3f

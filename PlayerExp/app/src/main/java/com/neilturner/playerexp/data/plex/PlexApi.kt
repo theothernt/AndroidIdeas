@@ -343,10 +343,13 @@ class PlexApi(private val clientIdentifier: String) {
 
     /**
      * Continue Watching. Progress comes from [PlexOnDeckUserState] where the server provides it.
+     * Posters are requested at the size the UI draws them, which is what keeps Plex resizing them.
      */
     suspend fun onDeck(
         serverUrl: String,
-        accountToken: String
+        accountToken: String,
+        posterWidthPx: Int,
+        posterHeightPx: Int
     ): List<OnDeckItem> {
         val response = apiCall("On Deck") { client.get("${serverUrl.trimEnd('/')}/library/onDeck") {
             plexHeaders(accountToken)
@@ -360,7 +363,9 @@ class PlexApi(private val clientIdentifier: String) {
                 ratingKey = ratingKey,
                 title = item.title,
                 grandparentTitle = item.grandparentTitle,
-                thumb = posterPath?.let { imageUrl(serverUrl, accountToken, it) }.orEmpty(),
+                thumb = posterPath
+                    ?.let { PlexImageUrl.build(serverUrl, accountToken, it, posterWidthPx, posterHeightPx) }
+                    .orEmpty(),
                 viewOffset = item.userState?.viewOffset ?: item.viewOffset ?: 0L,
                 duration = item.userState?.duration ?: item.duration ?: 0L,
                 type = item.type
@@ -373,20 +378,6 @@ class PlexApi(private val clientIdentifier: String) {
             }
         }
     }
-
-    /**
-     * Plex image paths are server-relative, and image loaders cannot send the token header, so the
-     * token goes in the query string too. The size is whatever the thumb token points at: Plex
-     * ignores a `width` parameter here, and only its photo transcode endpoint resizes — and that
-     * one rejects requests, so the full-size image is fetched and Coil samples it down.
-     */
-    private fun imageUrl(
-        serverUrl: String,
-        accountToken: String,
-        imagePath: String
-    ): String = URLBuilder("${serverUrl.trimEnd('/')}$imagePath").apply {
-        parameters.append("X-Plex-Token", accountToken)
-    }.buildString()
 
     suspend fun recentEpisodes(
         serverUrl: String,
