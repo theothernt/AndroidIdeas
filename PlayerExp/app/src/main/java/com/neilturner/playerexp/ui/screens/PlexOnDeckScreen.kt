@@ -1,6 +1,7 @@
 package com.neilturner.playerexp.ui.screens
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.spring
@@ -199,6 +200,14 @@ private fun OnDeckCard(
     val pressScale = remember { Animatable(1f) }
     val focusScale = remember { Animatable(1f) }
     val posterRequest = rememberPosterRequest(item.thumb, posterSize.pixels)
+    // The card draws a placeholder while the poster is in flight; fading the image in over it stops
+    // the poster arriving as a hard edge, and keeps a cached image from popping in just as abruptly.
+    var posterLoaded by remember(item.ratingKey) { mutableStateOf(false) }
+    val posterAlpha by animateFloatAsState(
+        targetValue = if (posterLoaded) 1f else 0f,
+        animationSpec = tween(POSTER_FADE_IN_MILLIS),
+        label = "posterFadeIn"
+    )
     val focusBorder = SolidColor(
         if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent
     )
@@ -243,7 +252,9 @@ private fun OnDeckCard(
                 model = posterRequest,
                 contentDescription = null,
                 contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                alpha = posterAlpha,
+                onSuccess = { posterLoaded = true }
             )
         }
         ProgressOverlay(
@@ -346,6 +357,9 @@ private val PROGRESS_BAR_HEIGHT = 4.dp
 private val PROGRESS_BAR_RADIUS = 2.dp
 private val PROGRESS_BAR_SHAPE = RoundedCornerShape(PROGRESS_BAR_RADIUS)
 private const val TRACK_ALPHA = 0.3f
+
+/** How long a poster takes to fade in over its placeholder. */
+private const val POSTER_FADE_IN_MILLIS = 250
 
 /** Smallest fill the bar will draw, so a barely-started item still reads as in progress. */
 private const val MIN_PROGRESS_FRACTION = 0.05f
