@@ -85,7 +85,7 @@ class MainActivity : ComponentActivity() {
                                 PlexSettingsScreen(onBack = { backStack.removeLastOrNull() })
                             }
                             entry<PlexOnDeckRoute> {
-                                PlexOnDeckScreen(onBack = { backStack.removeLastOrNull() })
+                                PlexOnDeckScreen()
                             }
                         }
                     )

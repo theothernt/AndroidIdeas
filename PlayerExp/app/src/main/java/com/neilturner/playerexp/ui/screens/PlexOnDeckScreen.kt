@@ -1,52 +1,64 @@
 package com.neilturner.playerexp.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.tv.material3.Button
-import androidx.tv.material3.Card
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.size.Size as CoilSize
+import kotlin.math.roundToInt
 import com.neilturner.playerexp.R
 import com.neilturner.playerexp.data.plex.OnDeckItem
-import com.neilturner.playerexp.data.plex.displayTitle
 import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckUiState
 import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckViewModel
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PlexOnDeckScreen(
-    onBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PlexOnDeckViewModel = viewModel()
 ) {
@@ -86,89 +98,130 @@ fun PlexOnDeckScreen(
                 }
             }
         }
-
-        Spacer(Modifier.height(16.dp))
-        BackButton(onBack)
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun OnDeckRow(items: List<OnDeckItem>) {
+    val firstPosterFocusRequester = remember { FocusRequester() }
+    val posterHeight = LocalConfiguration.current.screenHeightDp.dp * POSTER_HEIGHT_FRACTION
+    LaunchedEffect(items) {
+        if (items.isNotEmpty()) {
+            firstPosterFocusRequester.requestFocus()
+        }
+    }
+
     LazyRow(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         contentPadding = PaddingValues(vertical = 8.dp)
     ) {
-        items(items) { item ->
-            OnDeckCard(item)
+        itemsIndexed(items) { index, item ->
+            OnDeckCard(
+                item = item,
+                posterHeight = posterHeight,
+                modifier = if (index == 0) {
+                    Modifier.focusRequester(firstPosterFocusRequester)
+                } else {
+                    Modifier
+                }
+            )
         }
     }
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
+/** Poster only: the image is the card, with the progress bar drawn on top of it. */
 @Composable
-private fun OnDeckCard(item: OnDeckItem) {
-    Card(
-        // Cards are focusable for d-pad navigation only; there is no click action yet.
-        onClick = {},
-        modifier = Modifier.width(200.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(POSTER_ASPECT_RATIO)
-                .clip(MaterialTheme.shapes.medium)
-        ) {
-            if (item.thumb.isNotBlank()) {
-                AsyncImage(
-                    model = item.thumb,
-                    contentDescription = null,
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize()
-                )
+private fun OnDeckCard(
+    item: OnDeckItem,
+    posterHeight: Dp,
+    modifier: Modifier = Modifier
+) {
+    var isFocused by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (isFocused) FOCUSED_POSTER_SCALE else 1f,
+        label = "posterScale"
+    )
+    val posterRequest = rememberPosterRequest(item.thumb, posterHeight)
+
+    Box(
+        modifier = modifier
+            .width(posterHeight * POSTER_ASPECT_RATIO)
+            .aspectRatio(POSTER_ASPECT_RATIO)
+            .onFocusChanged { isFocused = it.isFocused }
+            .focusable()
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
             }
-            ProgressOverlay(
-                fraction = item.progressFraction,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .fillMaxWidth()
+            .clip(RoundedCornerShape(POSTER_CORNER_RADIUS))
+            .border(
+                width = if (isFocused) FOCUS_BORDER_WIDTH else 0.dp,
+                color = MaterialTheme.colorScheme.primary,
+                shape = RoundedCornerShape(POSTER_CORNER_RADIUS)
+            ),
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        if (item.thumb.isNotBlank()) {
+            AsyncImage(
+                model = posterRequest,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize()
             )
         }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = item.displayTitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurface,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+        ProgressOverlay(
+            fraction = item.progressFraction,
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .fillMaxWidth()
+                .padding(
+                    start = POSTER_BAR_INSET,
+                    end = POSTER_BAR_INSET,
+                    bottom = POSTER_BAR_INSET
+                )
         )
     }
 }
 
+/**
+ * Plex serves the poster at whatever size its thumb token points at, usually far larger than the
+ * card. Stating the size the card is drawn at lets Coil sample the bitmap down during decode rather
+ * than decoding the full image and scaling it afterwards.
+ */
+@Composable
+private fun rememberPosterRequest(url: String, posterHeight: Dp): ImageRequest {
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val sizePx = with(density) {
+        val heightPx = posterHeight.roundToPx()
+        CoilSize((heightPx * POSTER_ASPECT_RATIO).roundToInt(), heightPx)
+    }
+    return remember(url, sizePx) {
+        ImageRequest.Builder(context)
+            .data(url)
+            .size(sizePx)
+            .build()
+    }
+}
+
+/** Thin bar drawn inside the poster bounds, inset from the bottom and sides. */
 @Composable
 private fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
-            .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f))
-            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .height(PROGRESS_BAR_HEIGHT)
+            .clip(RoundedCornerShape(PROGRESS_BAR_RADIUS))
+            .background(Color.White.copy(alpha = TRACK_ALPHA))
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(4.dp)
-                .clip(MaterialTheme.shapes.extraSmall)
-                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f))
-        ) {
-            if (fraction > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth(fraction)
-                        .height(4.dp)
-                        .clip(MaterialTheme.shapes.extraSmall)
-                        .background(MaterialTheme.colorScheme.primary)
-                )
-            }
+        if (fraction > 0f) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth(fraction)
+                    .fillMaxHeight()
+                    .clip(RoundedCornerShape(PROGRESS_BAR_RADIUS))
+                    .background(MaterialTheme.colorScheme.primary)
+            )
         }
     }
 }
@@ -184,31 +237,14 @@ private fun StatusMessage(text: String) {
     )
 }
 
-@OptIn(ExperimentalTvMaterial3Api::class)
-@Composable
-private fun BackButton(onBack: () -> Unit) {
-    val backFocusRequester = remember { FocusRequester() }
-    LaunchedEffect(Unit) {
-        backFocusRequester.requestFocus()
-    }
-    Button(
-        onClick = onBack,
-        modifier = Modifier
-            .focusRequester(backFocusRequester)
-            .width(360.dp)
-            .height(56.dp)
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = stringResource(R.string.back),
-                style = MaterialTheme.typography.titleMedium,
-                textAlign = TextAlign.Center
-            )
-        }
-    }
-}
-
 private const val POSTER_ASPECT_RATIO = 2f / 3f
+
+/** Posters are sized relative to the screen so the row looks the same on any TV. */
+private const val POSTER_HEIGHT_FRACTION = 0.30f
+private val POSTER_CORNER_RADIUS = 12.dp
+private const val FOCUSED_POSTER_SCALE = 1.06f
+private val FOCUS_BORDER_WIDTH = 3.dp
+private val POSTER_BAR_INSET = 10.dp
+private val PROGRESS_BAR_HEIGHT = 4.dp
+private val PROGRESS_BAR_RADIUS = 2.dp
+private const val TRACK_ALPHA = 0.3f

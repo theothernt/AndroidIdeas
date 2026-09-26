@@ -341,8 +341,13 @@ class PlexApi(private val clientIdentifier: String) {
         return response.mediaContainer?.directory.orEmpty().filter { it.type == "show" }
     }
 
-    /** Continue Watching. Progress comes from [PlexOnDeckUserState] where the server provides it. */
-    suspend fun onDeck(serverUrl: String, accountToken: String): List<OnDeckItem> {
+    /**
+     * Continue Watching. Progress comes from [PlexOnDeckUserState] where the server provides it.
+     */
+    suspend fun onDeck(
+        serverUrl: String,
+        accountToken: String
+    ): List<OnDeckItem> {
         val response = apiCall("On Deck") { client.get("${serverUrl.trimEnd('/')}/library/onDeck") {
             plexHeaders(accountToken)
         } }.body<PlexOnDeckResponse>()
@@ -369,11 +374,19 @@ class PlexApi(private val clientIdentifier: String) {
         }
     }
 
-    /** Plex image paths are server-relative, and image loaders cannot send the token header. */
-    private fun imageUrl(serverUrl: String, accountToken: String, imagePath: String): String =
-        URLBuilder("${serverUrl.trimEnd('/')}$imagePath").apply {
-            parameters.append("X-Plex-Token", accountToken)
-        }.buildString()
+    /**
+     * Plex image paths are server-relative, and image loaders cannot send the token header, so the
+     * token goes in the query string too. The size is whatever the thumb token points at: Plex
+     * ignores a `width` parameter here, and only its photo transcode endpoint resizes — and that
+     * one rejects requests, so the full-size image is fetched and Coil samples it down.
+     */
+    private fun imageUrl(
+        serverUrl: String,
+        accountToken: String,
+        imagePath: String
+    ): String = URLBuilder("${serverUrl.trimEnd('/')}$imagePath").apply {
+        parameters.append("X-Plex-Token", accountToken)
+    }.buildString()
 
     suspend fun recentEpisodes(
         serverUrl: String,
