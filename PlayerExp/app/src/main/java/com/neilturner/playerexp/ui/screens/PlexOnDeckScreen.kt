@@ -8,6 +8,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +26,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -61,6 +64,7 @@ import kotlin.math.roundToInt
 import com.neilturner.playerexp.R
 import com.neilturner.playerexp.data.plex.OnDeckItem
 import com.neilturner.playerexp.ui.modifiers.dpadSelectable
+import com.neilturner.playerexp.ui.modifiers.rememberLeftEdgeSpec
 import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckUiState
 import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckViewModel
 
@@ -141,6 +145,7 @@ private fun rememberPosterSize(): PosterSize {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun OnDeckRow(items: List<OnDeckItem>, posterSize: PosterSize) {
     val firstPosterFocusRequester = remember { FocusRequester() }
@@ -150,29 +155,34 @@ private fun OnDeckRow(items: List<OnDeckItem>, posterSize: PosterSize) {
         }
     }
 
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        // 48.dp lines the first poster up with the title; the vertical padding is headroom for the
-        // focused card, which grows by 6% and would otherwise be clipped at the top.
-        contentPadding = PaddingValues(
-            start = SCREEN_HORIZONTAL_PADDING,
-            end = SCREEN_HORIZONTAL_PADDING,
-            top = FOCUSED_POSTER_OVERHANG,
-            bottom = POSTER_ROW_BOTTOM_PADDING
-        )
-    ) {
-        // Keyed by ratingKey so focus and the remembered request follow the item, not the index.
-        itemsIndexed(items, key = { _, item -> item.ratingKey }) { index, item ->
-            OnDeckCard(
-                item = item,
-                posterSize = posterSize,
-                modifier = if (index == 0) {
-                    Modifier.focusRequester(firstPosterFocusRequester)
-                } else {
-                    Modifier
-                }
+    // The focused card stops at a fixed inset from the left edge as the row scrolls, instead of
+    // stopping against whichever edge it happened to run out of room at.
+    val leftEdgeSpec = rememberLeftEdgeSpec(leadingInset = FOCUSED_CARD_LEADING_INSET)
+    CompositionLocalProvider(LocalBringIntoViewSpec provides leftEdgeSpec) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            // 48.dp lines the first poster up with the title; the vertical padding is headroom for
+            // the focused card, which grows by 6% and would otherwise be clipped at the top.
+            contentPadding = PaddingValues(
+                start = SCREEN_HORIZONTAL_PADDING,
+                end = SCREEN_HORIZONTAL_PADDING,
+                top = FOCUSED_POSTER_OVERHANG,
+                bottom = POSTER_ROW_BOTTOM_PADDING
             )
+        ) {
+            // Keyed by ratingKey so focus and the remembered request follow the item, not the index.
+            itemsIndexed(items, key = { _, item -> item.ratingKey }) { index, item ->
+                OnDeckCard(
+                    item = item,
+                    posterSize = posterSize,
+                    modifier = if (index == 0) {
+                        Modifier.focusRequester(firstPosterFocusRequester)
+                    } else {
+                        Modifier
+                    }
+                )
+            }
         }
     }
 }
@@ -308,6 +318,13 @@ private val SCREEN_HORIZONTAL_PADDING = 48.dp
 
 /** Room for the focused card to grow past its laid-out height without being clipped. */
 private val FOCUSED_POSTER_OVERHANG = 12.dp
+
+/**
+ * Where the focused card stops when the row scrolls it. The row's own 48.dp content padding only
+ * positions the first and last cards, so the focused card needs a wider inset of its own to sit
+ * clear of the screen edge.
+ */
+private val FOCUSED_CARD_LEADING_INSET = 96.dp
 private val POSTER_ROW_BOTTOM_PADDING = 8.dp
 
 /** Posters are sized relative to the screen so the row looks the same on any TV. */
