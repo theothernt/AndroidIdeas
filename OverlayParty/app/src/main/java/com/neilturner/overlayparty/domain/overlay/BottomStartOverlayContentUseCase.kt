@@ -10,18 +10,22 @@ class BottomStartOverlayContentUseCase(
     operator fun invoke(
         music: String?,
         countdown: String?,
-        animationType: OverlayAnimationType = OverlayAnimationType.FADE,
+        countdownAnimationType: OverlayAnimationType = OverlayAnimationType.RESIZE,
+        musicAnimationType: OverlayAnimationType = OverlayAnimationType.FADE,
     ): OverlayContent? {
         val items =
             buildList {
-                countdown?.let {
-                    add(OverlayContent.TextOnly(it, padding = 4f, animationType = animationType))
+                countdown?.takeIf { it.isNotBlank() }?.let {
+                    add(OverlayContent.TextOnly(it, padding = 4f, animationType = countdownAnimationType))
                 }
-                music?.let {
-                    add(musicToOverlayContent(it, animationType))
+                music?.takeIf { it.isNotBlank() }?.let {
+                    add(musicToOverlayContent(it, musicAnimationType))
                 }
             }
-        return if (items.isEmpty()) null
-        else OverlayContent.VerticalStack(items = items, alignment = StackAlignment.START)
+        return if (items.isEmpty()) {
+            null
+        } else {
+            OverlayContent.VerticalStack(items = items, alignment = StackAlignment.START)
+        }
     }
 }

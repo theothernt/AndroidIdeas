@@ -50,7 +50,10 @@ class ScreenTwoViewModelTest {
 
     private var testClock: Long = 0L
 
-    private fun advanceVirtualTime(testScope: TestScope, millis: Long) {
+    private fun advanceVirtualTime(
+        testScope: TestScope,
+        millis: Long,
+    ) {
         testClock += millis
         testScope.advanceTimeBy(millis)
     }
@@ -134,7 +137,6 @@ class ScreenTwoViewModelTest {
 
             // Initially visible
             assertTrue(viewModel.isOverlaysVisible.value)
-            assertEquals(1f, viewModel.groupAlpha.value, 0.001f)
 
             // Let initial collection run
             advanceVirtualTime(this, 150)
@@ -150,14 +152,12 @@ class ScreenTwoViewModelTest {
 
             // Overlays fade out
             assertFalse(viewModel.isOverlaysVisible.value)
-            assertEquals(0f, viewModel.groupAlpha.value, 0.001f)
 
-            // Advance through fade out (500ms) + settle time (50ms)
+            // Advance through fade out (500ms)
             advanceVirtualTime(this, 550)
             runCurrent()
 
             // Overlays fade back in
             assertTrue(viewModel.isOverlaysVisible.value)
-            assertEquals(1f, viewModel.groupAlpha.value, 0.001f)
         }
 }

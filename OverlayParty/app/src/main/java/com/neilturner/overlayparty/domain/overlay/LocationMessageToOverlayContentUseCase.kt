@@ -12,10 +12,13 @@ class LocationMessageToOverlayContentUseCase {
     ): OverlayContent? {
         val items =
             buildList {
-                message?.let { add(OverlayContent.TextOnly(it, animationType = animationType)) }
-                location?.let { add(OverlayContent.TextOnly(it, animationType = animationType)) }
+                message?.takeIf { it.isNotBlank() }?.let { add(OverlayContent.TextOnly(it, animationType = animationType)) }
+                location?.takeIf { it.isNotBlank() }?.let { add(OverlayContent.TextOnly(it, animationType = animationType)) }
             }
-        return if (items.isEmpty()) null
-        else OverlayContent.VerticalStack(items = items, alignment = StackAlignment.END)
+        return if (items.isEmpty()) {
+            null
+        } else {
+            OverlayContent.VerticalStack(items = items, alignment = StackAlignment.END)
+        }
     }
 }

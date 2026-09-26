@@ -20,12 +20,13 @@ import com.neilturner.overlayparty.ui.overlay.OverlayAnimationType
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
 import com.neilturner.overlayparty.ui.overlay.OverlayIcon
 import com.neilturner.overlayparty.ui.overlay.OverlayPosition
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
@@ -59,9 +60,6 @@ class ScreenTwoViewModel(
     private val _isOverlaysVisible = MutableStateFlow(true)
     val isOverlaysVisible: StateFlow<Boolean> = _isOverlaysVisible.asStateFlow()
 
-    private val _groupAlpha = MutableStateFlow(1f)
-    val groupAlpha: StateFlow<Float> = _groupAlpha.asStateFlow()
-
     private val _topStartOverlay =
         MutableStateFlow<OverlayContent?>(
             OverlayContent.TextOnly("Loading Weather...", animationType = OverlayAnimationType.NONE),
@@ -76,7 +74,7 @@ class ScreenTwoViewModel(
 
     private val _bottomStartOverlay =
         MutableStateFlow<OverlayContent?>(
-                OverlayContent.IconWithText(
+            OverlayContent.IconWithText(
                 "Loading Music...",
                 OverlayIcon.MusicNote,
                 animationType = OverlayAnimationType.NONE,
@@ -97,51 +95,64 @@ class ScreenTwoViewModel(
     private var latestCountdown: String? = null
     private var latestLocation: String? = null
     private var latestMessage: String? = null
-    private var hasInitialFlushOccurred = false
 
     init {
         val coroutineScope = scope ?: viewModelScope
         coroutineScope.launch {
+            val weatherReady = CompletableDeferred<Unit>()
+            val timeReady = CompletableDeferred<Unit>()
+            val musicReady = CompletableDeferred<Unit>()
+            val countdownReady = CompletableDeferred<Unit>()
+            val locationReady = CompletableDeferred<Unit>()
+            val messageReady = CompletableDeferred<Unit>()
+            var isInitialFlushPending = true
+
             launch {
                 weatherRepository.getWeatherStream().collect {
                     latestWeather = it
-                    if (!hasInitialFlushOccurred) updateTopStart()
+                    if (isInitialFlushPending) updateTopStart()
+                    weatherReady.complete(Unit)
                 }
             }
             launch {
                 timeRepository.getTimeStream(showSeconds = false).collect {
                     latestDateTime = it
-                    if (!hasInitialFlushOccurred) updateTopEnd()
+                    if (isInitialFlushPending) updateTopEnd()
+                    timeReady.complete(Unit)
                 }
             }
             launch {
                 musicRepository.getMusicStream().collect {
                     latestMusic = it
-                    if (!hasInitialFlushOccurred) updateBottomStart()
+                    if (isInitialFlushPending) updateBottomStart()
+                    musicReady.complete(Unit)
                 }
             }
             launch {
                 countdownRepository.getCountdownStream(durationMinutes = 2).collect {
                     latestCountdown = it
-                    if (!hasInitialFlushOccurred) updateBottomStart()
+                    if (isInitialFlushPending) updateBottomStart()
+                    countdownReady.complete(Unit)
                 }
             }
             launch {
                 locationRepository.getLocationStream().collect {
                     latestLocation = it
-                    if (!hasInitialFlushOccurred) updateBottomEnd()
+                    if (isInitialFlushPending) updateBottomEnd()
+                    locationReady.complete(Unit)
                 }
             }
             launch {
                 messageRepository.getMessageStream().collect {
                     latestMessage = it
-                    if (!hasInitialFlushOccurred) updateBottomEnd()
+                    if (isInitialFlushPending) updateBottomEnd()
+                    messageReady.complete(Unit)
                 }
             }
 
-            // Allow initial repository values to arrive before starting cycle
-            delay(100.milliseconds)
-            hasInitialFlushOccurred = true
+            // Do not start the cycle until every source has produced a first value
+            awaitAll(weatherReady, timeReady, musicReady, countdownReady, locationReady, messageReady)
+            isInitialFlushPending = false
             flushAllOverlays()
 
             // Coordinated fade cycle
@@ -150,16 +161,13 @@ class ScreenTwoViewModel(
 
                 // Fade out together
                 _isOverlaysVisible.value = false
-                _groupAlpha.value = 0f
                 delay(fadeOutDurationMs.milliseconds)
 
                 // Update data while completely hidden
                 flushAllOverlays()
-                delay(50.milliseconds)
 
                 // Fade back in together
                 _isOverlaysVisible.value = true
-                _groupAlpha.value = 1f
                 delay(fadeInDurationMs.milliseconds)
             }
         }
@@ -215,7 +223,12 @@ class ScreenTwoViewModel(
             if (!visible) {
                 null
             } else {
-                bottomStartMapper(music, countdown, OverlayAnimationType.NONE)
+                bottomStartMapper(
+                    music,
+                    countdown,
+                    countdownAnimationType = OverlayAnimationType.NONE,
+                    musicAnimationType = OverlayAnimationType.NONE,
+                )
             }
     }
 

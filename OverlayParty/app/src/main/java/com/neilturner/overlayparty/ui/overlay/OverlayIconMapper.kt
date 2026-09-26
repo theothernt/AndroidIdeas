@@ -12,10 +12,11 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * Maps [OverlayIcon] enums to actual [ImageVector] instances for rendering.
  * This keeps Compose imports confined to the UI layer only.
  */
-fun OverlayIcon.toImageVector(): ImageVector = when (this) {
-    OverlayIcon.WbSunny -> Icons.Filled.WbSunny
-    OverlayIcon.Cloud -> Icons.Filled.Cloud
-    OverlayIcon.WaterDrop -> Icons.Filled.WaterDrop
-    OverlayIcon.AcUnit -> Icons.Filled.AcUnit
-    OverlayIcon.MusicNote -> Icons.Filled.MusicNote
-}
+fun OverlayIcon.toImageVector(): ImageVector =
+    when (this) {
+        OverlayIcon.WbSunny -> Icons.Filled.WbSunny
+        OverlayIcon.Cloud -> Icons.Filled.Cloud
+        OverlayIcon.WaterDrop -> Icons.Filled.WaterDrop
+        OverlayIcon.AcUnit -> Icons.Filled.AcUnit
+        OverlayIcon.MusicNote -> Icons.Filled.MusicNote
+    }

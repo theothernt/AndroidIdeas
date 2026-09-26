@@ -1,7 +1,5 @@
 package com.neilturner.overlayparty.ui.main
 
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neilturner.overlayparty.data.CountdownRepository
@@ -19,8 +17,8 @@ import com.neilturner.overlayparty.domain.overlay.WeatherToOverlayContentUseCase
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
 import com.neilturner.overlayparty.ui.overlay.OverlayIcon
 import com.neilturner.overlayparty.ui.overlay.OverlayPosition
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 class MainViewModel(
@@ -93,10 +91,10 @@ class MainViewModel(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue =
-OverlayContent.IconWithText(
-                     "Loading Music...",
-                     OverlayIcon.MusicNote,
-                 ),
+                OverlayContent.IconWithText(
+                    "Loading Music...",
+                    OverlayIcon.MusicNote,
+                ),
         )
 
     val bottomEndOverlay =

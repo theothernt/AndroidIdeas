@@ -10,22 +10,20 @@ class CountdownRepository(
 ) {
     fun getCountdownStream(durationMinutes: Long): Flow<String> =
         flow {
-            val targetTime = clock() + TimeUnit.MINUTES.toMillis(durationMinutes)
-
             while (true) {
-                val currentTime = clock()
-                val remainingMillis = targetTime - currentTime
+                val targetTime = clock() + TimeUnit.MINUTES.toMillis(durationMinutes)
 
-                if (remainingMillis > 0) {
+                while (true) {
+                    val remainingMillis = targetTime - clock()
+
+                    if (remainingMillis <= 0) break
+
                     emit(formatRemainingTime(remainingMillis))
                     delay(1000)
-                } else {
-                    // Countdown complete
-                    emit("Countdown complete!")
-                    delay(10_000) // Show for 10 seconds
-                    emit("") // Then disappear
-                    break
                 }
+
+                emit("Countdown complete!")
+                delay(10_000) // Show for 10 seconds before starting again
             }
         }
 

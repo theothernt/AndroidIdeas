@@ -22,11 +22,12 @@ class WeatherToOverlayContentUseCase {
             padding = 4f,
         )
 
-    private fun mapConditionToIcon(condition: String) = when (condition) {
-        "Sunny" -> OverlayIcon.WbSunny
-        "Cloudy" -> OverlayIcon.Cloud
-        "Rainy" -> OverlayIcon.WaterDrop
-        "Snowy" -> OverlayIcon.AcUnit
-        else -> OverlayIcon.Cloud
-    }
+    private fun mapConditionToIcon(condition: String) =
+        when (condition) {
+            "Sunny" -> OverlayIcon.WbSunny
+            "Cloudy" -> OverlayIcon.Cloud
+            "Rainy" -> OverlayIcon.WaterDrop
+            "Snowy" -> OverlayIcon.AcUnit
+            else -> OverlayIcon.Cloud
+        }
 }

@@ -83,9 +83,15 @@ private fun AdaptiveOverlayRow(
     SubcomposeLayout { constraints ->
         val gapPx = minGap.roundToPx()
 
-        // Measure start overlay first - it wraps to its content size
-        // but is capped at 50% of available width to prevent it from taking everything
-        val maxStartWidth = (constraints.maxWidth - gapPx) / 2
+        // Measure start overlay first - it wraps to its content size.
+        // When an end overlay is present the width is split so they cannot collide,
+        // but on its own the start overlay is free to use the full width.
+        val maxStartWidth =
+            if (endContent == null) {
+                constraints.maxWidth
+            } else {
+                (constraints.maxWidth - gapPx).coerceAtLeast(0) / 2
+            }
         val startPlaceable =
             subcompose("start") {
                 OverlaySlot(content = startContent, showBackground = showBackground)
