@@ -1,6 +1,7 @@
 package com.neilturner.playerexp.ui.screens
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.SpringSpec
 import androidx.compose.animation.core.animateFloatAsState
@@ -34,6 +35,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -49,6 +51,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
+import androidx.tv.material3.Card
+import androidx.tv.material3.CardDefaults
+import androidx.tv.material3.Glow
+import androidx.tv.material3.Border
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
@@ -153,18 +159,17 @@ fun PlexPosterRow(
  * arrives as a hard edge. [overlay] draws inside the clipped card, which is where On Deck puts its
  * progress bar.
  */
+@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun PlexPosterCard(
     imageUrl: String,
     posterSize: PosterSize,
     modifier: Modifier = Modifier,
+    onFocusChanged: (isFocused: Boolean) -> Unit = {},
     onPressed: () -> Unit = {},
     overlay: @Composable BoxScope.() -> Unit = {}
 ) {
-    var isFocused by remember(imageUrl) { mutableStateOf(false) }
-    var selectCount by remember(imageUrl) { mutableIntStateOf(0) }
-    val pressScale = remember { Animatable(1f) }
-    val focusScale = remember { Animatable(1f) }
+    var posterFocused by remember(imageUrl) { mutableStateOf(false) }
     val posterRequest = rememberPosterRequest(imageUrl, posterSize.pixels)
     var posterLoaded by remember(imageUrl) { mutableStateOf(false) }
     val posterAlpha by animateFloatAsState(
@@ -172,56 +177,74 @@ fun PlexPosterCard(
         animationSpec = tween(POSTER_FADE_IN_MILLIS),
         label = "posterFadeIn"
     )
-    val focusBorder = SolidColor(if (isFocused) CARD_BORDER_COLOR else Color.Transparent)
+    val glowTuning = rememberGlowTuning()
+    // Animated rather than switched, so the card lights as it takes focus instead of snapping on,
+    // and zero elevation costs nothing when the card is not focused.
+    val glowElevation by animateDpAsState(
+        targetValue = if (posterFocused && glowTuning.enabled) glowTuning.spread else 0.dp,
+        animationSpec = tween(GLOW_FADE_MILLIS),
+        label = "posterGlow"
+    )
     val placeholder = MaterialTheme.colorScheme.surfaceVariant
 
-    // Only reading both values inside the layer keeps this to a redraw per frame instead of a
-    // recomposition.
-    LaunchedEffect(isFocused) {
-        focusScale.animateTo(
-            targetValue = if (isFocused) FOCUSED_POSTER_SCALE else 1f,
-            animationSpec = FOCUS_SCALE_SPRING
-        )
-    }
-    LaunchedEffect(selectCount) {
-        if (selectCount > 0) {
-            pressScale.animateTo(PRESSED_POSTER_SCALE, tween(PRESS_DOWN_MILLIS))
-            pressScale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
-        }
-    }
-
-    Box(
+    // The card is TV Material 3's own, so the focus treatment is the platform's rather than a
+    // reimplementation: its Glow, its zoom and its press dip, the same indicators it draws behind
+    // its own buttons and cards. It also clips to the shape, which is why nothing here needs a
+    // graphics layer of its own any more.
+    Card(
+        onClick = onPressed,
         modifier = modifier
             .size(width = posterSize.height * POSTER_ASPECT_RATIO, height = posterSize.height)
-            .onFocusChanged { isFocused = it.isFocused }
-            .dpadSelectable {
-                selectCount++
-                onPressed()
-            }
-            // Scale and rounded clip share one layer: a separate clip would add a second one.
-            .graphicsLayer {
-                val scale = focusScale.value * pressScale.value
-                scaleX = scale
-                scaleY = scale
+            .onFocusChanged {
+                posterFocused = it.isFocused
+                onFocusChanged(it.isFocused)
+            },
+        shape = CardDefaults.shape(shape = POSTER_SHAPE),
+        colors = CardDefaults.colors(containerColor = Color.Transparent),
+        scale = CardDefaults.scale(
+            focusedScale = FOCUSED_POSTER_SCALE,
+            pressedScale = PRESSED_POSTER_SCALE
+        ),
+        border = CardDefaults.border(
+            focusedBorder = Border(
+                border = BorderStroke(FOCUS_BORDER_WIDTH, CARD_BORDER_COLOR),
                 shape = POSTER_SHAPE
-                clip = true
-            }
-            // Painted under the poster so cards hold their space while Coil is still fetching.
-            .drawBehind { drawRect(placeholder) }
-            .border(BorderStroke(FOCUS_BORDER_WIDTH, focusBorder), POSTER_SHAPE),
-        contentAlignment = Alignment.BottomCenter
-    ) {
-        if (imageUrl.isNotBlank()) {
-            AsyncImage(
-                model = posterRequest,
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-                alpha = posterAlpha,
-                onSuccess = { posterLoaded = true }
             )
+        ),
+        // A small glow that sits around the whole card, the way the Google TV home screen rings its
+        // focused icons, rather than a shadow under it.
+        glow = CardDefaults.glow(
+            // Glow.None rather than a zero elevation, so a disabled glow draws nothing at all and
+            // costs no animation. The card keeps the platform's border and zoom either way.
+            focusedGlow = if (glowTuning.enabled) {
+                Glow(
+                    elevation = glowElevation,
+                    elevationColor = Color.White.copy(alpha = glowTuning.alpha)
+                )
+            } else {
+                Glow.None
+            }
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                // Painted under the poster so cards hold their space while Coil is still fetching.
+                .drawBehind { drawRect(placeholder) },
+            contentAlignment = Alignment.BottomCenter
+        ) {
+            if (imageUrl.isNotBlank()) {
+                AsyncImage(
+                    model = posterRequest,
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                    alpha = posterAlpha,
+                    onSuccess = { posterLoaded = true }
+                )
+            }
+            overlay()
         }
-        overlay()
     }
 }
 
@@ -261,7 +284,7 @@ val SCREEN_HORIZONTAL_PADDING = 48.dp
 val ROW_ITEM_SPACING = 16.dp
 
 /** Room for the focused card to grow past its laid-out height without being clipped. */
-val FOCUSED_POSTER_OVERHANG = 12.dp
+val FOCUSED_POSTER_OVERHANG = 20.dp
 
 /**
  * Where the focused card stops when the row scrolls it. The row's own 48.dp content padding only
@@ -269,7 +292,7 @@ val FOCUSED_POSTER_OVERHANG = 12.dp
  * clear of the screen edge.
  */
 val FOCUSED_CARD_LEADING_INSET = 96.dp
-val POSTER_ROW_BOTTOM_PADDING = 8.dp
+val POSTER_ROW_BOTTOM_PADDING = 16.dp
 
 /** Posters are sized relative to the screen so a shelf looks the same on any TV. */
 const val POSTER_HEIGHT_FRACTION = 0.33f
@@ -277,15 +300,64 @@ val POSTER_CORNER_RADIUS = 12.dp
 val POSTER_SHAPE = RoundedCornerShape(POSTER_CORNER_RADIUS)
 const val FOCUSED_POSTER_SCALE = 1.06f
 
-/** Focus moves on a spring so a card grows and settles instead of snapping to size. */
-val FOCUS_SCALE_SPRING: SpringSpec<Float> = spring(
-    dampingRatio = Spring.DampingRatioLowBouncy,
-    stiffness = Spring.StiffnessMediumLow
-)
+/**
+ * The glow TV Material 3 draws around a focused card: an even halo all the way round it, the way the
+ * Google TV home screen rings a focused icon.
+ *
+ * Two numbers, and they do different things: [FOCUSED_POSTER_GLOW_ALPHA] is how bright it is, and
+ * [FOCUSED_POSTER_GLOW_SPREAD] is how far it reaches. Raising the spread makes it wider and softer
+ * rather than bigger and brighter. The spread also has to clear the card's own growth, a little over
+ * 10dp at this card size, or the zoom covers the glow instead of sitting inside it.
+ *
+ * Both can be tried without a rebuild from a connected device, which is the quicker way to settle on
+ * a pair: set the properties, then leave and re-enter the screen so the cards are composed again.
+ *
+ *     adb shell setprop debug.playerexp.glowAlpha 0.25
+ *     adb shell setprop debug.playerexp.glowSpread 20
+ *     adb shell setprop debug.playerexp.glowAlpha 0
+ *
+ * The zero clears the override and puts these constants back in charge.
+ */
+private val FOCUSED_POSTER_GLOW_ALPHA = 0.3f
+private val FOCUSED_POSTER_GLOW_SPREAD = 16.dp
+private const val GLOW_FADE_MILLIS = 180
+
+/**
+ * TEMPORARY: the glow is off while it is being tuned, so what the card is doing without it can be
+ * compared against it. With it off the focused card keeps the platform's white border and its zoom and
+ * simply has no halo. Turn it on here once the values above are settled, or at runtime with
+ * `adb shell setprop debug.playerexp.glowOn 1`.
+ */
+private const val FOCUSED_POSTER_GLOW_ENABLED = false
+
 const val PRESSED_POSTER_SCALE = 0.94f
 const val PRESS_DOWN_MILLIS = 90
 val FOCUS_BORDER_WIDTH = 3.dp
-val CARD_BORDER_COLOR = Color.White
+val CARD_BORDER_COLOR = Color.White.copy(alpha = 0.5f)
+
+/** TEMPORARY: reads a debug property off the device so the glow can be tuned without a rebuild. */
+private fun debugFloatProperty(name: String, fallback: Float): Float =
+    runCatching {
+        ProcessBuilder("getprop", name)
+            .start()
+            .inputStream.bufferedReader()
+            .readText()
+            .trim()
+            .toFloat()
+    }.getOrDefault(fallback)
+
+/** TEMPORARY: see the two `debug.playerexp.glow*` properties. */
+@Composable
+private fun rememberGlowTuning(): GlowTuning = remember {
+    GlowTuning(
+        enabled = FOCUSED_POSTER_GLOW_ENABLED &&
+            debugFloatProperty("debug.playerexp.glowOn", 1f) > 0f,
+        alpha = debugFloatProperty("debug.playerexp.glowAlpha", FOCUSED_POSTER_GLOW_ALPHA),
+        spread = debugFloatProperty("debug.playerexp.glowSpread", FOCUSED_POSTER_GLOW_SPREAD.value).dp
+    )
+}
+
+private data class GlowTuning(val enabled: Boolean, val alpha: Float, val spread: Dp)
 
 /** How long a poster takes to fade in over its placeholder. */
 const val POSTER_FADE_IN_MILLIS = 250
