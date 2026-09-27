@@ -2,6 +2,7 @@ package com.neilturner.videothumbnails.ui.components
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
@@ -40,6 +41,14 @@ import com.neilturner.videothumbnails.ui.theme.VideoThumbnailsTheme
 private const val HIDDEN_LABEL_ALPHA = 0.4f
 private const val GRAYSCALE_FADE_MILLIS = 300
 
+private val THUMBNAIL_SHAPE = RoundedCornerShape(12.dp)
+private val THUMBNAIL_BORDER =
+    Border(
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.5f)),
+        inset = 0.dp,
+        shape = THUMBNAIL_SHAPE,
+    )
+
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Stable
 @Composable
@@ -76,7 +85,7 @@ fun VideoItem(
         onClick = { onClick(video) },
         onLongClick = { onLongClick(video) },
         modifier = modifier.aspectRatio(16f / 9f),
-        shape = CardDefaults.shape(RoundedCornerShape(12.dp)),
+        shape = CardDefaults.shape(THUMBNAIL_SHAPE),
         glow =
             CardDefaults.glow(
                 glow = Glow.None,
@@ -86,7 +95,7 @@ fun VideoItem(
         border =
             CardDefaults.border(
                 border = Border.None,
-                focusedBorder = Border.None,
+                focusedBorder = THUMBNAIL_BORDER,
                 pressedBorder = Border.None,
             ),
     ) {

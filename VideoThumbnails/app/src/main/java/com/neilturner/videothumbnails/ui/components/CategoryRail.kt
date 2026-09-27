@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -34,6 +35,8 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.videothumbnails.data.VideoCategory
+import com.neilturner.videothumbnails.ui.theme.RailFocusedLabel
+import com.neilturner.videothumbnails.ui.theme.RailFocusedPill
 import com.neilturner.videothumbnails.ui.theme.RailSelectedLabel
 import com.neilturner.videothumbnails.ui.theme.RailSelectedPill
 import com.neilturner.videothumbnails.ui.theme.RailUnselectedLabel
@@ -41,7 +44,7 @@ import kotlinx.coroutines.launch
 
 private const val ALL_CATEGORIES_ID = "all"
 private const val RAIL_FADE_MILLIS = 200
-private const val RAIL_FOCUSED_SCALE = 1.05f
+private const val RAIL_FOCUSED_SCALE = 1.02f
 private val RAIL_PILL_SHAPE = RoundedCornerShape(percent = 50)
 
 @OptIn(ExperimentalTvMaterial3Api::class)
@@ -120,13 +123,23 @@ private fun CategoryRailItem(
     }
 
     val containerColor by animateColorAsState(
-        targetValue = if (isSelected) RailSelectedPill else Color.Transparent,
+        targetValue =
+            when {
+                isFocused -> RailFocusedPill
+                isSelected -> RailSelectedPill
+                else -> Color.Transparent
+            },
         animationSpec = tween(durationMillis = RAIL_FADE_MILLIS),
         label = "railPillColor",
     )
 
     val labelColor by animateColorAsState(
-        targetValue = if (isSelected || isFocused) RailSelectedLabel else RailUnselectedLabel,
+        targetValue =
+            when {
+                isFocused -> RailFocusedLabel
+                isSelected -> RailSelectedLabel
+                else -> RailUnselectedLabel
+            },
         animationSpec = tween(durationMillis = RAIL_FADE_MILLIS),
         label = "railLabelColor",
     )
@@ -146,7 +159,11 @@ private fun CategoryRailItem(
                     scaleY = scale
                 }.background(containerColor, RAIL_PILL_SHAPE)
                 .onFocusChanged { isFocused = it.isFocused }
-                .clickable(onClick = onClick),
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null,
+                    onClick = onClick,
+                ),
         contentAlignment = Alignment.CenterStart,
     ) {
         Text(
