@@ -65,6 +65,20 @@ class HomeViewModel(
             initialValue = emptyList(),
         )
 
+    val selectionCounts: StateFlow<SelectionCounts> =
+        combine(_uiState, selectionStore.hiddenVideoIds) { state, hiddenVideoIds ->
+            val videos = (state as? VideoUiState.Success)?.videos.orEmpty()
+            val hiddenInLibrary = videos.count { video -> video.id in hiddenVideoIds }
+            SelectionCounts(
+                selected = videos.size - hiddenInLibrary,
+                total = videos.size,
+            )
+        }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+            initialValue = SelectionCounts(),
+        )
+
     init {
         loadVideos()
     }
@@ -108,3 +122,8 @@ class HomeViewModel(
         const val STOP_TIMEOUT_MILLIS = 5_000L
     }
 }
+
+data class SelectionCounts(
+    val selected: Int = 0,
+    val total: Int = 0,
+)

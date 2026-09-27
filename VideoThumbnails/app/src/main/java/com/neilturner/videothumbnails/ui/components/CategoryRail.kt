@@ -19,6 +19,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +37,7 @@ import com.neilturner.videothumbnails.data.VideoCategory
 import com.neilturner.videothumbnails.ui.theme.RailSelectedLabel
 import com.neilturner.videothumbnails.ui.theme.RailSelectedPill
 import com.neilturner.videothumbnails.ui.theme.RailUnselectedLabel
+import kotlinx.coroutines.launch
 
 private const val ALL_CATEGORIES_ID = "all"
 private const val RAIL_FADE_MILLIS = 200
@@ -47,12 +50,29 @@ fun CategoryRail(
     categories: List<VideoCategory>,
     selectedCategory: VideoCategory?,
     onSelectCategory: (VideoCategory?) -> Unit,
+    onSelectedFocusReady: (() -> Unit) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val firstItemFocusRequester = remember { FocusRequester() }
+    val itemFocusRequesters =
+        remember(categories) {
+            buildMap {
+                put(ALL_CATEGORIES_ID, FocusRequester())
+                categories.forEach { category -> put(category.id, FocusRequester()) }
+            }
+        }
+    val allFocusRequester = itemFocusRequesters.getValue(ALL_CATEGORIES_ID)
+    val scope = rememberCoroutineScope()
+    val selectedKey by rememberUpdatedState(selectedCategory?.id ?: ALL_CATEGORIES_ID)
+    val readyCallback by rememberUpdatedState(onSelectedFocusReady)
 
     LaunchedEffect(Unit) {
-        firstItemFocusRequester.requestFocus()
+        allFocusRequester.requestFocus()
+    }
+
+    LaunchedEffect(itemFocusRequesters) {
+        readyCallback {
+            scope.launch { itemFocusRequesters[selectedKey]?.requestFocus() }
+        }
     }
 
     LazyColumn(
@@ -66,7 +86,7 @@ fun CategoryRail(
                 isSelected = selectedCategory == null,
                 onFocused = { onSelectCategory(null) },
                 onClick = { onSelectCategory(null) },
-                modifier = Modifier.focusRequester(firstItemFocusRequester),
+                modifier = Modifier.focusRequester(allFocusRequester),
             )
         }
 
@@ -76,6 +96,7 @@ fun CategoryRail(
                 isSelected = selectedCategory == category,
                 onFocused = { onSelectCategory(category) },
                 onClick = { onSelectCategory(category) },
+                modifier = Modifier.focusRequester(itemFocusRequesters.getValue(category.id)),
             )
         }
     }

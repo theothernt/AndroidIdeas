@@ -24,6 +24,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.tv.material3.Border
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -81,6 +82,12 @@ fun VideoItem(
                 glow = Glow.None,
                 focusedGlow = Glow.None,
                 pressedGlow = Glow.None,
+            ),
+        border =
+            CardDefaults.border(
+                border = Border.None,
+                focusedBorder = Border.None,
+                pressedBorder = Border.None,
             ),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
