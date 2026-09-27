@@ -22,6 +22,13 @@ data class Video(
     @SerialName("timeOfDay")
     val timeOfDay: String,
     val scene: String,
+    val categories: List<String> = emptyList(),
+    @SerialName("subcategories")
+    val subcategories: List<String> = emptyList(),
+    @SerialName("showInTopLevel")
+    val showInTopLevel: Boolean? = null,
+    @SerialName("includeInShuffle")
+    val includeInShuffle: Boolean? = null,
     @SerialName("url-1080-H264")
     val url1080H264: String? = null,
     @SerialName("url-1080-HDR")

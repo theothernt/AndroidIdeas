@@ -12,15 +12,18 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -31,8 +34,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -46,14 +47,16 @@ import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Text
-import androidx.compose.material3.CircularProgressIndicator
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size
 import com.neilturner.videothumbnails.data.Video
+import com.neilturner.videothumbnails.ui.components.CategoryRail
 import com.neilturner.videothumbnails.ui.components.VideoItem
 import org.koin.androidx.compose.koinViewModel
+
+private const val RAIL_WIDTH_DP = 200
 
 @Composable
 fun HomeScreen(
@@ -62,6 +65,9 @@ fun HomeScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val selectedVideo by viewModel.selectedVideo.collectAsState()
+    val selectedCategory by viewModel.selectedCategory.collectAsState()
+    val hiddenVideoIds by viewModel.hiddenVideoIds.collectAsState()
+    val filteredVideos by viewModel.filteredVideos.collectAsState()
 
     BackHandler(enabled = selectedVideo != null) {
         viewModel.clearSelectedVideo()
@@ -77,10 +83,21 @@ fun HomeScreen(
             }
 
             is VideoUiState.Success -> {
-                VideoGrid(
-                    videos = state.videos,
-                    onVideoClick = { viewModel.selectVideo(it) },
-                )
+                Row(modifier = Modifier.fillMaxSize()) {
+                    CategoryRail(
+                        categories = viewModel.categories,
+                        selectedCategory = selectedCategory,
+                        onSelectCategory = viewModel::selectCategory,
+                        modifier = Modifier.width(RAIL_WIDTH_DP.dp),
+                    )
+
+                    VideoGrid(
+                        videos = filteredVideos,
+                        hiddenVideoIds = hiddenVideoIds,
+                        onVideoClick = viewModel::toggleVideoHidden,
+                        onVideoLongClick = viewModel::selectVideo,
+                    )
+                }
             }
 
             is VideoUiState.Error -> {
@@ -101,33 +118,31 @@ fun HomeScreen(
 @Composable
 fun VideoGrid(
     videos: List<Video>,
+    hiddenVideoIds: Set<String>,
     onVideoClick: (Video) -> Unit,
+    onVideoLongClick: (Video) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val focusRequester = remember { FocusRequester() }
     val gridState = rememberLazyGridState()
 
-    LaunchedEffect(Unit) {
-        focusRequester.requestFocus()
-    }
-
     LazyVerticalGrid(
-        columns = GridCells.Fixed(5),
+        columns = GridCells.Fixed(4),
         state = gridState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        itemsIndexed(
+        items(
             items = videos,
-            key = { _, video -> video.id },
-            contentType = { _, _ -> "video_item" },
-        ) { index, video ->
+            key = { video -> video.id },
+            contentType = { "video_item" },
+        ) { video ->
             VideoItem(
                 video = video,
+                isHidden = video.id in hiddenVideoIds,
                 onClick = onVideoClick,
-                modifier = if (index == 0) Modifier.focusRequester(focusRequester) else Modifier,
+                onLongClick = onVideoLongClick,
             )
         }
     }
@@ -142,9 +157,10 @@ private fun VideoPreviewOverlay(
     val safeVideo = video ?: return
     val context = LocalContext.current
 
-    val exoPlayer = remember(context) {
-        ExoPlayer.Builder(context).build()
-    }
+    val exoPlayer =
+        remember(context) {
+            ExoPlayer.Builder(context).build()
+        }
 
     DisposableEffect(exoPlayer) {
         onDispose { exoPlayer.release() }
@@ -160,42 +176,48 @@ private fun VideoPreviewOverlay(
 
     var isLoading by remember { mutableStateOf(true) }
 
-    // Observe player state to hide loading when playback starts
     LaunchedEffect(exoPlayer) {
         val snapshot = exoPlayer.playbackState
-        // We'll use a coroutine to observe state changes
-        exoPlayer.addListener(object : Player.Listener {
-            override fun onPlaybackStateChanged(playbackState: Int) {
-                if (playbackState == Player.STATE_READY && exoPlayer.playWhenReady) {
-                    isLoading = false
+        exoPlayer.addListener(
+            object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (playbackState == Player.STATE_READY && exoPlayer.playWhenReady) {
+                        isLoading = false
+                    }
                 }
-            }
-        })
+            },
+        )
     }
 
     AnimatedVisibility(
         visible = true,
-        enter = fadeIn(tween(300)) + scaleIn(
-            initialScale = 0.9f,
-            animationSpec = tween(300)
-        ),
-        exit = fadeOut(tween(200)) + scaleOut(
-            targetScale = 0.9f,
-            animationSpec = tween(200)
-        ),
+        enter =
+            fadeIn(tween(300)) +
+                scaleIn(
+                    initialScale = 0.9f,
+                    animationSpec = tween(300),
+                ),
+        exit =
+            fadeOut(tween(200)) +
+                scaleOut(
+                    targetScale = 0.9f,
+                    animationSpec = tween(200),
+                ),
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.8f))
-                .clickable(onClick = onDismiss),
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.8f))
+                    .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center,
         ) {
             Card(
                 onClick = {},
-                modifier = Modifier
-                    .fillMaxWidth(0.6f)
-                    .aspectRatio(16f / 9f),
+                modifier =
+                    Modifier
+                        .fillMaxWidth(0.6f)
+                        .aspectRatio(16f / 9f),
                 shape = CardDefaults.shape(RoundedCornerShape(16.dp)),
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -230,14 +252,15 @@ private fun VideoPreviewOverlay(
 
                     if (isLoading) {
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(Color.Black.copy(alpha = 0.5f)),
-                            contentAlignment = Alignment.Center
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .background(Color.Black.copy(alpha = 0.5f)),
+                            contentAlignment = Alignment.Center,
                         ) {
                             CircularProgressIndicator(
                                 color = Color.White,
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier.size(48.dp),
                             )
                         }
                     }

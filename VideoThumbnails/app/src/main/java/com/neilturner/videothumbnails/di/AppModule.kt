@@ -1,7 +1,9 @@
 package com.neilturner.videothumbnails.di
 
+import com.neilturner.videothumbnails.data.DataStoreVideoSelectionStore
 import com.neilturner.videothumbnails.data.RawResourceVideoRepository
 import com.neilturner.videothumbnails.data.VideoRepository
+import com.neilturner.videothumbnails.data.VideoSelectionStore
 import com.neilturner.videothumbnails.ui.screens.HomeViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.asCoroutineDispatcher
@@ -14,8 +16,9 @@ import java.util.concurrent.Executors
 val appModule =
     module {
         single<VideoRepository> { RawResourceVideoRepository(androidContext()) }
+        single<VideoSelectionStore> { DataStoreVideoSelectionStore(androidContext()) }
         single<CoroutineDispatcher>(named("ThumbnailDispatcher")) {
             Executors.newFixedThreadPool(2).asCoroutineDispatcher()
         }
-        viewModel { HomeViewModel(get()) }
+        viewModel { HomeViewModel(get(), get()) }
     }
