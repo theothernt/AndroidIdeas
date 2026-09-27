@@ -70,6 +70,7 @@ import com.neilturner.videothumbnails.ui.theme.RailUnselectedLabel
 import org.koin.androidx.compose.koinViewModel
 
 private const val RAIL_WIDTH_DP = 200
+private const val GRID_COLUMNS = 3
 
 @Composable
 fun HomeScreen(
@@ -192,7 +193,7 @@ fun VideoGrid(
     }
 
     LazyVerticalGrid(
-        columns = GridCells.Fixed(4),
+        columns = GridCells.Fixed(GRID_COLUMNS),
         state = gridState,
         modifier =
             modifier
