@@ -24,6 +24,11 @@ interface VideoSelectionStore {
 
     suspend fun toggle(videoId: String): Boolean
 
+    suspend fun setHiddenAll(
+        videoIds: Set<String>,
+        hidden: Boolean,
+    )
+
     suspend fun clearAll()
 }
 
@@ -60,6 +65,19 @@ class DataStoreVideoSelectionStore(
             preferences[hiddenIdsKey] = if (hidden) current + videoId else current - videoId
         }
         return hidden
+    }
+
+    override suspend fun setHiddenAll(
+        videoIds: Set<String>,
+        hidden: Boolean,
+    ) {
+        if (videoIds.isEmpty()) {
+            return
+        }
+        context.videoSelectionDataStore.edit { preferences ->
+            val current = preferences[hiddenIdsKey].orEmpty()
+            preferences[hiddenIdsKey] = if (hidden) current + videoIds else current - videoIds
+        }
     }
 
     override suspend fun clearAll() {

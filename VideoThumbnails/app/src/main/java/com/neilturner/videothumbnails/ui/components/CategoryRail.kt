@@ -30,6 +30,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
@@ -42,7 +47,6 @@ import com.neilturner.videothumbnails.ui.theme.RailSelectedPill
 import com.neilturner.videothumbnails.ui.theme.RailUnselectedLabel
 import kotlinx.coroutines.launch
 
-private const val ALL_CATEGORIES_ID = "all"
 private const val RAIL_FADE_MILLIS = 200
 private const val RAIL_FOCUSED_SCALE = 1.02f
 private val RAIL_PILL_SHAPE = RoundedCornerShape(percent = 50)
@@ -51,25 +55,22 @@ private val RAIL_PILL_SHAPE = RoundedCornerShape(percent = 50)
 @Composable
 fun CategoryRail(
     categories: List<VideoCategory>,
-    selectedCategory: VideoCategory?,
-    onSelectCategory: (VideoCategory?) -> Unit,
+    selectedCategory: VideoCategory,
+    onSelectCategory: (VideoCategory) -> Unit,
     onSelectedFocusReady: (() -> Unit) -> Unit = {},
+    onNavigateToGrid: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
     val itemFocusRequesters =
         remember(categories) {
-            buildMap {
-                put(ALL_CATEGORIES_ID, FocusRequester())
-                categories.forEach { category -> put(category.id, FocusRequester()) }
-            }
+            categories.associate { category -> category.id to FocusRequester() }
         }
-    val allFocusRequester = itemFocusRequesters.getValue(ALL_CATEGORIES_ID)
     val scope = rememberCoroutineScope()
-    val selectedKey by rememberUpdatedState(selectedCategory?.id ?: ALL_CATEGORIES_ID)
+    val selectedKey by rememberUpdatedState(selectedCategory.id)
     val readyCallback by rememberUpdatedState(onSelectedFocusReady)
 
     LaunchedEffect(Unit) {
-        allFocusRequester.requestFocus()
+        itemFocusRequesters[selectedKey]?.requestFocus()
     }
 
     LaunchedEffect(itemFocusRequesters) {
@@ -83,22 +84,13 @@ fun CategoryRail(
         contentPadding = PaddingValues(vertical = 24.dp, horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        item(key = ALL_CATEGORIES_ID) {
-            CategoryRailItem(
-                displayName = "All",
-                isSelected = selectedCategory == null,
-                onFocused = { onSelectCategory(null) },
-                onClick = { onSelectCategory(null) },
-                modifier = Modifier.focusRequester(allFocusRequester),
-            )
-        }
-
         items(items = categories, key = { it.id }) { category ->
             CategoryRailItem(
                 displayName = category.displayName,
                 isSelected = selectedCategory == category,
                 onFocused = { onSelectCategory(category) },
                 onClick = { onSelectCategory(category) },
+                onNavigateToGrid = onNavigateToGrid,
                 modifier = Modifier.focusRequester(itemFocusRequesters.getValue(category.id)),
             )
         }
@@ -112,6 +104,7 @@ private fun CategoryRailItem(
     isSelected: Boolean,
     onFocused: () -> Unit,
     onClick: () -> Unit,
+    onNavigateToGrid: (() -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
     var isFocused by remember { mutableStateOf(false) }
@@ -159,7 +152,14 @@ private fun CategoryRailItem(
                     scaleY = scale
                 }.background(containerColor, RAIL_PILL_SHAPE)
                 .onFocusChanged { isFocused = it.isFocused }
-                .clickable(
+                .onPreviewKeyEvent { event ->
+                    if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionRight) {
+                        onNavigateToGrid?.invoke()
+                        true
+                    } else {
+                        false
+                    }
+                }.clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null,
                     onClick = onClick,
