@@ -71,6 +71,7 @@ import org.koin.androidx.compose.koinViewModel
 
 private const val RAIL_WIDTH_DP = 200
 private const val GRID_COLUMNS = 3
+private const val GRID_SPACING_DP = 25
 
 @Composable
 fun HomeScreen(
@@ -210,8 +211,8 @@ fun VideoGrid(
                 }
             },
         contentPadding = PaddingValues(16.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
+        verticalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
     ) {
         items(
             items = videos,
