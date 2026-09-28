@@ -1,22 +1,23 @@
 package com.neilturner.perfview.ui.dashboard
 
+import com.neilturner.perfview.ui.dashboard.contract.BackgroundActionUiState
 import com.neilturner.perfview.ui.dashboard.contract.DashboardContentState
 import com.neilturner.perfview.ui.dashboard.contract.DashboardUiState
-import com.neilturner.perfview.ui.dashboard.contract.PermissionPhase
-import com.neilturner.perfview.ui.dashboard.contract.PermissionUiState
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewViewState
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PerfViewViewStateTest {
 
     @Test
-    fun `default state has permission state and null dashboard state`() {
+    fun `default view state has no dashboard and a default background action state`() {
         val state = PerfViewViewState()
 
-        assertEquals(PermissionPhase.Rationale, state.permissionState?.phase)
-        assertEquals(null, state.dashboardState)
+        assertNull(state.dashboardState)
+        assertEquals(BackgroundActionUiState(), state.backgroundActionState)
     }
 
     @Test
@@ -25,18 +26,20 @@ class PerfViewViewStateTest {
 
         assertEquals("Starting", state.sourceLabel)
         assertEquals("Starting process monitor", state.statusLabel)
-        assertEquals(null, state.lastUpdatedLabel)
-        assertTrue(state.isPolling.not())
+        assertFalse(state.isPolling)
         assertTrue(state.content is DashboardContentState.Loading)
     }
 
     @Test
-    fun `PermissionUiState default values are correct`() {
-        val state = PermissionUiState()
+    fun `DashboardUiState defaults to a loading message`() {
+        val state = DashboardUiState()
 
-        assertEquals(PermissionPhase.Rationale, state.phase)
-        assertEquals("ADB access is needed", state.title)
-        assertTrue(state.message.contains("loopback ADB access"))
-        assertEquals("Grant ADB access", state.buttonLabel)
+        val content = state.content as DashboardContentState.Loading
+        assertEquals("Connecting to ADB and reading top process usage", content.message)
+    }
+
+    @Test
+    fun `BackgroundActionUiState default message is null`() {
+        assertNull(BackgroundActionUiState().backgroundActionMessage)
     }
 }
