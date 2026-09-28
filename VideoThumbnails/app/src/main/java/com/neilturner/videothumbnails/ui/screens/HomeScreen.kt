@@ -9,6 +9,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,11 +34,13 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -50,7 +53,9 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -78,6 +83,9 @@ import org.koin.androidx.compose.koinViewModel
 private const val RAIL_WIDTH_DP = 200
 private const val GRID_COLUMNS = 3
 private const val GRID_SPACING_DP = 25
+private const val GRID_TOP_GAP_DP = 16
+private const val GRID_EDGE_PADDING_DP = 16
+private const val CARD_FOCUSED_SCALE = 1.1f
 private const val THUMBNAIL_REVEAL_STEP_MILLIS = 40
 private const val THUMBNAIL_REVEAL_MAX_MILLIS = 120
 
@@ -234,6 +242,22 @@ fun VideoGrid(
     val restoreCallback by rememberUpdatedState(onGridFocusReady)
     val revealedVideoIds = remember(resetKey) { mutableSetOf<String>() }
     var focusedVideoId by remember { mutableStateOf<String?>(null) }
+    var gridWidthPx by remember { mutableIntStateOf(0) }
+
+    val density = LocalDensity.current
+    val focusedCardOverflow =
+        with(density) {
+            val edgePaddingPx = GRID_EDGE_PADDING_DP.dp.toPx()
+            val spacingPx = GRID_SPACING_DP.dp.toPx()
+            val cardWidthPx =
+                (
+                    (gridWidthPx - 2 * edgePaddingPx - (GRID_COLUMNS - 1) * spacingPx) / GRID_COLUMNS
+                ).coerceAtLeast(0f)
+            val cardHeightPx = cardWidthPx / 16f * 9f
+            (cardHeightPx * (CARD_FOCUSED_SCALE - 1f) / 2f).toDp()
+        }
+    val gridTopPadding = (GRID_TOP_GAP_DP.dp - focusedCardOverflow).coerceAtLeast(0.dp)
+    val focusedCardOverflowPx = with(density) { focusedCardOverflow.toPx() }
 
     LaunchedEffect(resetKey) {
         focusedVideoId = null
@@ -263,12 +287,41 @@ fun VideoGrid(
         }
     }
 
-    val focusedCardInFirstRow by remember(gridState) {
+    val focusedCardInFirstRow by remember(gridState, focusedCardOverflowPx) {
         derivedStateOf {
             val focusedId = focusedVideoId
             val visibleItems = gridState.layoutInfo.visibleItemsInfo
             val focusedItem = visibleItems.firstOrNull { it.key == focusedId }
-            focusedItem != null && visibleItems.none { it.offset.y < focusedItem.offset.y }
+            focusedItem != null &&
+                visibleItems.none { it.offset.y < focusedItem.offset.y - focusedCardOverflowPx }
+        }
+    }
+
+    val nudgeFocusedCardClearOfTopEdge: suspend () -> Unit = nudge@{
+        val focusedId = focusedVideoId ?: return@nudge
+        val focusedItem = gridState.layoutInfo.visibleItemsInfo.firstOrNull { it.key == focusedId }
+        val slack = focusedItem?.offset?.y?.toFloat() ?: return@nudge
+        val atListStart =
+            gridState.firstVisibleItemIndex == 0 && gridState.firstVisibleItemScrollOffset == 0
+        val delta = focusedCardOverflowPx - slack
+        if (!atListStart && delta >= 1f) {
+            gridState.scrollBy(-delta)
+        }
+    }
+
+    val keepFocusedCardClearOfTopEdge: (String) -> Unit = { videoId ->
+        scope.launch {
+            if (gridState.layoutInfo.visibleItemsInfo.any { it.key == videoId }) {
+                nudgeFocusedCardClearOfTopEdge()
+            }
+        }
+    }
+
+    LaunchedEffect(gridState, focusedCardOverflowPx) {
+        snapshotFlow { gridState.isScrollInProgress }.collect { isScrolling ->
+            if (!isScrolling) {
+                nudgeFocusedCardClearOfTopEdge()
+            }
         }
     }
 
@@ -278,6 +331,8 @@ fun VideoGrid(
         modifier =
             modifier
                 .fillMaxWidth()
+                .onSizeChanged { gridWidthPx = it.width }
+                .padding(top = gridTopPadding)
                 .focusRequester(gridFocusRequester)
                 .onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) {
@@ -292,7 +347,13 @@ fun VideoGrid(
                         false
                     }
                 },
-        contentPadding = PaddingValues(16.dp),
+        contentPadding =
+            PaddingValues(
+                start = GRID_EDGE_PADDING_DP.dp,
+                end = GRID_EDGE_PADDING_DP.dp,
+                top = focusedCardOverflow,
+                bottom = GRID_EDGE_PADDING_DP.dp,
+            ),
         horizontalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
         verticalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
     ) {
@@ -321,7 +382,12 @@ fun VideoGrid(
                             } else {
                                 Modifier
                             },
-                        ).onFocusChanged { if (it.isFocused) focusedVideoId = video.id },
+                        ).onFocusChanged {
+                            if (it.isFocused) {
+                                focusedVideoId = video.id
+                                keepFocusedCardClearOfTopEdge(video.id)
+                            }
+                        },
             )
         }
     }
