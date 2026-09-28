@@ -26,7 +26,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        // Stop overlay service when app comes to foreground
-        stopService(CpuOverlayService.createStopIntent(this))
+        // Tear the overlay down only when it is actually attached. Returning from the
+        // overlay-permission Settings screen, and the very first resume, both reach
+        // this callback with no overlay running, and an unconditional stopService
+        // there would race the StartBackgroundOverlay command.
+        if (CpuOverlayService.isRunning) {
+            stopService(CpuOverlayService.createStopIntent(this))
+        }
     }
 }

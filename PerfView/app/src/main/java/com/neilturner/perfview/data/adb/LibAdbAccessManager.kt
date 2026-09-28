@@ -10,48 +10,15 @@ import kotlinx.coroutines.withContext
 class LibAdbAccessManager(
     private val context: Context,
 ) : AdbAccessManager {
-    private val preferences = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-
-    override val isConnected: Boolean
-        get() = PerfViewAdbConnectionManager.getInstance(context).isConnected
-
-    override fun hasGrantedAccess(): Boolean = preferences.getBoolean(KEY_ACCESS_GRANTED, false)
 
     override suspend fun requestAccess(timeoutMillis: Long) = withContext(Dispatchers.IO) {
         val manager = PerfViewAdbConnectionManager.getInstance(context)
-
-        try {
-            // Keep the existing connection if present so we reuse the same identity,
-            // but always run a shell probe before treating access as granted.
-            if (!manager.isConnected) {
-                connect(manager = manager, timeoutMillis = timeoutMillis)
-            }
-            verifyShellAccess(manager)
-            persistGrantedAccess(true)
-        } catch (error: AdbAuthorizationRequiredException) {
-            persistGrantedAccess(false)
-            throw error
+        // Reuse an existing connection so we keep the same device identity, but always
+        // run a shell probe before treating access as granted.
+        if (!manager.isConnected) {
+            connect(manager = manager, timeoutMillis = timeoutMillis)
         }
-    }
-
-    override suspend fun ensureConnected(timeoutMillis: Long) = withContext(Dispatchers.IO) {
-        val manager = PerfViewAdbConnectionManager.getInstance(context)
-        try {
-            if (!manager.isConnected) {
-                connect(manager = manager, timeoutMillis = timeoutMillis)
-            }
-            verifyShellAccess(manager)
-            persistGrantedAccess(true)
-        } catch (error: AdbAuthorizationRequiredException) {
-            // If authorization was revoked, don't keep telling startup that access
-            // was previously granted.
-            persistGrantedAccess(false)
-            throw error
-        } catch (error: Exception) {
-            // Don't clear access flag on transient availability errors. The flag
-            // still represents prior user consent, not current connection state.
-            throw error
-        }
+        verifyShellAccess(manager)
     }
 
     private fun connect(
@@ -163,19 +130,8 @@ class LibAdbAccessManager(
         }
     }
 
-    private fun persistGrantedAccess(granted: Boolean) {
-        preferences.edit().putBoolean(KEY_ACCESS_GRANTED, granted).apply()
-    }
-
-    private fun PerfViewAdbConnectionManager.disconnectIfNeeded() {
-        if (!isConnected) return
-        runCatching { disconnect() }
-    }
-
     private companion object {
         private const val DEFAULT_ADB_PORT = 5555
-        private const val PREFS_NAME = "perfview_adb_access"
-        private const val KEY_ACCESS_GRANTED = "adb_access_granted"
         private const val PROBE_TOKEN = "perfview_probe_ok"
         private const val POLL_DELAY_MILLIS = 50L
         private const val MAX_IDLE_CYCLES = 20

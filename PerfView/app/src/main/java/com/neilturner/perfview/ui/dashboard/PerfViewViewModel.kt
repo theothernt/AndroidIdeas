@@ -1,6 +1,5 @@
 package com.neilturner.perfview.ui.dashboard
 
-import android.app.Activity
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -13,7 +12,6 @@ import com.neilturner.perfview.overlay.OverlayPermissionManager
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewCommand
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewIntent
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewViewState
-import com.neilturner.perfview.ui.dashboard.contract.BackgroundActionUiState
 import com.neilturner.perfview.ui.dashboard.contract.DashboardContentState
 import com.neilturner.perfview.ui.dashboard.contract.DashboardUiState
 import kotlinx.coroutines.Job
@@ -44,8 +42,10 @@ class PerfViewViewModel(
     val commands = _commands.asSharedFlow()
 
     private var observeJob: Job? = null
+    private var connectJob: Job? = null
     private var overlayPermissionPollJob: Job? = null
     private var isMonitoringActive = false
+    private var isHandoffRequested = false
 
     fun accept(intent: PerfViewIntent) {
         when (intent) {
@@ -59,6 +59,10 @@ class PerfViewViewModel(
     private fun startConnecting() {
         stopMonitoring()
         observeJob?.cancel()
+        // Cancel any in-flight handshake so a re-entrant Load cannot race a second
+        // requestAccess against the same shared connection manager.
+        connectJob?.cancel()
+        isHandoffRequested = false
 
         _uiState.value = PerfViewViewState(
             dashboardState = DashboardUiState(
@@ -70,7 +74,7 @@ class PerfViewViewModel(
             ),
         )
 
-        viewModelScope.launch {
+        connectJob = viewModelScope.launch {
             runCatching {
                 adbAccessManager.requestAccess(timeoutMillis = ADB_REQUEST_TIMEOUT_MILLIS)
             }.onSuccess {
@@ -141,8 +145,7 @@ class PerfViewViewModel(
     private fun runInBackground() {
         if (overlayPermissionManager.canDrawOverlays()) {
             overlayPermissionPollJob?.cancel()
-            _uiState.update { it.copy(backgroundActionState = BackgroundActionUiState()) }
-            _commands.tryEmit(PerfViewCommand.StartBackgroundOverlay)
+            requestOverlayHandoff()
             return
         }
 
@@ -157,9 +160,19 @@ class PerfViewViewModel(
     private fun handleOverlayPermissionResult() {
         if (overlayPermissionManager.canDrawOverlays()) {
             overlayPermissionPollJob?.cancel()
-            _uiState.update { it.copy(backgroundActionState = BackgroundActionUiState()) }
-            _commands.tryEmit(PerfViewCommand.StartBackgroundOverlay)
+            requestOverlayHandoff()
         }
+    }
+
+    /**
+     * The settings activity result and the permission poll can both observe the grant,
+     * so the handoff is latched to fire exactly once per foreground session. A second
+     * emission would try to launch the notification permission dialog over itself.
+     */
+    private fun requestOverlayHandoff() {
+        if (isHandoffRequested) return
+        isHandoffRequested = true
+        _commands.tryEmit(PerfViewCommand.StartBackgroundOverlay)
     }
 
     private fun startOverlayPermissionPolling() {
@@ -168,8 +181,7 @@ class PerfViewViewModel(
             repeat(OVERLAY_PERMISSION_POLL_ATTEMPTS) {
                 delay(OVERLAY_PERMISSION_POLL_INTERVAL_MILLIS)
                 if (overlayPermissionManager.canDrawOverlays()) {
-                    _uiState.update { it.copy(backgroundActionState = BackgroundActionUiState()) }
-                    _commands.emit(PerfViewCommand.StartBackgroundOverlay)
+                    requestOverlayHandoff()
                     return@launch
                 }
             }
@@ -208,7 +220,9 @@ class PerfViewViewModel(
 
     override fun onCleared() {
         stopMonitoring()
-        super.onCleared()
+        connectJob?.cancel()
+        observeJob?.cancel()
+        overlayPermissionPollJob?.cancel()
     }
 
     private companion object {

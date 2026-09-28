@@ -6,7 +6,6 @@ import com.neilturner.perfview.data.cpu.model.TopProcessUsage
 @Stable
 data class PerfViewViewState(
     val dashboardState: DashboardUiState? = null,
-    val backgroundActionState: BackgroundActionUiState = BackgroundActionUiState(),
 )
 
 @Stable
@@ -41,8 +40,3 @@ sealed interface DashboardContentState {
         val message: String,
     ) : DashboardContentState
 }
-
-@Stable
-data class BackgroundActionUiState(
-    val backgroundActionMessage: String? = null,
-)

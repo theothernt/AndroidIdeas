@@ -70,6 +70,9 @@ class CpuMonitor(
         if (activeClients == 0) {
             pollJob?.cancel()
             pollJob = null
+            // Drop the last snapshot so a client that re-acquires does not render
+            // a previous session's processes as if they were current.
+            _results.value = null
         }
     }
 

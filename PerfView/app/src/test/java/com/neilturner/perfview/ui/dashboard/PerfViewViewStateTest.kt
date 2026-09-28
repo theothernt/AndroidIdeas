@@ -1,6 +1,5 @@
 package com.neilturner.perfview.ui.dashboard
 
-import com.neilturner.perfview.ui.dashboard.contract.BackgroundActionUiState
 import com.neilturner.perfview.ui.dashboard.contract.DashboardContentState
 import com.neilturner.perfview.ui.dashboard.contract.DashboardUiState
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewViewState
@@ -13,11 +12,8 @@ import org.junit.Test
 class PerfViewViewStateTest {
 
     @Test
-    fun `default view state has no dashboard and a default background action state`() {
-        val state = PerfViewViewState()
-
-        assertNull(state.dashboardState)
-        assertEquals(BackgroundActionUiState(), state.backgroundActionState)
+    fun `default view state has no dashboard state`() {
+        assertNull(PerfViewViewState().dashboardState)
     }
 
     @Test
@@ -39,7 +35,12 @@ class PerfViewViewStateTest {
     }
 
     @Test
-    fun `BackgroundActionUiState default message is null`() {
-        assertNull(BackgroundActionUiState().backgroundActionMessage)
+    fun `DashboardUiState carries its content through unchanged`() {
+        val content = DashboardContentState.Unsupported(message = "Wireless debugging is off")
+
+        val state = DashboardUiState(sourceLabel = "Unavailable", content = content)
+
+        assertEquals("Unavailable", state.sourceLabel)
+        assertEquals(content, state.content)
     }
 }

@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The ADB identity is a long-lived RSA key pair plus a self-signed certificate that
+  grants shell access to the device. Backing those up or transferring them to a new
+  device would hand the shell credential to whatever account performed the backup,
+  so they are excluded from both cloud backup and device transfer.
+
+  Regenerating them on a new device is safe and cheap: the app creates a fresh pair
+  and the user re-approves the debugging prompt.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude
+            domain="file"
+            path="perfview-private.key" />
+        <exclude
+            domain="file"
+            path="perfview-private.key.pub" />
+        <exclude
+            domain="file"
+            path="perfview-cert.der" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude
+            domain="file"
+            path="perfview-private.key" />
+        <exclude
+            domain="file"
+            path="perfview-private.key.pub" />
+        <exclude
+            domain="file"
+            path="perfview-cert.der" />
+    </device-transfer>
+</data-extraction-rules>

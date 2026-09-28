@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.neilturner.perfview.ui.dashboard.contract.DashboardContentState
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewViewState
 import com.neilturner.perfview.ui.theme.PerfViewTheme
+import java.util.Locale
 
 private val OverlayBackground = Color(0xF2102A36)
 private val OverlayText = Color(0xFFEAF5F7)
@@ -42,7 +43,7 @@ fun PerfViewScreen(
 ) {
     val processLines = when (val content = uiState.dashboardState?.content) {
         is DashboardContentState.Data -> content.processes.take(5).mapIndexed { index, process ->
-            "${index + 1}. ${String.format("%.0f%%", process.cpuPercent)}  ${String.format("%.0fMB", process.ramMb)}  ${process.name}"
+            "${index + 1}. ${String.format(Locale.US, "%.0f%%", process.cpuPercent)}  ${String.format(Locale.US, "%.0fMB", process.ramMb)}  ${process.name}"
         }
 
         is DashboardContentState.Loading -> listOf(content.message)

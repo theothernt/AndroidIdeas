@@ -1,5 +1,6 @@
 package com.neilturner.perfview.overlay
 
+import android.annotation.SuppressLint
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -67,10 +68,15 @@ class CpuOverlayService : Service() {
         startAsForegroundService()
         ensureOverlayAttached()
         startObserving()
+        // Set only once every step has succeeded. startForeground throws when the
+        // runtime type is not a subset of the manifest declaration, so claiming the
+        // overlay is up beforehand would report success for a service that died.
+        isRunning = true
         return START_STICKY
     }
 
     override fun onDestroy() {
+        isRunning = false
         observeJob?.cancel()
         stopMonitoring()
         removeOverlay()
@@ -83,11 +89,7 @@ class CpuOverlayService : Service() {
     private fun startAsForegroundService() {
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(
-                NOTIFICATION_ID,
-                notification,
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
-            )
+            startForeground(NOTIFICATION_ID, notification, currentForegroundServiceType())
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -258,6 +260,37 @@ class CpuOverlayService : Service() {
         private const val ACTION_STOP = "com.neilturner.perfview.overlay.STOP"
         private const val NOTIFICATION_CHANNEL_ID = "perfview_overlay"
         private const val NOTIFICATION_ID = 1001
+
+        /**
+         * True while the overlay window is attached. The service runs in the same
+         * process as the activity, so this avoids a deprecated
+         * ActivityManager.getRunningServices() call just to decide whether the
+         * overlay needs tearing down.
+         */
+        @Volatile
+        var isRunning: Boolean = false
+            private set
+
+        /**
+         * The foreground service type this service promotes itself with on the current
+         * platform version.
+         *
+         * Android requires this value to be a bitwise subset of the
+         * `android:foregroundServiceType` declared in the manifest, and throws
+         * IllegalArgumentException from startForeground() otherwise. That pairing is
+         * easy to break because it is maintained in two places, so it is covered by
+         * CpuOverlayServiceTest.
+         */
+        @SuppressLint("InlinedApi")
+        internal fun currentForegroundServiceType(): Int = when {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE ->
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+
+            // Before specialUse existed, dataSync was the only type that permitted a
+            // continuously running overlay with no user-facing progress indicator.
+            // The manifest declares both types so this fallback stays a valid subset.
+            else -> ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+        }
 
         fun createStartIntent(context: Context): Intent =
             Intent(context, CpuOverlayService::class.java).setAction(ACTION_START)

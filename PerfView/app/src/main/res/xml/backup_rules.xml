@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Backup rules for Android 11 and below. Android 12+ uses
+  res/xml/data_extraction_rules.xml instead; both exclude the ADB shell credential
+  so it is never copied off the device.
+-->
+<full-backup-content>
+    <exclude
+        domain="file"
+        path="perfview-private.key" />
+    <exclude
+        domain="file"
+        path="perfview-private.key.pub" />
+    <exclude
+        domain="file"
+        path="perfview-cert.der" />
+</full-backup-content>

@@ -5,7 +5,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <uses-feature
         android:name="android.hardware.touchscreen"
@@ -17,6 +19,8 @@
     <application
         android:name=".PerfViewApp"
         android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:banner="@mipmap/ic_banner"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -33,10 +37,26 @@
             </intent-filter>
         </activity>
 
+        <!--
+          The overlay is a continuous, user-initiated monitor that must keep sampling
+          while other apps are in the foreground. dataSync is not a valid fit: it is
+          scoped to short-lived transfers and is capped at six hours per day from
+          Android 15, which would kill a monitor that is meant to run indefinitely.
+
+          Both types are declared because the type passed to startForeground() must be
+          a bitwise subset of this attribute. specialUse only exists from API 34, so
+          CpuOverlayService falls back to dataSync below that. dataSync carries no
+          time cap on API 29-33, so the fallback is only ever active where the cap
+          does not apply.
+        -->
         <service
             android:name=".overlay.CpuOverlayService"
             android:exported="false"
-            android:foregroundServiceType="dataSync" />
+            android:foregroundServiceType="specialUse|dataSync">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Persistent on-device CPU and memory monitor overlay rendered above other apps." />
+        </service>
     </application>
 
 </manifest>

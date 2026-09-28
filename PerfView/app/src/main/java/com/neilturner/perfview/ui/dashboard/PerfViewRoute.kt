@@ -1,6 +1,10 @@
 package com.neilturner.perfview.ui.dashboard
 
+import android.Manifest
 import android.app.Activity
+import android.content.Context
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -24,16 +28,33 @@ fun PerfViewRoute(
     val uiState = viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+
+    fun startOverlayAndFinish() {
+        ContextCompat.startForegroundService(
+            context,
+            CpuOverlayService.createStartIntent(context),
+        )
+        (context as? Activity)?.finish()
+    }
+
     val overlayPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
         viewModel.accept(PerfViewIntent.OverlayPermissionResult)
     }
 
-    LaunchedEffect(viewModel) {
-        viewModel.accept(PerfViewIntent.Load)
+    // The foreground service notification is the only affordance for stopping the
+    // overlay, so ask for POST_NOTIFICATIONS before handing off. A denial is not
+    // fatal: the overlay still runs, it just becomes harder to dismiss.
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {
+        startOverlayAndFinish()
     }
 
+    // ON_START is the single source of truth for loading. A separate LaunchedEffect
+    // would fire alongside it on first composition and start a second, racing
+    // connection attempt.
     DisposableEffect(lifecycleOwner, viewModel) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
@@ -57,11 +78,11 @@ fun PerfViewRoute(
                     overlayPermissionLauncher.launch(command.intent)
 
                 PerfViewCommand.StartBackgroundOverlay -> {
-                    ContextCompat.startForegroundService(
-                        context,
-                        CpuOverlayService.createStartIntent(context),
-                    )
-                    (context as? Activity)?.finish()
+                    if (needsNotificationPermission(context)) {
+                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    } else {
+                        startOverlayAndFinish()
+                    }
                 }
 
                 PerfViewCommand.ExitApp -> {
@@ -77,3 +98,10 @@ fun PerfViewRoute(
         onExitApp = { viewModel.accept(PerfViewIntent.ExitApp) },
     )
 }
+
+private fun needsNotificationPermission(context: Context): Boolean =
+    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS,
+        ) != PackageManager.PERMISSION_GRANTED
