@@ -1,10 +1,10 @@
 package com.neilturner.navstate.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -16,27 +16,21 @@ import androidx.tv.material3.Text
 fun TvScreenColumn(
     modifier: Modifier = Modifier,
     horizontalAlignment: Alignment.Horizontal = Alignment.CenterHorizontally,
+    verticalArrangement: Arrangement.Vertical = Arrangement.Center,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    LazyColumn(
+    Column(
         modifier = modifier
             .fillMaxSize()
             .padding(horizontal = 48.dp, vertical = 24.dp),
         horizontalAlignment = horizontalAlignment,
-        verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
-    ) {
-        item {
-            Column(
-                horizontalAlignment = horizontalAlignment,
-                verticalArrangement = androidx.compose.foundation.layout.Arrangement.Center,
-                content = content,
-            )
-        }
-    }
+        verticalArrangement = verticalArrangement,
+        content = content,
+    )
 }
 
 @Composable
-fun FocusableText(text: String, modifier: Modifier = Modifier, fontSize: Int = 24) {
+fun ScreenText(text: String, modifier: Modifier = Modifier, fontSize: Int = 24) {
     Text(
         text = text,
         modifier = modifier.padding(16.dp),

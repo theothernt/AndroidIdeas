@@ -1,3 +1,10 @@
 <resources>
+
     <string name="app_name">Nav State</string>
+    <string name="screen_title">Screen %1$d</string>
+    <string name="counter_value">Counter: %1$d</string>
+    <string name="increment">Increment</string>
+    <string name="go_to_screen">Go to Screen %1$d</string>
+    <string name="back_to_screen">Back to Screen %1$d</string>
+
 </resources>
