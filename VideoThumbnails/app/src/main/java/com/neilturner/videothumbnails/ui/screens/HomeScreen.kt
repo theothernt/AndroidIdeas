@@ -23,7 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -78,6 +78,8 @@ import org.koin.androidx.compose.koinViewModel
 private const val RAIL_WIDTH_DP = 200
 private const val GRID_COLUMNS = 3
 private const val GRID_SPACING_DP = 25
+private const val THUMBNAIL_REVEAL_STEP_MILLIS = 40
+private const val THUMBNAIL_REVEAL_MAX_MILLIS = 120
 
 @Composable
 fun HomeScreen(
@@ -230,6 +232,7 @@ fun VideoGrid(
     val focusedCardRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
     val restoreCallback by rememberUpdatedState(onGridFocusReady)
+    val revealedVideoIds = remember(resetKey) { mutableSetOf<String>() }
     var focusedVideoId by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(resetKey) {
@@ -293,16 +296,23 @@ fun VideoGrid(
         horizontalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
         verticalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
     ) {
-        items(
+        itemsIndexed(
             items = videos,
-            key = { video -> video.id },
-            contentType = { "video_item" },
-        ) { video ->
+            key = { _, video -> video.id },
+            contentType = { _, _ -> "video_item" },
+        ) { index, video ->
             VideoItem(
                 video = video,
                 isHidden = video.id in hiddenVideoIds,
                 onClick = onVideoClick,
                 onLongClick = onVideoLongClick,
+                revealDelayMillis =
+                    if (video.id in revealedVideoIds) {
+                        0
+                    } else {
+                        (index * THUMBNAIL_REVEAL_STEP_MILLIS).coerceAtMost(THUMBNAIL_REVEAL_MAX_MILLIS)
+                    },
+                onReveal = { revealedVideoIds += video.id },
                 modifier =
                     Modifier
                         .then(
