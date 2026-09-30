@@ -27,10 +27,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.neilturner.perfview.ui.components.TvActionButton
-import com.neilturner.perfview.ui.components.TvPanelButtonWidth
-import com.neilturner.perfview.ui.components.TvSecondaryButton
-import com.neilturner.perfview.ui.intro.contract.ChecklistAction
 import com.neilturner.perfview.ui.intro.contract.ChecklistStatus
 import com.neilturner.perfview.ui.intro.contract.IntroChecklistItem
 import com.neilturner.perfview.ui.intro.contract.IntroViewState
@@ -46,11 +42,16 @@ private val PanelBorder = Color(0xFF3A5A6A)
 private val PanelShape = RoundedCornerShape(18.dp)
 private val RowDivider = Color(0x1AFFFFFF)
 
+/**
+ * Readiness checklist, shown with no controls at all.
+ *
+ * Every permission is raised by the screen as it is reached, so there is nothing here for the
+ * user to press. The row currently being asked for carries a spinner, which is the only signal
+ * that something is expected of them.
+ */
 @Composable
 fun IntroScreen(
     uiState: IntroViewState,
-    onAction: () -> Unit,
-    onExitApp: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(
@@ -93,30 +94,8 @@ fun IntroScreen(
                     ChecklistRow(item = item)
                 }
             }
-
-            uiState.action?.let { action ->
-                TvActionButton(
-                    text = actionLabel(action),
-                    onClick = onAction,
-                    width = TvPanelButtonWidth,
-                )
-            }
-
-            Spacer(modifier = Modifier.size(4.dp))
-
-            TvSecondaryButton(
-                text = "Exit app",
-                onClick = onExitApp,
-                width = TvPanelButtonWidth,
-            )
         }
     }
-}
-
-private fun actionLabel(action: ChecklistAction): String = when (action) {
-    ChecklistAction.RequestNotifications -> "Allow notifications"
-    ChecklistAction.OpenOverlaySettings -> "Open Settings"
-    ChecklistAction.Retry -> "Try again"
 }
 
 @Composable
@@ -160,7 +139,7 @@ private fun StatusIndicator(
     status: ChecklistStatus,
     modifier: Modifier = Modifier,
 ) {
-    // A fixed box so the spinner and the tick occupy the same space, otherwise the text beside
+    // A fixed box so the spinner and the badges occupy the same space, otherwise the text beside
     // them shifts sideways as each item settles.
     Box(
         modifier = modifier.size(28.dp),
@@ -214,17 +193,48 @@ private fun IntroScreenPreview() {
                 uiState = IntroViewState(
                     items = listOf(
                         IntroChecklistItem("USB debugging", ChecklistStatus.Ready, "Connected"),
-                        IntroChecklistItem("Notification access", ChecklistStatus.Ready, "Granted"),
+                        IntroChecklistItem(
+                            label = "Notification access",
+                            status = ChecklistStatus.Ready,
+                            detail = "Granted",
+                        ),
+                        IntroChecklistItem(
+                            label = "Overlay access",
+                            status = ChecklistStatus.InProgress,
+                            detail = "Waiting for your answer",
+                        ),
+                    ),
+                )
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, backgroundColor = 0xFF07131F)
+@Composable
+private fun IntroScreenRefusedPreview() {
+    PerfViewTheme(dynamicColor = false) {
+        PerfViewTvTheme {
+            IntroScreen(
+                uiState = IntroViewState(
+                    items = listOf(
+                        IntroChecklistItem(
+                            label = "USB debugging",
+                            status = ChecklistStatus.Ready,
+                            detail = "Connected",
+                        ),
+                        IntroChecklistItem(
+                            label = "Notification access",
+                            status = ChecklistStatus.Ready,
+                            detail = "Granted",
+                        ),
                         IntroChecklistItem(
                             label = "Overlay access",
                             status = ChecklistStatus.NeedsAttention,
-                            detail = "Tap Open Settings to allow",
+                            detail = "Not granted",
                         ),
                     ),
-                    action = ChecklistAction.OpenOverlaySettings,
-                ),
-                onAction = {},
-                onExitApp = {},
+                )
             )
         }
     }

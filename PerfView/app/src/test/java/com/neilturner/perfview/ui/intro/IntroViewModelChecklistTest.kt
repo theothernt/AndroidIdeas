@@ -10,7 +10,7 @@ import com.neilturner.perfview.domain.cpu.repository.CpuRepository
 import android.content.Intent
 import com.neilturner.perfview.platform.NotificationPermissionChecker
 import com.neilturner.perfview.platform.OverlayAccessChecker
-import com.neilturner.perfview.ui.intro.contract.ChecklistAction
+import com.neilturner.perfview.ui.intro.contract.ChecklistItem
 import com.neilturner.perfview.ui.intro.contract.ChecklistStatus
 import com.neilturner.perfview.ui.intro.contract.IntroCommand
 import com.neilturner.perfview.ui.intro.contract.IntroIntent
@@ -24,6 +24,7 @@ import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -90,11 +91,12 @@ class IntroViewModelChecklistTest {
         )
 
         viewModel.accept(IntroIntent.Load)
-        advanceUntilIdle()
+        runCurrent()
 
-        assertEquals(ChecklistStatus.NeedsAttention, notificationStatus(viewModel))
+        // InProgress, because the prompt is raised automatically and is awaiting an answer.
+        assertEquals(ChecklistStatus.InProgress, notificationStatus(viewModel))
+        // The prompt is up and unanswered, so the gate is still closed.
         assertFalse("must not advance while notifications are unsatisfied", viewModel.uiState.value.isReady)
-        assertEquals(ChecklistAction.RequestNotifications, viewModel.uiState.value.action)
     }
 
     @Test
@@ -130,7 +132,6 @@ class IntroViewModelChecklistTest {
 
         assertEquals(ChecklistStatus.NeedsAttention, notificationStatus(viewModel))
         assertFalse(viewModel.uiState.value.isReady)
-        assertTrue("a denial should offer an action", viewModel.uiState.value.canAct)
     }
 
     @Test
@@ -148,7 +149,7 @@ class IntroViewModelChecklistTest {
     }
 
     @Test
-    fun `missing overlay access blocks the gate and offers settings`() = runTest {
+    fun `missing overlay access is raised but does not block the dashboard`() = runTest {
         val viewModel = viewModel(
             gate = grantedGate(testScheduler),
             permissions = FakePermissions(required = true, granted = true),
@@ -156,11 +157,18 @@ class IntroViewModelChecklistTest {
         )
 
         viewModel.accept(IntroIntent.Load)
-        advanceUntilIdle()
+        runCurrent()
 
-        assertEquals(ChecklistStatus.NeedsAttention, overlayStatus(viewModel))
-        assertFalse("must not advance without overlay access", viewModel.uiState.value.isReady)
-        assertEquals(ChecklistAction.OpenOverlaySettings, viewModel.uiState.value.action)
+        // InProgress, because Settings is raised automatically and is awaiting an answer.
+        assertEquals(ChecklistStatus.InProgress, overlayStatus(viewModel))
+        // Advisory: overlay access is excluded from the blocking set, which is what keeps the
+        // process list reachable where the grant cannot be given. Verified directly against the
+        // gate's own predicate rather than isReady, which also waits on a real process snapshot
+        // that CpuMonitor produces on Dispatchers.IO, outside this test scheduler.
+        assertFalse(
+            "overlay access must not block the gate",
+            viewModel.uiState.value.isBlockingItemOutstanding(ChecklistItem.OverlayAccess),
+        )
     }
 
     @Test
@@ -184,7 +192,6 @@ class IntroViewModelChecklistTest {
         advanceUntilIdle()
         assertEquals(ChecklistStatus.NeedsAttention, overlayStatus(viewModel))
 
-        assertEquals(ChecklistAction.OpenOverlaySettings, viewModel.uiState.value.action)
         assertNotNull(granting)
     }
 
@@ -202,7 +209,6 @@ class IntroViewModelChecklistTest {
         advanceUntilIdle()
 
         assertEquals(ChecklistStatus.NeedsAttention, adbStatus(viewModel))
-        assertTrue("a failed check should offer an action", viewModel.uiState.value.canAct)
     }
 
     private fun notificationStatus(viewModel: IntroViewModel) =

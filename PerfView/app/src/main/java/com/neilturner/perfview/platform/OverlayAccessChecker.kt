@@ -3,7 +3,6 @@ package com.neilturner.perfview.platform
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Build
 import android.provider.Settings
 
 /**
@@ -15,6 +14,14 @@ import android.provider.Settings
 interface OverlayAccessChecker {
     fun canDrawOverlays(): Boolean
 
+    /**
+     * The intent that opens the screen where the grant is toggled.
+     *
+     * Always returns an intent, matching the pattern that works in AerialViews: a bare
+     * `Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)` with no data URI and no
+     * FLAG_ACTIVITY_NEW_TASK. Deciding up front whether it is resolvable was the mistake that
+     * silently skipped the prompt, so the launch itself is guarded by the caller instead.
+     */
     fun createGrantIntent(): Intent
 }
 
@@ -24,11 +31,6 @@ class AndroidOverlayAccessChecker(
 
     override fun canDrawOverlays(): Boolean = Settings.canDrawOverlays(context)
 
-    override fun createGrantIntent(): Intent {
-        val intent = Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
-            intent.data = Uri.parse("package:${context.packageName}")
-        }
-        return intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    }
+    override fun createGrantIntent(): Intent =
+        Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)
 }

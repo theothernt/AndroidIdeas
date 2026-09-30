@@ -1,7 +1,7 @@
 package com.neilturner.perfview.ui.intro
 
 import android.Manifest
-import android.app.Activity
+import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -37,13 +37,6 @@ fun IntroRoute(
         viewModel.accept(IntroIntent.NotificationPermissionResult(granted = granted))
     }
 
-    // There is no dialog for the overlay permission, so granting it means a trip to Settings.
-    // Returning here is what re-checks it, since the grant is decided on that screen.
-    val overlaySettingsLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult(),
-    ) {
-        viewModel.accept(IntroIntent.OverlaySettingsResult)
-    }
 
     // Subscribed before the first check runs. LaunchedEffect and DisposableEffect are otherwise
     // ordered arbitrarily, and a check that emits the permission request before anything is
@@ -57,11 +50,19 @@ fun IntroRoute(
                     Manifest.permission.POST_NOTIFICATIONS,
                 )
 
-                IntroCommand.OpenOverlaySettings -> overlaySettingsLauncher.launch(
-                    overlayAccessChecker.createGrantIntent(),
-                )
+                IntroCommand.OpenOverlaySettings -> {
+                    // Started directly rather than through an ActivityResultLauncher. This
+                    // matches AerialViews: there is no result to read, since Settings reports
+                    // success whether or not anything was granted. The re-check on ON_START is
+                    // what observes the change.
+                    runCatching {
+                        context.startActivity(overlayAccessChecker.createGrantIntent())
+                    }.onFailure {
+                        Log.w(INTRO_TAG, "Could not open the overlay permission screen", it)
+                        viewModel.accept(IntroIntent.OverlaySettingsResult)
+                    }
+                }
 
-                IntroCommand.ExitApp -> (context as? Activity)?.finish()
             }
         }
     }
@@ -79,9 +80,7 @@ fun IntroRoute(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    IntroScreen(
-        uiState = uiState,
-        onAction = { viewModel.accept(IntroIntent.ActionClicked) },
-        onExitApp = { viewModel.accept(IntroIntent.ExitApp) },
-    )
+    IntroScreen(uiState = uiState)
 }
+
+private const val INTRO_TAG = "PerfViewIntro"

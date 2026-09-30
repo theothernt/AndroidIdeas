@@ -20,6 +20,4 @@ sealed interface IntroCommand {
      * There is no dialog equivalent for this permission, so this is the only route to it.
      */
     data object OpenOverlaySettings : IntroCommand
-
-    data object ExitApp : IntroCommand
 }

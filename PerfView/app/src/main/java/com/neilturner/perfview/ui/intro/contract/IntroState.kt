@@ -14,7 +14,7 @@ data class IntroChecklistItem(
 
 @Stable
 enum class ChecklistStatus {
-    /** Being checked or awaited, shown with a spinner. */
+    /** Being checked, or being asked for right now. Shown with a spinner. */
     InProgress,
 
     /** Satisfied. */
@@ -23,26 +23,8 @@ enum class ChecklistStatus {
     /** Nothing to ask for on this platform. */
     NotNeeded,
 
-    /** The user declined, or it could not be established. */
+    /** Asked for and not granted, so it cannot be asked again automatically. */
     NeedsAttention,
-}
-
-/**
- * The single action offered for whatever is outstanding.
- *
- * Kept as one action rather than one per row because only one thing can be actionable at a time:
- * the checklist settles in order, and the user works through them one by one.
- */
-@Stable
-sealed interface ChecklistAction {
-    /** Ask for notifications, which the platform can do with a dialog. */
-    data object RequestNotifications : ChecklistAction
-
-    /** Send the user to Settings, the only route to the overlay permission. */
-    data object OpenOverlaySettings : ChecklistAction
-
-    /** Everything outstanding was declined or refused. */
-    data object Retry : ChecklistAction
 }
 
 @Stable
@@ -50,15 +32,34 @@ data class IntroViewState(
     val items: List<IntroChecklistItem> = emptyList(),
     val isReady: Boolean = false,
     val isCheckingAdb: Boolean = true,
-    val action: ChecklistAction? = null,
 ) {
+    val isNotificationsInProgress: Boolean
+        get() = itemStatus("Notification access") == ChecklistStatus.InProgress
+
+    val isOverlayAccessInProgress: Boolean
+        get() = itemStatus("Overlay access") == ChecklistStatus.InProgress
+
     /**
-     * A retry is only meaningful once a check has actually failed. While something is still in
-     * progress there is nothing to retry, and offering it would just let the user start a second
-     * attempt against the in-flight one.
+     * Whether the named item is still holding the gate closed.
+     *
+     * Overlay access is not blocking, so this always reports false for it. Exposed so the gate's
+     * own rule can be asserted directly, rather than through isReady, which additionally waits on
+     * a real process snapshot produced off the test scheduler.
      */
-    val canAct: Boolean
-        get() = items.any { it.status == ChecklistStatus.NeedsAttention }
+    fun isBlockingItemOutstanding(item: ChecklistItem): Boolean {
+        if (item == ChecklistItem.OverlayAccess) return false
+        val status = itemStatus(labelOf(item)) ?: return false
+        return status != ChecklistStatus.Ready && status != ChecklistStatus.NotNeeded
+    }
+
+    private fun itemStatus(label: String): ChecklistStatus? =
+        items.firstOrNull { it.label == label }?.status
+
+    private fun labelOf(item: ChecklistItem): String = when (item) {
+        ChecklistItem.AdbDebugging -> "USB debugging"
+        ChecklistItem.Notifications -> "Notification access"
+        ChecklistItem.OverlayAccess -> "Overlay access"
+    }
 }
 
 /** Ordered so the checklist always renders the same rows, whatever has been checked yet. */
