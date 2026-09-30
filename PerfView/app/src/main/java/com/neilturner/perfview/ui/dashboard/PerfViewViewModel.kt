@@ -88,7 +88,7 @@ class PerfViewViewModel(
         }
 
         connectJob = viewModelScope.launch {
-            adbConnectionGate.ensureAuthorized(ADB_REQUEST_TIMEOUT_MILLIS)
+            adbConnectionGate.ensureAuthorized()
                 .onSuccess {
                     Log.d(TAG, "ADB connection established")
                     startObserving()
@@ -162,19 +162,33 @@ class PerfViewViewModel(
         }
     }
 
+    /**
+* Runs the overlay only if the permission is held.
+     *
+     * The grant is settled on the intro screen and re-checked here because it is revocable. A
+     * refusal is shown inline rather than as a modal dialog: interrupting the dashboard with a
+     * permission prompt is exactly what moving these asks onto the intro screen was for.
+     */
     private fun runInBackground() {
-        if (overlayPermissionManager.canDrawOverlays()) {
-            overlayPermissionPollJob?.cancel()
-            requestOverlayHandoff()
+        if (!overlayPermissionManager.canDrawOverlays()) {
+            Log.d(TAG, "Overlay permission is not granted, staying on the dashboard")
+            _uiState.update { state ->
+                state.copy(
+                    dashboardState = DashboardUiState(
+                        sourceLabel = "Permission needed",
+                        statusLabel = OVERLAY_PERMISSION_MESSAGE,
+                        isPolling = state.dashboardState?.isPolling == true,
+                        content = DashboardContentState.Loading(
+                            message = OVERLAY_PERMISSION_MESSAGE,
+                        ),
+                    )
+                )
+            }
             return
         }
 
-        _commands.tryEmit(
-            PerfViewCommand.OpenOverlayPermissionSettings(
-                intent = overlayPermissionManager.createPermissionIntent()
-            )
-        )
-        startOverlayPermissionPolling()
+        overlayPermissionPollJob?.cancel()
+        requestOverlayHandoff()
     }
 
     private fun handleOverlayPermissionResult() {
@@ -266,11 +280,12 @@ class PerfViewViewModel(
             "protocol fault",
             "closed",
         )
-        private const val ADB_REQUEST_TIMEOUT_MILLIS = 30_000L
         private const val OVERLAY_PERMISSION_POLL_INTERVAL_MILLIS = 1_000L
         private const val OVERLAY_PERMISSION_POLL_ATTEMPTS = 20
         private const val ADB_UNAVAILABLE_MESSAGE =
             "Could not connect to ADB. Enable wireless debugging and try again."
+        private const val OVERLAY_PERMISSION_MESSAGE =
+            "Grant overlay access on the intro screen to run in the background"
         private const val TAG = "PerfViewVm"
     }
 }

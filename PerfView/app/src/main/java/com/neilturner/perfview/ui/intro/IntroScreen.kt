@@ -5,12 +5,15 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
@@ -27,7 +30,9 @@ import androidx.compose.ui.unit.sp
 import com.neilturner.perfview.ui.components.TvActionButton
 import com.neilturner.perfview.ui.components.TvPanelButtonWidth
 import com.neilturner.perfview.ui.components.TvSecondaryButton
-import com.neilturner.perfview.ui.intro.contract.IntroContentState
+import com.neilturner.perfview.ui.intro.contract.ChecklistAction
+import com.neilturner.perfview.ui.intro.contract.ChecklistStatus
+import com.neilturner.perfview.ui.intro.contract.IntroChecklistItem
 import com.neilturner.perfview.ui.intro.contract.IntroViewState
 import com.neilturner.perfview.ui.theme.PerfAmber
 import com.neilturner.perfview.ui.theme.PerfInk
@@ -39,11 +44,12 @@ import com.neilturner.perfview.ui.theme.PerfViewTvTheme
 private val PanelBackground = Color(0xF2102A36)
 private val PanelBorder = Color(0xFF3A5A6A)
 private val PanelShape = RoundedCornerShape(18.dp)
+private val RowDivider = Color(0x1AFFFFFF)
 
 @Composable
 fun IntroScreen(
     uiState: IntroViewState,
-    onRetry: () -> Unit,
+    onAction: () -> Unit,
     onExitApp: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -51,7 +57,7 @@ fun IntroScreen(
         modifier = modifier
             .fillMaxSize()
             .background(PerfInk)
-            .padding(32.dp),
+            .padding(48.dp),
         contentAlignment = Alignment.Center,
     ) {
         Column(
@@ -68,116 +74,135 @@ fun IntroScreen(
                 letterSpacing = 4.sp,
             )
 
-            Panel(content = uiState.content)
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(PanelBackground, PanelShape)
+                    .border(1.dp, PanelBorder, PanelShape)
+                    .padding(horizontal = 28.dp, vertical = 12.dp),
+            ) {
+                uiState.items.forEachIndexed { index, item ->
+                    if (index > 0) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(1.dp)
+                                .background(RowDivider),
+                        )
+                    }
+                    ChecklistRow(item = item)
+                }
+            }
 
-            Actions(
-                content = uiState.content,
-                onRetry = onRetry,
-                onExitApp = onExitApp,
+            uiState.action?.let { action ->
+                TvActionButton(
+                    text = actionLabel(action),
+                    onClick = onAction,
+                    width = TvPanelButtonWidth,
+                )
+            }
+
+            Spacer(modifier = Modifier.size(4.dp))
+
+            TvSecondaryButton(
+                text = "Exit app",
+                onClick = onExitApp,
+                width = TvPanelButtonWidth,
             )
         }
     }
 }
 
-@Composable
-private fun Panel(content: IntroContentState) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(PanelBackground, PanelShape)
-            .border(1.dp, PanelBorder, PanelShape)
-            .padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        when (content) {
-            IntroContentState.Checking -> SpinnerBody(
-                title = "Checking connection",
-                detail = "Looking for an existing ADB connection",
-            )
-
-            IntroContentState.NeedsAuthorization -> NeedsAuthorizationBody()
-
-            is IntroContentState.Verifying -> SpinnerBody(
-                title = content.message,
-                detail = "Waiting for the first process reading",
-            )
-
-            is IntroContentState.Failed -> FailedBody(message = content.message)
-        }
-    }
+private fun actionLabel(action: ChecklistAction): String = when (action) {
+    ChecklistAction.RequestNotifications -> "Allow notifications"
+    ChecklistAction.OpenOverlaySettings -> "Open Settings"
+    ChecklistAction.Retry -> "Try again"
 }
 
 @Composable
-private fun SpinnerBody(
-    title: String,
-    detail: String,
+private fun ChecklistRow(
+    item: IntroChecklistItem,
+    modifier: Modifier = Modifier,
 ) {
-    CircularProgressIndicator(
-        modifier = Modifier.size(36.dp),
-        color = PerfSlate,
-        strokeWidth = 3.dp,
-    )
-    BodyText(title = title, color = PerfMist)
-    BodyText(title = detail, color = PerfSlate)
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        StatusIndicator(status = item.status)
+
+        Spacer(modifier = Modifier.width(20.dp))
+
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = item.label,
+                color = PerfMist,
+                fontSize = 14.sp,
+                fontFamily = FontFamily.Monospace,
+            )
+
+            Spacer(modifier = Modifier.size(4.dp))
+
+            Text(
+                text = item.detail,
+                color = if (item.status == ChecklistStatus.NeedsAttention) PerfAmber else PerfSlate,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                lineHeight = 15.sp,
+            )
+        }
+    }
 }
 
 @Composable
-private fun NeedsAuthorizationBody() {
-    BodyText(
-        title = "Permission needed",
-        color = PerfAmber,
-    )
-    BodyText(
-        title = "Perf View was not granted ADB access. Enable wireless debugging or run " +
-            "\"adb tcpip 5555\", then try again and allow the debugging prompt.",
-        color = PerfSlate,
-    )
+private fun StatusIndicator(
+    status: ChecklistStatus,
+    modifier: Modifier = Modifier,
+) {
+    // A fixed box so the spinner and the tick occupy the same space, otherwise the text beside
+    // them shifts sideways as each item settles.
+    Box(
+        modifier = modifier.size(28.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        when (status) {
+            ChecklistStatus.InProgress -> CircularProgressIndicator(
+                modifier = Modifier.size(20.dp),
+                color = PerfSlate,
+                strokeWidth = 2.dp,
+            )
+
+            ChecklistStatus.Ready -> StatusBadge(text = "OK", color = PerfMist)
+
+            ChecklistStatus.NotNeeded -> StatusBadge(text = "N/A", color = PerfSlate)
+
+            ChecklistStatus.NeedsAttention -> StatusBadge(text = "!", color = PerfAmber)
+        }
+    }
 }
 
 @Composable
-private fun FailedBody(message: String) {
-    BodyText(title = "Connection failed", color = PerfAmber)
-    BodyText(title = message, color = PerfSlate)
-}
-
-@Composable
-private fun BodyText(
-    title: String,
+private fun StatusBadge(
+    text: String,
     color: Color,
 ) {
-    Text(
-        text = title,
-        color = color,
-        fontSize = 12.sp,
-        fontFamily = FontFamily.Monospace,
-        textAlign = TextAlign.Center,
-        lineHeight = 18.sp,
-    )
-}
-
-@Composable
-private fun Actions(
-    content: IntroContentState,
-    onRetry: () -> Unit,
-    onExitApp: () -> Unit,
-) {
-    // Both terminal states are failed attempts of the same connect, so they share one action.
-    if (content is IntroContentState.NeedsAuthorization || content is IntroContentState.Failed) {
-        TvActionButton(
-            text = "Try again",
-            onClick = onRetry,
-            width = TvPanelButtonWidth,
+    Box(
+        modifier = Modifier
+            .size(22.dp)
+            .background(color.copy(alpha = 0.16f), CircleShape)
+            .border(1.dp, color.copy(alpha = 0.5f), CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = text,
+            color = color,
+            fontSize = 9.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
         )
     }
-
-    Spacer(modifier = Modifier.height(4.dp))
-
-    TvSecondaryButton(
-        text = "Exit app",
-        onClick = onExitApp,
-        width = TvPanelButtonWidth,
-    )
 }
 
 @Preview(showBackground = true, backgroundColor = 0xFF07131F)
@@ -186,22 +211,19 @@ private fun IntroScreenPreview() {
     PerfViewTheme(dynamicColor = false) {
         PerfViewTvTheme {
             IntroScreen(
-                uiState = IntroViewState(),
-                onRetry = {},
-                onExitApp = {},
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true, backgroundColor = 0xFF07131F)
-@Composable
-private fun IntroScreenNeedsAuthorizationPreview() {
-    PerfViewTheme(dynamicColor = false) {
-        PerfViewTvTheme {
-            IntroScreen(
-                uiState = IntroViewState(content = IntroContentState.NeedsAuthorization),
-                onRetry = {},
+                uiState = IntroViewState(
+                    items = listOf(
+                        IntroChecklistItem("USB debugging", ChecklistStatus.Ready, "Connected"),
+                        IntroChecklistItem("Notification access", ChecklistStatus.Ready, "Granted"),
+                        IntroChecklistItem(
+                            label = "Overlay access",
+                            status = ChecklistStatus.NeedsAttention,
+                            detail = "Tap Open Settings to allow",
+                        ),
+                    ),
+                    action = ChecklistAction.OpenOverlaySettings,
+                ),
+                onAction = {},
                 onExitApp = {},
             )
         }

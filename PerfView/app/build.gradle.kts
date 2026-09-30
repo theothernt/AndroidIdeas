@@ -37,6 +37,10 @@ android {
 	testOptions {
 		unitTests {
 			isIncludeAndroidResources = true
+			// android.util.Log is not mocked by default, which makes any logging call throw
+			// inside a plain JVM test. Default values let ViewModel and gate logic be tested
+			// without stripping the logging that helps diagnose real ADB failures.
+			isReturnDefaultValues = true
 		}
 	}
 

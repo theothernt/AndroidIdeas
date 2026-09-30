@@ -2,15 +2,24 @@ package com.neilturner.perfview.ui.intro.contract
 
 sealed interface IntroIntent {
     /**
-     * Fired once when the intro becomes visible. Starts the connect, which doubles as the
-     * authorization request if the device has not trusted this key before.
+     * Fired when the intro becomes visible. Re-checks every item from live platform state, so
+     * returning to the app reflects a permission the user may have just changed in Settings.
      */
     data object Load : IntroIntent
 
     /**
-     * Retries after a failed or declined attempt.
+     * Act on whatever is outstanding, which is a permission prompt or a trip to Settings
+     * depending on the item.
      */
-    data object RetryClicked : IntroIntent
+    data object ActionClicked : IntroIntent
+
+    /** The user answered the notification permission prompt. */
+    data class NotificationPermissionResult(
+        val granted: Boolean,
+    ) : IntroIntent
+
+    /** The user came back from the overlay permission screen in Settings. */
+    data object OverlaySettingsResult : IntroIntent
 
     data object ExitApp : IntroIntent
 }

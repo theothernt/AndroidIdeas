@@ -2,6 +2,7 @@ package com.neilturner.perfview.data.adb
 
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -27,8 +28,9 @@ import kotlinx.coroutines.sync.withLock
  */
 class AdbConnectionGate(
     private val adbAccessManager: AdbAccessManager,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
     /**
      * Guards the handshake so concurrent callers await one attempt rather than racing two
@@ -52,33 +54,40 @@ class AdbConnectionGate(
      * already under way. Never throws for an expected ADB failure: those come back as a failed
      * [Result] so callers can render them.
      *
-     * [timeoutMillis] bounds how long this caller waits, and deliberately does not bound the
-     * handshake itself, since abandoning it would corrupt the shared connection.
+     * The attempt is deliberately not abandoned part way through: abandoning a connect leaves the
+     * shared connection manager believing it is connected, and every later attempt then fails
+     * with a cancellation error instead of reconnecting.
      */
-    suspend fun ensureAuthorized(timeoutMillis: Long = DEFAULT_TIMEOUT_MILLIS): Result<Unit> {
-        val existing = inFlight
-        if (existing != null && !existing.isCompleted) {
-            return runCatching { existing.await() }.getOrElse { Result.failure(it) }
-        }
+    suspend fun ensureAuthorized(): Result<Unit> =
+        // The whole decision is serialized rather than just the handshake start. Checking for an
+        // existing attempt outside the lock let a caller that arrived while a handshake was
+        // completing, but before isAuthorized was set, start a second connection against the
+        // same manager.
+        handshakeMutex.withLock {
+            if (isAuthorized) return@withLock Result.success(Unit)
 
-        val attempt = handshakeMutex.withLock {
-            // Re-check inside the lock: a caller may have completed a handshake while this one
-            // was waiting for it, in which case there is nothing left to do.
-            if (isAuthorized) return Result.success(Unit)
+            // Another caller may have finished the handshake while this one waited for the lock.
+            inFlight?.let { existing ->
+                if (!existing.isCompleted) {
+                    val result = runCatching { existing.await() }
+                    if (result.isSuccess) {
+                        isAuthorized = true
+                    }
+                    return@withLock result.getOrElse { Result.failure(it) }
+                }
+            }
 
-            val started = scope.async {
+            val attempt = scope.async {
                 runCatching { adbAccessManager.requestAccess(timeoutMillis = NO_TIMEOUT) }
             }
-            inFlight = started
-            started
-        }
+            inFlight = attempt
 
-        val result = runCatching { attempt.await() }.getOrElse { Result.failure(it) }
-        if (result.isSuccess) {
-            isAuthorized = true
+            val result = runCatching { attempt.await() }.getOrElse { Result.failure(it) }
+            if (result.isSuccess) {
+                isAuthorized = true
+            }
+            result
         }
-        return result
-    }
 
     /**
      * Marks the session unauthorized, for example after a read failure that indicates the
@@ -93,8 +102,6 @@ class AdbConnectionGate(
     }
 
     private companion object {
-        const val DEFAULT_TIMEOUT_MILLIS = 30_000L
-
         /**
          * Passed to the access manager for the underlying attempt, which is not abandoned. The
          * caller's own timeout is enforced by the awaiting side instead.

@@ -8,6 +8,10 @@ import com.neilturner.perfview.data.adb.LibAdbShellClient
 import com.neilturner.perfview.data.cpu.repository.CpuRepositoryImpl
 import com.neilturner.perfview.data.cpu.source.AdbTopCpuReader
 import com.neilturner.perfview.domain.cpu.repository.CpuRepository
+import com.neilturner.perfview.platform.AndroidNotificationPermissionChecker
+import com.neilturner.perfview.platform.AndroidOverlayAccessChecker
+import com.neilturner.perfview.platform.NotificationPermissionChecker
+import com.neilturner.perfview.platform.OverlayAccessChecker
 import org.koin.dsl.module
 
 val dataModule = module {
@@ -16,4 +20,6 @@ val dataModule = module {
     single<AdbShellClient> { LibAdbShellClient(get(), get()) }
     single { AdbTopCpuReader(get()) }
     single<CpuRepository> { CpuRepositoryImpl(get()) }
+    single<NotificationPermissionChecker> { AndroidNotificationPermissionChecker(get()) }
+    single<OverlayAccessChecker> { AndroidOverlayAccessChecker(get()) }
 }

@@ -8,6 +8,7 @@ data class PerfViewViewState(
     val dashboardState: DashboardUiState? = null,
 )
 
+
 @Stable
 data class DashboardUiState(
     val sourceLabel: String = "Starting",

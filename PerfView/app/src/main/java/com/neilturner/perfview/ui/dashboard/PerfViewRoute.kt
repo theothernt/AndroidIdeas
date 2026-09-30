@@ -1,21 +1,19 @@
 package com.neilturner.perfview.ui.dashboard
 
-import android.Manifest
 import android.app.Activity
-import android.content.Context
-import android.content.pm.PackageManager
-import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.neilturner.perfview.overlay.CpuOverlayService
+import com.neilturner.perfview.overlay.OverlayPermissionManager
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewCommand
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewIntent
 import kotlinx.coroutines.flow.collectLatest
@@ -28,6 +26,7 @@ fun PerfViewRoute(
     val uiState = viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val overlayPermissionManager = remember { OverlayPermissionManager(context) }
 
     fun startOverlayAndFinish() {
         ContextCompat.startForegroundService(
@@ -37,21 +36,14 @@ fun PerfViewRoute(
         (context as? Activity)?.finish()
     }
 
+    // The notification permission is asked for on the intro screen, before anything finishes.
+    // Raising it here used to land a system dialog on top of an Activity that was about to be
+    // finished, which could take the process down and lose the ADB session with it.
     val overlayPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult()
     ) {
         viewModel.accept(PerfViewIntent.OverlayPermissionResult)
     }
-
-    // The foreground service notification is the only affordance for stopping the
-    // overlay, so ask for POST_NOTIFICATIONS before handing off. A denial is not
-    // fatal: the overlay still runs, it just becomes harder to dismiss.
-    val notificationPermissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) {
-        startOverlayAndFinish()
-    }
-
     // ON_START is the single source of truth for loading. A separate LaunchedEffect
     // would fire alongside it on first composition and start a second, racing
     // connection attempt.
@@ -74,16 +66,11 @@ fun PerfViewRoute(
     LaunchedEffect(viewModel) {
         viewModel.commands.collectLatest { command ->
             when (command) {
-                is PerfViewCommand.OpenOverlayPermissionSettings ->
-                    overlayPermissionLauncher.launch(command.intent)
-
-                PerfViewCommand.StartBackgroundOverlay -> {
-                    if (needsNotificationPermission(context)) {
-                        notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        startOverlayAndFinish()
-                    }
+                is PerfViewCommand.OpenOverlayPermissionSettings -> {
+                    overlayPermissionLauncher.launch(overlayPermissionManager.createPermissionIntent())
                 }
+
+                PerfViewCommand.StartBackgroundOverlay -> startOverlayAndFinish()
 
                 PerfViewCommand.ExitApp -> {
                     (context as? Activity)?.finish()
@@ -98,10 +85,3 @@ fun PerfViewRoute(
         onExitApp = { viewModel.accept(PerfViewIntent.ExitApp) },
     )
 }
-
-private fun needsNotificationPermission(context: Context): Boolean =
-    Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) != PackageManager.PERMISSION_GRANTED

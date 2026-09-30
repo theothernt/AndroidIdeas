@@ -8,6 +8,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
 import com.neilturner.perfview.data.adb.AdbConnectionGate
 import com.neilturner.perfview.overlay.CpuOverlayService
+import com.neilturner.perfview.platform.NotificationPermissionChecker
 import com.neilturner.perfview.ui.navigation.PerfViewNavGraph
 import com.neilturner.perfview.ui.theme.PerfViewTheme
 import com.neilturner.perfview.ui.theme.PerfViewTvTheme
@@ -16,6 +17,7 @@ import org.koin.android.ext.android.inject
 class MainActivity : ComponentActivity() {
 
     private val adbConnectionGate: AdbConnectionGate by inject()
+    private val notificationPermissionChecker: NotificationPermissionChecker by inject()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,7 +29,10 @@ class MainActivity : ComponentActivity() {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        PerfViewNavGraph(adbConnectionGate = adbConnectionGate)
+                        PerfViewNavGraph(
+                            adbConnectionGate = adbConnectionGate,
+                            notificationPermissionChecker = notificationPermissionChecker,
+                        )
                     }
                 }
             }
