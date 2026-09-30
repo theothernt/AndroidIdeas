@@ -56,23 +56,36 @@ class PerfViewViewModel(
         }
     }
 
+    /**
+     * Whether this is a resume over data that is already on screen. ON_START fires every time
+     * the activity comes back to the foreground, so a plain reload would replace a populated
+     * process list with a "Connecting to ADB..." placeholder each time.
+     */
+    private fun hasLiveDataToPreserve(): Boolean =
+        isMonitoringActive && cpuMonitor.results.value is CpuUsageResult.Success
+
     private fun startConnecting() {
-        stopMonitoring()
-        observeJob?.cancel()
-        // Cancel any in-flight handshake so a re-entrant Load cannot race a second
-        // requestAccess against the same shared connection manager.
+        val isResume = hasLiveDataToPreserve()
+
+        // A handshake left in flight across a stop would race the one started here, so it is
+        // always cancelled. Only the visible reset is conditional.
         connectJob?.cancel()
         isHandoffRequested = false
 
-        _uiState.value = PerfViewViewState(
-            dashboardState = DashboardUiState(
-                sourceLabel = "Connecting...",
-                statusLabel = "Establishing ADB connection",
-                content = DashboardContentState.Loading(
-                    message = "Connecting to ADB...",
+        if (!isResume) {
+            stopMonitoring()
+            observeJob?.cancel()
+
+            _uiState.value = PerfViewViewState(
+                dashboardState = DashboardUiState(
+                    sourceLabel = "Connecting...",
+                    statusLabel = "Establishing ADB connection",
+                    content = DashboardContentState.Loading(
+                        message = "Connecting to ADB...",
+                    ),
                 ),
-            ),
-        )
+            )
+        }
 
         connectJob = viewModelScope.launch {
             runCatching {

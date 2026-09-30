@@ -6,6 +6,7 @@ import io.github.muntashirakon.adb.AdbPairingRequiredException
 import io.github.muntashirakon.adb.AdbStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 class LibAdbAccessManager(
     private val context: Context,
@@ -21,7 +22,7 @@ class LibAdbAccessManager(
         verifyShellAccess(manager)
     }
 
-    private fun connect(
+    private suspend fun connect(
         manager: PerfViewAdbConnectionManager,
         timeoutMillis: Long,
     ) {
@@ -30,7 +31,19 @@ class LibAdbAccessManager(
         try {
             val host = "127.0.0.1"
             Log.d(TAG, "Attempting direct ADB connect to $host:$DEFAULT_ADB_PORT")
-            val connected = manager.connect(host, DEFAULT_ADB_PORT)
+            // The connect blocks while the system "Allow USB debugging?" dialog is unanswered,
+            // so the caller's deadline has to be enforced here rather than by the caller alone.
+            // withTimeoutOrNull releases the waiting caller; the socket thread it leaves behind
+            // resolves on its own once the user responds or the attempt is abandoned.
+            val connected = withTimeoutOrNull(timeoutMillis) {
+                manager.connect(host, DEFAULT_ADB_PORT)
+            }
+            if (connected == null) {
+                Log.w(TAG, "ADB connect to $host:$DEFAULT_ADB_PORT timed out after ${timeoutMillis}ms")
+                throw AdbUnavailableException(
+                    "Perf View could not get ADB access. Make sure wireless debugging is enabled and try again."
+                )
+            }
             if (!connected) {
                 Log.w(TAG, "Direct ADB connect returned false for $host:$DEFAULT_ADB_PORT")
                 throw AdbUnavailableException(

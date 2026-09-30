@@ -9,5 +9,8 @@ import kotlinx.serialization.Serializable
  */
 sealed interface PerfViewDestinations : NavKey {
     @Serializable
+    data object Intro : PerfViewDestinations
+
+    @Serializable
     data object Dashboard : PerfViewDestinations
 }
