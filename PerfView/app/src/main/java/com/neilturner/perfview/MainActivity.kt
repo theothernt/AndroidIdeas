@@ -6,12 +6,17 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import com.neilturner.perfview.data.adb.AdbConnectionGate
 import com.neilturner.perfview.overlay.CpuOverlayService
 import com.neilturner.perfview.ui.navigation.PerfViewNavGraph
 import com.neilturner.perfview.ui.theme.PerfViewTheme
 import com.neilturner.perfview.ui.theme.PerfViewTvTheme
+import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
+
+    private val adbConnectionGate: AdbConnectionGate by inject()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -22,7 +27,7 @@ class MainActivity : ComponentActivity() {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        PerfViewNavGraph()
+                        PerfViewNavGraph(adbConnectionGate = adbConnectionGate)
                     }
                 }
             }

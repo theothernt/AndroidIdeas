@@ -3,7 +3,7 @@ package com.neilturner.perfview.ui.intro
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.neilturner.perfview.data.adb.AdbAccessManager
+import com.neilturner.perfview.data.adb.AdbConnectionGate
 import com.neilturner.perfview.domain.cpu.CpuMonitor
 import com.neilturner.perfview.ui.intro.contract.IntroCommand
 import com.neilturner.perfview.ui.intro.contract.IntroContentState
@@ -11,8 +11,6 @@ import com.neilturner.perfview.ui.intro.contract.IntroIntent
 import com.neilturner.perfview.ui.intro.contract.IntroViewState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.async
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -32,7 +30,7 @@ import kotlinx.coroutines.withTimeoutOrNull
  * debugging dialog. Probing first avoids re-raising a prompt the user already accepted.
  */
 class IntroViewModel(
-    private val adbAccessManager: AdbAccessManager,
+    private val adbConnectionGate: AdbConnectionGate,
     private val cpuMonitor: CpuMonitor,
 ) : ViewModel() {
 
@@ -61,36 +59,28 @@ class IntroViewModel(
 
     /**
      * One connect attempt serves as both the existence check and the authorization request,
-     * because a fresh key cannot be queried without triggering the system dialog: probing
-     * first and prompting on a button press would raise two dialogs per run wherever the
-     * key is not remembered, such as an emulator.
+     * because a fresh key cannot be queried without triggering the system dialog.
      *
-     * A key that is already trusted connects in well under the grace period, so that case
-     * passes through with only the initial spinner and never raises a dialog. A key that is
-     * not trusted leaves the connect blocked on the dialog, which is detected by the grace
-     * period elapsing and is reported as [IntroContentState.Authorizing].
+     * When the process already holds an authorized session, which is the common case after the
+     * first run because the overlay service keeps the process alive, the gate is skipped
+     * outright. Re-checking would flash the intro screen on every return to the app and would
+     * have nothing to prove, since the session outlives the Activity.
      */
     private fun startGate() {
         gateJob?.cancel()
+
+        if (adbConnectionGate.isAuthorized) {
+            Log.d(TAG, "Reusing the existing authorized ADB session")
+            navigateToDashboard()
+            return
+        }
+
         _uiState.value = IntroViewState(content = IntroContentState.Checking)
 
         gateJob = viewModelScope.launch {
-            val access = async {
-                runCatching {
-                    adbAccessManager.requestAccess(timeoutMillis = AUTHORIZE_TIMEOUT_MILLIS)
-                }
-            }
-
-            delay(TRUSTED_CONNECT_GRACE_MILLIS)
-            if (!access.isCompleted) {
-                _uiState.value = IntroViewState(
-                    content = IntroContentState.Authorizing(message = "Waiting for approval"),
-                )
-            }
-
-            val granted = access.await().isSuccess
-            if (!granted) {
-                Log.d(TAG, "ADB access was not granted")
+            val granted = adbConnectionGate.ensureAuthorized(AUTHORIZE_TIMEOUT_MILLIS)
+            if (granted.isFailure) {
+                Log.w(TAG, "ADB access was not granted: ${granted.exceptionOrNull()}")
                 _uiState.value = IntroViewState(content = IntroContentState.NeedsAuthorization)
                 return@launch
             }
@@ -156,15 +146,8 @@ class IntroViewModel(
 
     private companion object {
         /**
-         * How long an already-trusted key is given to connect before the attempt is assumed
-         * to be waiting on the user. Loopback connects in milliseconds, so this only has to
-         * cover scheduling jitter, not real network latency.
-         */
-        private const val TRUSTED_CONNECT_GRACE_MILLIS = 750L
-
-        /**
-         * The user decides how long to take over a debugging dialog, so the connect is not
-         * abandoned underneath them.
+         * How long this screen waits before assuming the user is looking at the system debugging
+         * dialog. Enforced by the gate so the wait cannot outlive this ViewModel.
          */
         private const val AUTHORIZE_TIMEOUT_MILLIS = 300_000L
 

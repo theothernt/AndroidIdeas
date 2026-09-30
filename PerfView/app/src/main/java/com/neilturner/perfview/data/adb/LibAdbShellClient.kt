@@ -7,13 +7,13 @@ import kotlinx.coroutines.withContext
 
 class LibAdbShellClient(
     private val context: Context,
-    private val adbAccessManager: AdbAccessManager,
+    private val adbConnectionGate: AdbConnectionGate,
 ) : AdbShellClient {
     override suspend fun run(command: String): String = withContext(Dispatchers.IO) {
         Log.d(TAG, "ADB command requested: $command")
 
         try {
-            adbAccessManager.ensureConnected()
+            adbConnectionGate.ensureAuthorized().getOrThrow()
         } catch (exception: Exception) {
             Log.e(TAG, "Failed to ensure ADB connection", exception)
             throw AdbShellException.ConnectionException(command, exception)

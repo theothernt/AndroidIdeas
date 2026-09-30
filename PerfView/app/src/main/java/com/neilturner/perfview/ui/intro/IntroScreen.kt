@@ -98,11 +98,6 @@ private fun Panel(content: IntroContentState) {
 
             IntroContentState.NeedsAuthorization -> NeedsAuthorizationBody()
 
-            is IntroContentState.Authorizing -> SpinnerBody(
-                title = content.message,
-                detail = "Approve the debugging prompt on this device",
-            )
-
             is IntroContentState.Verifying -> SpinnerBody(
                 title = content.message,
                 detail = "Waiting for the first process reading",

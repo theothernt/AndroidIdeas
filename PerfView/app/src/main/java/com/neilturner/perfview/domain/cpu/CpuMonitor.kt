@@ -1,9 +1,11 @@
 package com.neilturner.perfview.domain.cpu
 
+import android.util.Log
 import com.neilturner.perfview.data.cpu.model.CpuUsageSnapshot
 import com.neilturner.perfview.domain.cpu.model.CpuObservation
 import com.neilturner.perfview.domain.cpu.model.CpuUsageResult
 import com.neilturner.perfview.domain.cpu.repository.CpuRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -35,26 +37,39 @@ class CpuMonitor(
 
         pollJob = scope.launch {
             while (isActive) {
-                val result = runCatching {
+                var errorMessage: String? = null
+
+                // Cancellation is a lifecycle event, not a device failure. runCatching would
+                // otherwise capture the CancellationException raised when this poll is torn down
+                // and report it as Unsupported, which made a healthy session look unauthorized
+                // and sent the next foreground pass back through the authorization gate.
+                val failure = try {
                     withTimeout(SNAPSHOT_TIMEOUT_MILLIS) {
                         cpuRepository.readSnapshot()
+                    }.also {
+                        errorMessage = null
                     }
-                }.fold(
-                    onSuccess = { snapshot ->
-                        CpuUsageResult.Success(
-                            observation = CpuObservation(
-                                percent = snapshot.totalCpuPercent,
-                                topProcesses = snapshot.topProcesses,
-                                collectedAtMillis = snapshot.timestampMillis,
-                            )
+                } catch (cancellation: CancellationException) {
+                    throw cancellation
+                } catch (error: Exception) {
+                    errorMessage = error.message ?: DEFAULT_ERROR_MESSAGE
+                    Log.w(TAG, "Snapshot read failed: $errorMessage", error)
+                    null
+                }
+
+                val result = if (failure != null) {
+                    CpuUsageResult.Success(
+                        observation = CpuObservation(
+                            percent = failure.totalCpuPercent,
+                            topProcesses = failure.topProcesses,
+                            collectedAtMillis = failure.timestampMillis,
                         )
-                    },
-                    onFailure = { error ->
-                        CpuUsageResult.Unsupported(
-                            message = error.message ?: DEFAULT_ERROR_MESSAGE,
-                        )
-                    }
-                )
+                    )
+                } else {
+                    CpuUsageResult.Unsupported(
+                        message = errorMessage ?: DEFAULT_ERROR_MESSAGE,
+                    )
+                }
 
                 _results.value = result
                 delay(POLL_INTERVAL_MILLIS)
@@ -81,6 +96,7 @@ class CpuMonitor(
     }
 
     private companion object {
+        private const val TAG = "PerfViewCpuMonitor"
         private const val POLL_INTERVAL_MILLIS = 1_000L
         private const val SNAPSHOT_TIMEOUT_MILLIS = 10_000L
         private const val DEFAULT_ERROR_MESSAGE =

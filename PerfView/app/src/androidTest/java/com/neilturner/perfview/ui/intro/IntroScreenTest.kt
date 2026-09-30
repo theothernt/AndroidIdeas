@@ -62,14 +62,6 @@ class IntroScreenTest {
     }
 
     @Test
-    fun authorizingState_showsProgressCopyAndNoRetryButton() {
-        setContent(IntroContentState.Authorizing(message = "Waiting for approval"))
-
-        composeTestRule.onNodeWithText("Waiting for approval").assertExists()
-        composeTestRule.onNodeWithText("Try again").assertDoesNotExist()
-    }
-
-    @Test
     fun verifyingState_showsProgressCopyAndNoRetryButton() {
         setContent(IntroContentState.Verifying(message = "Checking connection"))
 

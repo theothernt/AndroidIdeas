@@ -1,6 +1,7 @@
 package com.neilturner.perfview.di
 
 import com.neilturner.perfview.data.adb.AdbAccessManager
+import com.neilturner.perfview.data.adb.AdbConnectionGate
 import com.neilturner.perfview.data.adb.AdbShellClient
 import com.neilturner.perfview.data.adb.LibAdbAccessManager
 import com.neilturner.perfview.data.adb.LibAdbShellClient
@@ -11,6 +12,7 @@ import org.koin.dsl.module
 
 val dataModule = module {
     single<AdbAccessManager> { LibAdbAccessManager(get()) }
+    single { AdbConnectionGate(get()) }
     single<AdbShellClient> { LibAdbShellClient(get(), get()) }
     single { AdbTopCpuReader(get()) }
     single<CpuRepository> { CpuRepositoryImpl(get()) }

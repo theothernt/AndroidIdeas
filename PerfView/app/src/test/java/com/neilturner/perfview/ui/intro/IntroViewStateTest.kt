@@ -14,13 +14,6 @@ class IntroViewStateTest {
     }
 
     @Test
-    fun `authorizing state carries its message`() {
-        val content = IntroContentState.Authorizing(message = "Waiting for approval")
-
-        assertEquals("Waiting for approval", content.message)
-    }
-
-    @Test
     fun `verifying state carries its message`() {
         val content = IntroContentState.Verifying(message = "Checking connection")
 
@@ -41,7 +34,6 @@ class IntroViewStateTest {
 }
 
 private fun IntroContentState.messageOrNull(): String? = when (this) {
-    is IntroContentState.Authorizing -> message
     is IntroContentState.Verifying -> message
     is IntroContentState.Failed -> message
     IntroContentState.Checking,

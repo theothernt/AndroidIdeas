@@ -3,6 +3,7 @@ package com.neilturner.perfview.ui.dashboard
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.neilturner.perfview.data.adb.AdbAccessManager
+import com.neilturner.perfview.data.adb.AdbConnectionGate
 import com.neilturner.perfview.domain.cpu.CpuMonitor
 import com.neilturner.perfview.overlay.FakeCpuRepository
 import com.neilturner.perfview.overlay.OverlayPermissionManager
@@ -28,7 +29,7 @@ class PerfViewViewModelResumeTest {
     @Test
     fun resumeOverLiveData_keepsTheProcessList() = runBlocking {
         val viewModel = PerfViewViewModel(
-            adbAccessManager = PermissiveAdbAccessManager,
+            adbConnectionGate = authorizedGate(),
             overlayPermissionManager = OverlayPermissionManager(
                 ApplicationProvider.getApplicationContext(),
             ),
@@ -63,6 +64,8 @@ class PerfViewViewModelResumeTest {
                 "${viewModel.uiState.value.dashboardState?.content}"
         )
     }
+
+    private fun authorizedGate() = AdbConnectionGate(PermissiveAdbAccessManager)
 
     private object PermissiveAdbAccessManager : AdbAccessManager {
         override suspend fun requestAccess(timeoutMillis: Long) = Unit

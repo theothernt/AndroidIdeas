@@ -3,8 +3,8 @@ package com.neilturner.perfview.ui.dashboard
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.neilturner.perfview.data.adb.AdbAccessManager
 import com.neilturner.perfview.data.adb.AdbAuthorizationRequiredException
+import com.neilturner.perfview.data.adb.AdbConnectionGate
 import com.neilturner.perfview.data.adb.AdbUnavailableException
 import com.neilturner.perfview.domain.cpu.CpuMonitor
 import com.neilturner.perfview.domain.cpu.model.CpuUsageResult
@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.isActive
 
 class PerfViewViewModel(
-    private val adbAccessManager: AdbAccessManager,
+    private val adbConnectionGate: AdbConnectionGate,
     private val overlayPermissionManager: OverlayPermissionManager,
     private val cpuMonitor: CpuMonitor,
 ) : ViewModel() {
@@ -88,15 +88,15 @@ class PerfViewViewModel(
         }
 
         connectJob = viewModelScope.launch {
-            runCatching {
-                adbAccessManager.requestAccess(timeoutMillis = ADB_REQUEST_TIMEOUT_MILLIS)
-            }.onSuccess {
-                Log.d(TAG, "ADB connection established")
-                startObserving()
-            }.onFailure { error ->
-                Log.w(TAG, "requestAccess failed", error)
-                showAdbError(error)
-            }
+            adbConnectionGate.ensureAuthorized(ADB_REQUEST_TIMEOUT_MILLIS)
+                .onSuccess {
+                    Log.d(TAG, "ADB connection established")
+                    startObserving()
+                }
+                .onFailure { error ->
+                    Log.w(TAG, "ADB connect failed", error)
+                    showAdbError(error)
+                }
         }
     }
 
@@ -143,6 +143,13 @@ class PerfViewViewModel(
             }
 
             is CpuUsageResult.Unsupported -> _uiState.update {
+                // Only forget the session when the failure looks like the connection itself
+                // going away, for example wireless debugging being switched off. A single failed
+                // read is transient, and discarding the session on one would drop the user back
+                // to the authorization gate on the next foreground pass.
+                if (result.message.containsAny(CONNECTION_LOST_MARKERS)) {
+                    adbConnectionGate.markUnauthorized()
+                }
                 it.copy(
                     dashboardState = DashboardUiState(
                         sourceLabel = "Unavailable",
@@ -238,7 +245,27 @@ class PerfViewViewModel(
         overlayPermissionPollJob?.cancel()
     }
 
+    private fun String.containsAny(markers: List<String>): Boolean {
+        val lower = lowercase()
+        return markers.any { lower.contains(it) }
+    }
+
     private companion object {
+        /**
+         * Substrings that indicate the ADB connection itself is gone, as opposed to a single
+         * read that failed. Matched case-insensitively against the failure message.
+         */
+        private val CONNECTION_LOST_MARKERS = listOf(
+            "connection refused",
+            "connection reset",
+            "broken pipe",
+            "connection closed",
+            "not connected",
+            "device offline",
+            "wireless debugging",
+            "protocol fault",
+            "closed",
+        )
         private const val ADB_REQUEST_TIMEOUT_MILLIS = 30_000L
         private const val OVERLAY_PERMISSION_POLL_INTERVAL_MILLIS = 1_000L
         private const val OVERLAY_PERMISSION_POLL_ATTEMPTS = 20
