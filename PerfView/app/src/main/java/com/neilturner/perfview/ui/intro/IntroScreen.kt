@@ -12,12 +12,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +24,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.neilturner.perfview.ui.components.TvActionButton
+import com.neilturner.perfview.ui.components.TvPanelButtonWidth
+import com.neilturner.perfview.ui.components.TvSecondaryButton
 import com.neilturner.perfview.ui.intro.contract.IntroContentState
 import com.neilturner.perfview.ui.intro.contract.IntroViewState
 import com.neilturner.perfview.ui.theme.PerfAmber
@@ -35,11 +34,10 @@ import com.neilturner.perfview.ui.theme.PerfInk
 import com.neilturner.perfview.ui.theme.PerfMist
 import com.neilturner.perfview.ui.theme.PerfSlate
 import com.neilturner.perfview.ui.theme.PerfViewTheme
+import com.neilturner.perfview.ui.theme.PerfViewTvTheme
 
 private val PanelBackground = Color(0xF2102A36)
 private val PanelBorder = Color(0xFF3A5A6A)
-private val PrimaryButton = Color(0xFF1A8A5C)
-private val SecondaryText = Color(0xFF8AACB8)
 private val PanelShape = RoundedCornerShape(18.dp)
 
 @Composable
@@ -171,47 +169,33 @@ private fun Actions(
 ) {
     // Both terminal states are failed attempts of the same connect, so they share one action.
     if (content is IntroContentState.NeedsAuthorization || content is IntroContentState.Failed) {
-        Button(
+        TvActionButton(
+            text = "Try again",
             onClick = onRetry,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = PrimaryButton,
-                contentColor = Color.White,
-            ),
-        ) {
-            Text(
-                text = "Try again",
-                style = MaterialTheme.typography.bodyLarge,
-                fontWeight = FontWeight.Medium,
-            )
-        }
+            width = TvPanelButtonWidth,
+        )
     }
 
     Spacer(modifier = Modifier.height(4.dp))
 
-    TextButton(
+    TvSecondaryButton(
+        text = "Exit app",
         onClick = onExitApp,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(12.dp),
-    ) {
-        Text(
-            text = "Exit app",
-            style = MaterialTheme.typography.bodyLarge,
-            color = SecondaryText,
-        )
-    }
+        width = TvPanelButtonWidth,
+    )
 }
 
 @Preview(showBackground = true, backgroundColor = 0xFF07131F)
 @Composable
 private fun IntroScreenPreview() {
     PerfViewTheme(dynamicColor = false) {
-        IntroScreen(
-            uiState = IntroViewState(),
-            onRetry = {},
-            onExitApp = {},
-        )
+        PerfViewTvTheme {
+            IntroScreen(
+                uiState = IntroViewState(),
+                onRetry = {},
+                onExitApp = {},
+            )
+        }
     }
 }
 
@@ -219,10 +203,12 @@ private fun IntroScreenPreview() {
 @Composable
 private fun IntroScreenNeedsAuthorizationPreview() {
     PerfViewTheme(dynamicColor = false) {
-        IntroScreen(
-            uiState = IntroViewState(content = IntroContentState.NeedsAuthorization),
-            onRetry = {},
-            onExitApp = {},
-        )
+        PerfViewTvTheme {
+            IntroScreen(
+                uiState = IntroViewState(content = IntroContentState.NeedsAuthorization),
+                onRetry = {},
+                onExitApp = {},
+            )
+        }
     }
 }

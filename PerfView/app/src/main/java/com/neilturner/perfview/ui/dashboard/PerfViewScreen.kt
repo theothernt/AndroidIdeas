@@ -11,23 +11,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.neilturner.perfview.ui.components.TvActionButton
+import com.neilturner.perfview.ui.components.TvPanelButtonWidth
+import com.neilturner.perfview.ui.components.TvSecondaryButton
 import com.neilturner.perfview.ui.dashboard.contract.DashboardContentState
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewViewState
 import com.neilturner.perfview.ui.theme.PerfViewTheme
+import com.neilturner.perfview.ui.theme.PerfViewTvTheme
 import java.util.Locale
 
 private val OverlayBackground = Color(0xF2102A36)
@@ -84,35 +83,19 @@ fun PerfViewScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Button(
+            TvActionButton(
+                text = "Run in the background",
                 onClick = onRunInBackground,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF1A8A5C),
-                    contentColor = Color.White,
-                ),
-            ) {
-                Text(
-                    text = "Run in the background",
-                    style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
-                )
-            }
+                width = TvPanelButtonWidth,
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            TextButton(
+            TvSecondaryButton(
+                text = "Exit app",
                 onClick = onExitApp,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Text(
-                    text = "Exit app",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Color(0xFF8AACB8),
-                )
-            }
+                width = TvPanelButtonWidth,
+            )
         }
     }
 }
@@ -121,10 +104,12 @@ fun PerfViewScreen(
 @Composable
 private fun PerfViewScreenPreview() {
     PerfViewTheme(dynamicColor = false) {
-        PerfViewScreen(
-            uiState = PerfViewViewState(),
-            onRunInBackground = {},
-            onExitApp = {},
-        )
+        PerfViewTvTheme {
+            PerfViewScreen(
+                uiState = PerfViewViewState(),
+                onRunInBackground = {},
+                onExitApp = {},
+            )
+        }
     }
 }

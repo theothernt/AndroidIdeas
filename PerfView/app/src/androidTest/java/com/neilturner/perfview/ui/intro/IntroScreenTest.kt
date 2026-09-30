@@ -3,10 +3,11 @@ package com.neilturner.perfview.ui.intro
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
+import com.neilturner.perfview.ui.performTvClick
 import com.neilturner.perfview.ui.intro.contract.IntroContentState
 import com.neilturner.perfview.ui.intro.contract.IntroViewState
 import com.neilturner.perfview.ui.theme.PerfViewTheme
+import com.neilturner.perfview.ui.theme.PerfViewTvTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -23,11 +24,13 @@ class IntroScreenTest {
     ) {
         composeTestRule.setContent {
             PerfViewTheme(dynamicColor = false) {
-                IntroScreen(
-                    uiState = IntroViewState(content = content),
-                    onRetry = onRetry,
-                    onExitApp = onExitApp,
-                )
+                PerfViewTvTheme {
+                    IntroScreen(
+                        uiState = IntroViewState(content = content),
+                        onRetry = onRetry,
+                        onExitApp = onExitApp,
+                    )
+                }
             }
         }
     }
@@ -53,7 +56,7 @@ class IntroScreenTest {
         var clicks = 0
         setContent(IntroContentState.NeedsAuthorization, onRetry = { clicks++ })
 
-        composeTestRule.onNodeWithText("Try again").performClick()
+        composeTestRule.onNodeWithText("Try again").performTvClick()
 
         assertEquals(1, clicks)
     }
@@ -88,7 +91,7 @@ class IntroScreenTest {
         var clicks = 0
         setContent(IntroContentState.Failed(message = "Nope"), onRetry = { clicks++ })
 
-        composeTestRule.onNodeWithText("Try again").performClick()
+        composeTestRule.onNodeWithText("Try again").performTvClick()
 
         assertEquals(1, clicks)
     }
@@ -98,7 +101,7 @@ class IntroScreenTest {
         var clicks = 0
         setContent(IntroContentState.Checking, onExitApp = { clicks++ })
 
-        composeTestRule.onNodeWithText("Exit app").assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithText("Exit app").assertIsDisplayed().performTvClick()
 
         assertEquals(1, clicks)
     }

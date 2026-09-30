@@ -7,10 +7,12 @@ import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import com.neilturner.perfview.data.cpu.model.TopProcessUsage
+import com.neilturner.perfview.ui.performTvClick
 import com.neilturner.perfview.ui.dashboard.contract.DashboardContentState
 import com.neilturner.perfview.ui.dashboard.contract.DashboardUiState
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewViewState
 import com.neilturner.perfview.ui.theme.PerfViewTheme
+import com.neilturner.perfview.ui.theme.PerfViewTvTheme
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -23,11 +25,13 @@ class PerfViewScreenTest {
     private fun setContent(state: PerfViewViewState, onRunInBackground: () -> Unit = {}, onExitApp: () -> Unit = {}) {
         composeTestRule.setContent {
             PerfViewTheme(dynamicColor = false) {
-                PerfViewScreen(
-                    uiState = state,
-                    onRunInBackground = onRunInBackground,
-                    onExitApp = onExitApp,
-                )
+                PerfViewTvTheme {
+                    PerfViewScreen(
+                        uiState = state,
+                        onRunInBackground = onRunInBackground,
+                        onExitApp = onExitApp,
+                    )
+                }
             }
         }
     }
@@ -121,7 +125,7 @@ class PerfViewScreenTest {
         var clicks = 0
         setContent(PerfViewViewState(), onRunInBackground = { clicks++ })
 
-        composeTestRule.onNodeWithText("Run in the background").assertIsDisplayed().performClick()
+        composeTestRule.onNodeWithText("Run in the background").assertIsDisplayed().performTvClick()
 
         assertEquals(1, clicks)
     }
@@ -131,7 +135,7 @@ class PerfViewScreenTest {
         var clicks = 0
         setContent(PerfViewViewState(), onExitApp = { clicks++ })
 
-        composeTestRule.onNodeWithText("Exit app").performClick()
+        composeTestRule.onNodeWithText("Exit app").performTvClick()
 
         assertEquals(1, clicks)
     }
