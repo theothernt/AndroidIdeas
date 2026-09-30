@@ -5,7 +5,6 @@ import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
 import com.neilturner.perfview.data.cpu.model.TopProcessUsage
 import com.neilturner.perfview.ui.performTvClick
 import com.neilturner.perfview.ui.dashboard.contract.DashboardContentState
@@ -14,6 +13,7 @@ import com.neilturner.perfview.ui.dashboard.contract.PerfViewViewState
 import com.neilturner.perfview.ui.theme.PerfViewTheme
 import com.neilturner.perfview.ui.theme.PerfViewTvTheme
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -140,6 +140,34 @@ class PerfViewScreenTest {
         assertEquals(1, clicks)
     }
 
+    @Test
+    fun longProcessName_isTruncatedRatherThanWideningThePanel() {
+        val longName = "com.android.vending:instant_app_installer_with_a_deliberately_long_name"
+
+        setContent(
+            PerfViewViewState(
+                dashboardState = DashboardUiState(
+                    content = DashboardContentState.Data(
+                        processes = listOf(process(pid = 1, name = longName, cpuPercent = 5f, ramMb = 10f)),
+                    ),
+                ),
+            ),
+        )
+
+        // The full string stays in the semantics tree even when visually ellipsised, so the
+        // check is that the row was laid out inside a bounded width rather than growing to fit.
+        val rowWidth = composeTestRule
+            .onNodeWithText(longName, substring = true)
+            .fetchSemanticsNode()
+            .size
+            .width
+
+        assertTrue(
+            "row was $rowWidth px, expected it bounded by the fixed panel",
+            rowWidth <= MAX_ROW_WIDTH_PX,
+        )
+    }
+
     private fun process(
         pid: Int,
         name: String,
@@ -154,4 +182,13 @@ class PerfViewScreenTest {
         user = "u0_a101",
         state = "R",
     )
+
+    private companion object {
+        /**
+         * Panel inner width in px:440.dp minus 20.dp padding each side, at the 1.5x density of a
+         * typical TV. Deliberately loose so the assertion proves the row was bounded by the panel
+         * rather than tracking the text length.
+         */
+        const val MAX_ROW_WIDTH_PX = 800
+    }
 }
