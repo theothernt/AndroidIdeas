@@ -6,7 +6,6 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -97,9 +96,6 @@ class AdbConnectionGate(
         isAuthorized = false
     }
 
-    fun close() {
-        scope.cancel()
-    }
 
     private companion object {
         /**

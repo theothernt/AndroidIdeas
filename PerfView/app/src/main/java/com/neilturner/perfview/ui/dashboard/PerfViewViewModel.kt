@@ -8,7 +8,7 @@ import com.neilturner.perfview.data.adb.AdbConnectionGate
 import com.neilturner.perfview.data.adb.AdbUnavailableException
 import com.neilturner.perfview.domain.cpu.CpuMonitor
 import com.neilturner.perfview.domain.cpu.model.CpuUsageResult
-import com.neilturner.perfview.overlay.OverlayPermissionManager
+import com.neilturner.perfview.platform.OverlayAccessChecker
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewCommand
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewIntent
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewViewState
@@ -16,7 +16,6 @@ import com.neilturner.perfview.ui.dashboard.contract.DashboardContentState
 import com.neilturner.perfview.ui.dashboard.contract.DashboardUiState
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,7 +27,7 @@ import kotlinx.coroutines.isActive
 
 class PerfViewViewModel(
     private val adbConnectionGate: AdbConnectionGate,
-    private val overlayPermissionManager: OverlayPermissionManager,
+    private val overlayAccessChecker: OverlayAccessChecker,
     private val cpuMonitor: CpuMonitor,
 ) : ViewModel() {
 
@@ -43,7 +42,6 @@ class PerfViewViewModel(
 
     private var observeJob: Job? = null
     private var connectJob: Job? = null
-    private var overlayPermissionPollJob: Job? = null
     private var isMonitoringActive = false
     private var isHandoffRequested = false
 
@@ -51,7 +49,6 @@ class PerfViewViewModel(
         when (intent) {
             PerfViewIntent.Load -> startConnecting()
             PerfViewIntent.RunInBackgroundClicked -> runInBackground()
-            PerfViewIntent.OverlayPermissionResult -> handleOverlayPermissionResult()
             PerfViewIntent.ExitApp -> _commands.tryEmit(PerfViewCommand.ExitApp)
         }
     }
@@ -170,7 +167,7 @@ class PerfViewViewModel(
      * permission prompt is exactly what moving these asks onto the intro screen was for.
      */
     private fun runInBackground() {
-        if (!overlayPermissionManager.canDrawOverlays()) {
+        if (!overlayAccessChecker.canDrawOverlays()) {
             Log.d(TAG, "Overlay permission is not granted, staying on the dashboard")
             _uiState.update { state ->
                 state.copy(
@@ -187,15 +184,7 @@ class PerfViewViewModel(
             return
         }
 
-        overlayPermissionPollJob?.cancel()
         requestOverlayHandoff()
-    }
-
-    private fun handleOverlayPermissionResult() {
-        if (overlayPermissionManager.canDrawOverlays()) {
-            overlayPermissionPollJob?.cancel()
-            requestOverlayHandoff()
-        }
     }
 
     /**
@@ -207,19 +196,6 @@ class PerfViewViewModel(
         if (isHandoffRequested) return
         isHandoffRequested = true
         _commands.tryEmit(PerfViewCommand.StartBackgroundOverlay)
-    }
-
-    private fun startOverlayPermissionPolling() {
-        overlayPermissionPollJob?.cancel()
-        overlayPermissionPollJob = viewModelScope.launch {
-            repeat(OVERLAY_PERMISSION_POLL_ATTEMPTS) {
-                delay(OVERLAY_PERMISSION_POLL_INTERVAL_MILLIS)
-                if (overlayPermissionManager.canDrawOverlays()) {
-                    requestOverlayHandoff()
-                    return@launch
-                }
-            }
-        }
     }
 
     private fun showAdbError(error: Throwable) {
@@ -256,7 +232,6 @@ class PerfViewViewModel(
         stopMonitoring()
         connectJob?.cancel()
         observeJob?.cancel()
-        overlayPermissionPollJob?.cancel()
     }
 
     private fun String.containsAny(markers: List<String>): Boolean {
@@ -280,8 +255,6 @@ class PerfViewViewModel(
             "protocol fault",
             "closed",
         )
-        private const val OVERLAY_PERMISSION_POLL_INTERVAL_MILLIS = 1_000L
-        private const val OVERLAY_PERMISSION_POLL_ATTEMPTS = 20
         private const val ADB_UNAVAILABLE_MESSAGE =
             "Could not connect to ADB. Enable wireless debugging and try again."
         private const val OVERLAY_PERMISSION_MESSAGE =

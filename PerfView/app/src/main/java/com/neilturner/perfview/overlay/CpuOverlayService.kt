@@ -20,10 +20,10 @@ import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.app.NotificationCompat
-import androidx.core.content.ContextCompat
 import com.neilturner.perfview.MainActivity
 import com.neilturner.perfview.R
 import com.neilturner.perfview.domain.cpu.CpuMonitor
+import com.neilturner.perfview.platform.OverlayAccessChecker
 import com.neilturner.perfview.domain.cpu.model.CpuUsageResult
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
@@ -37,6 +37,7 @@ import org.koin.android.ext.android.inject
 
 class CpuOverlayService : Service() {
     private val cpuMonitor: CpuMonitor by inject()
+    private val overlayAccessChecker: OverlayAccessChecker by inject()
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -60,7 +61,7 @@ class CpuOverlayService : Service() {
             }
         }
 
-        if (!OverlayPermissionManager(this).canDrawOverlays()) {
+        if (!overlayAccessChecker.canDrawOverlays()) {
             stopSelf()
             return START_NOT_STICKY
         }

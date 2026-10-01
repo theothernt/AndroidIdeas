@@ -6,7 +6,7 @@ import com.neilturner.perfview.data.adb.AdbAccessManager
 import com.neilturner.perfview.data.adb.AdbConnectionGate
 import com.neilturner.perfview.domain.cpu.CpuMonitor
 import com.neilturner.perfview.overlay.FakeCpuRepository
-import com.neilturner.perfview.overlay.OverlayPermissionManager
+import com.neilturner.perfview.platform.AndroidOverlayAccessChecker
 import com.neilturner.perfview.ui.dashboard.contract.DashboardContentState
 import com.neilturner.perfview.ui.dashboard.contract.PerfViewIntent
 import kotlinx.coroutines.runBlocking
@@ -20,7 +20,7 @@ import org.junit.runner.RunWith
  * ON_START fires on every return to the foreground, so a second Load must not replace an
  * already populated process list with a "Connecting to ADB..." placeholder.
  *
- * Instrumented rather than a JVM unit test because [OverlayPermissionManager] needs a real
+ * Instrumented rather than a JVM unit test because [AndroidOverlayAccessChecker] needs a real
  * Context, and the project has no Robolectric or coroutines-test dependency.
  */
 @RunWith(AndroidJUnit4::class)
@@ -30,7 +30,7 @@ class PerfViewViewModelResumeTest {
     fun resumeOverLiveData_keepsTheProcessList() = runBlocking {
         val viewModel = PerfViewViewModel(
             adbConnectionGate = authorizedGate(),
-            overlayPermissionManager = OverlayPermissionManager(
+            overlayAccessChecker = AndroidOverlayAccessChecker(
                 ApplicationProvider.getApplicationContext(),
             ),
             cpuMonitor = CpuMonitor(FakeCpuRepository()),

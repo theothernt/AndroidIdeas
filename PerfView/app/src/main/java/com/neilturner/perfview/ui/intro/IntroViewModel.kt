@@ -267,8 +267,6 @@ private val _commands = Channel<IntroCommand>(capacity = Channel.BUFFERED)
         }
         if (!allSatisfied || state.isReady || hasNavigated) return
 
-        _uiState.update { it.copy(isCheckingAdb = true) }
-
         verifyJob = viewModelScope.launch {
             acquireMonitoring()
 
@@ -282,11 +280,10 @@ private val _commands = Channel<IntroCommand>(capacity = Channel.BUFFERED)
                 Log.w(TAG, "No snapshot within ${VERIFY_TIMEOUT_MILLIS}ms, failing verification")
                 releaseMonitoring()
                 update(ChecklistItem.AdbDebugging, ChecklistStatus.NeedsAttention, "No process data arrived")
-                _uiState.update { it.copy(isCheckingAdb = false) }
                 return@launch
             }
 
-            _uiState.update { it.copy(isReady = true, isCheckingAdb = false) }
+        _uiState.update { it.copy(isReady = true) }
             navigateToDashboard()
         }
     }

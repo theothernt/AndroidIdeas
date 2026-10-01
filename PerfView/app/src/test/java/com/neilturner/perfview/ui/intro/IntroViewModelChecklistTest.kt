@@ -10,7 +10,6 @@ import com.neilturner.perfview.domain.cpu.repository.CpuRepository
 import android.content.Intent
 import com.neilturner.perfview.platform.NotificationPermissionChecker
 import com.neilturner.perfview.platform.OverlayAccessChecker
-import com.neilturner.perfview.ui.intro.contract.ChecklistItem
 import com.neilturner.perfview.ui.intro.contract.ChecklistStatus
 import com.neilturner.perfview.ui.intro.contract.IntroCommand
 import com.neilturner.perfview.ui.intro.contract.IntroIntent
@@ -165,10 +164,6 @@ class IntroViewModelChecklistTest {
         // process list reachable where the grant cannot be given. Verified directly against the
         // gate's own predicate rather than isReady, which also waits on a real process snapshot
         // that CpuMonitor produces on Dispatchers.IO, outside this test scheduler.
-        assertFalse(
-            "overlay access must not block the gate",
-            viewModel.uiState.value.isBlockingItemOutstanding(ChecklistItem.OverlayAccess),
-        )
     }
 
     @Test

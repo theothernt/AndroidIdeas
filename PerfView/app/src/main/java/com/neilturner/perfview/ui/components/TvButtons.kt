@@ -16,15 +16,8 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 
 /** Shared button metrics, matching the sizing used across the other AndroidIdeas TV apps. */
-val TvButtonWidth: Dp = 360.dp
+private val TvButtonWidth: Dp = 360.dp
 val TvButtonHeight: Dp = 56.dp
-
-/**
- * Dashboard buttons sit under a full width process panel, so the shared 360.dp action width
- * looks stunted there and stretches too far when it does fill the row. This is wide enough to
- * stay readable and clearly narrower than the panel above it.
- */
-val TvPanelButtonWidth: Dp = 520.dp
 
 /**
  * TV Material 3 scales a focused button by 1.1 by default. At this width that reads as a jump
@@ -46,14 +39,12 @@ fun TvActionButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     width: Dp = TvButtonWidth,
-    enabled: Boolean = true,
 ) {
     Button(
         onClick = onClick,
         modifier = modifier
             .width(width)
             .height(TvButtonHeight),
-        enabled = enabled,
         scale = ButtonDefaults.scale(
             focusedScale = FOCUSED_SCALE,
             pressedScale = PRESSED_SCALE,
