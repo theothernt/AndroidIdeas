@@ -2,6 +2,8 @@ package com.neilturner.perfview.ui.intro
 
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.assertCountEquals
+import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import com.neilturner.perfview.ui.intro.contract.ChecklistStatus
 import com.neilturner.perfview.ui.intro.contract.IntroChecklistItem
@@ -24,6 +26,25 @@ class IntroScreenTest {
                 }
             }
         }
+    }
+
+    @Test
+    fun aQueuedItem_isDistinguishableFromOneBeingChecked() {
+        setContent(
+            listOf(
+                IntroChecklistItem("USB debugging", ChecklistStatus.InProgress, "Connecting"),
+                IntroChecklistItem(
+                    label = "Notification access",
+                    status = ChecklistStatus.Pending,
+                    detail = "Waiting",
+                ),
+                IntroChecklistItem("Overlay access", ChecklistStatus.Pending, "Waiting"),
+            )
+        )
+
+        // Only the step being run reads as active; the queued ones say so in words.
+        composeTestRule.onNodeWithText("Connecting").assertIsDisplayed()
+        composeTestRule.onAllNodesWithText("Waiting").assertCountEquals(2)
     }
 
     @Test

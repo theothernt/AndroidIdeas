@@ -14,7 +14,13 @@ data class IntroChecklistItem(
 
 @Stable
 enum class ChecklistStatus {
-    /** Being checked, or being asked for right now. Shown with a spinner. */
+    /**
+     * Not reached yet. The checks run one at a time, so anything still queued must not look
+     * like it is in progress.
+     */
+    Pending,
+
+    /** Being checked or asked for right now. The only status that shows a spinner. */
     InProgress,
 
     /** Satisfied. */

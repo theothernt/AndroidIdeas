@@ -146,6 +146,8 @@ private fun StatusIndicator(
         contentAlignment = Alignment.Center,
     ) {
         when (status) {
+            ChecklistStatus.Pending -> PendingIndicator()
+
             ChecklistStatus.InProgress -> CircularProgressIndicator(
                 modifier = Modifier.size(20.dp),
                 color = PerfSlate,
@@ -158,6 +160,26 @@ private fun StatusIndicator(
 
             ChecklistStatus.NeedsAttention -> StatusBadge(text = "!", color = PerfAmber)
         }
+    }
+}
+
+/**
+ * Static marker for a step that has not been reached yet.
+ *
+ * Deliberately not a spinner: the checks run one at a time, so a queued step must not read as
+ * active. A dimmed ring shows it is still to come without animating.
+ */
+@Composable
+private fun PendingIndicator(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.size(20.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(8.dp)
+                .border(1.dp, PerfSlate.copy(alpha = 0.45f), CircleShape),
+        )
     }
 }
 

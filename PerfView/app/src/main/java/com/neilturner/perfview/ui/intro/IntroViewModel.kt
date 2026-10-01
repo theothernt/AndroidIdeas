@@ -103,16 +103,17 @@ private val _commands = Channel<IntroCommand>(capacity = Channel.BUFFERED)
         cancelPromptWatchdog()
 
         if (_uiState.value.items.isEmpty()) {
-            _uiState.value = IntroViewState(
-                items = ChecklistItem.entries.map {
-                    IntroChecklistItem(
-                        label = labelFor(it),
-                        status = ChecklistStatus.InProgress,
-                        detail = "Checking",
-                    )
-                },
-                isReady = false,
-            )
+_uiState.value = IntroViewState(
+            items = ChecklistItem.entries.map {
+                IntroChecklistItem(
+                    label = labelFor(it),
+                    // Queued, not in progress: only the step currently being run shows a spinner.
+                    status = ChecklistStatus.Pending,
+                    detail = "Waiting",
+                )
+            },
+            isReady = false,
+        )
         }
 
         hasNavigated = false
@@ -128,6 +129,7 @@ private val _commands = Channel<IntroCommand>(capacity = Channel.BUFFERED)
 
         update(ChecklistItem.AdbDebugging, ChecklistStatus.InProgress, "Checking")
         adbJob = viewModelScope.launch {
+            update(ChecklistItem.AdbDebugging, ChecklistStatus.InProgress, "Connecting")
             adbConnectionGate.ensureAuthorized()
                 .onSuccess {
                     update(ChecklistItem.AdbDebugging, ChecklistStatus.Ready, "Connected")
