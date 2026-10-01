@@ -88,30 +88,56 @@ private val _commands = Channel<IntroCommand>(capacity = Channel.BUFFERED)
     }
 
     /**
-     * Re-reads everything from live platform state.
+     * Re-reads everything from live platform state sequentially.
      *
-     * Called on every appearance rather than once, so a permission the user revokes while the
-     * app is backgrounded brings the gate back rather than leaving the app quietly broken.
+     * Permissions and connections are checked one by one rather than in parallel,
+     * so dialogs and settings activities do not collide or race.
+     * Once a permission is verified, the gate advances to the next item:
+     * 1. USB debugging (AdbDebugging)
+     * 2. Notification access (Notifications)
+     * 3. Overlay access (OverlayAccess)
      */
     private fun checkReadiness() {
         adbJob?.cancel()
         verifyJob?.cancel()
         cancelPromptWatchdog()
 
-        _uiState.value = IntroViewState(
-            items = ChecklistItem.entries.map {
-                IntroChecklistItem(
-                    label = labelFor(it),
-                    status = ChecklistStatus.InProgress,
-                    detail = "Checking",
-                )
-            },
-            isReady = false,
-        )
+        if (_uiState.value.items.isEmpty()) {
+            _uiState.value = IntroViewState(
+                items = ChecklistItem.entries.map {
+                    IntroChecklistItem(
+                        label = labelFor(it),
+                        status = ChecklistStatus.InProgress,
+                        detail = "Checking",
+                    )
+                },
+                isReady = false,
+            )
+        }
 
-        // ADB is independent of the permissions, so it runs alongside them.
+        hasNavigated = false
         checkAdb()
-        checkNotifications()
+    }
+
+    private fun checkAdb() {
+        if (adbConnectionGate.isAuthorized) {
+            update(ChecklistItem.AdbDebugging, ChecklistStatus.Ready, "Connected")
+            checkNotifications()
+            return
+        }
+
+        update(ChecklistItem.AdbDebugging, ChecklistStatus.InProgress, "Checking")
+        adbJob = viewModelScope.launch {
+            adbConnectionGate.ensureAuthorized()
+                .onSuccess {
+                    update(ChecklistItem.AdbDebugging, ChecklistStatus.Ready, "Connected")
+                    checkNotifications()
+                }
+                .onFailure { error ->
+                    Log.w(TAG, "ADB access was not granted", error)
+                    update(ChecklistItem.AdbDebugging, ChecklistStatus.NeedsAttention, "Not authorized")
+                }
+        }
     }
 
     private fun checkNotifications() {
@@ -129,7 +155,6 @@ private val _commands = Channel<IntroCommand>(capacity = Channel.BUFFERED)
 
         if (hasRequestedNotifications) {
             update(ChecklistItem.Notifications, ChecklistStatus.NeedsAttention, "Not granted")
-            checkOverlayAccess()
             return
         }
 
@@ -153,9 +178,10 @@ private val _commands = Channel<IntroCommand>(capacity = Channel.BUFFERED)
 
         onPromptAnswered()
 
-        // The next prompt is only raised once this one has been answered, since the system will
-        // not display two permission dialogs at once.
-        checkOverlayAccess()
+        // The next prompt is only raised once this one has been verified and granted.
+        if (granted) {
+            checkOverlayAccess()
+        }
     }
 
     private fun checkOverlayAccess() {
@@ -211,12 +237,10 @@ private val _commands = Channel<IntroCommand>(capacity = Channel.BUFFERED)
             if (hasRequestedOverlayAccess && _uiState.value.isOverlayAccessInProgress) {
                 Log.w(TAG, "Overlay permission screen did not come back, settling the row")
                 update(ChecklistItem.OverlayAccess, ChecklistStatus.NeedsAttention, "Not granted")
-                advanceWhenReady()
             }
             if (hasRequestedNotifications && _uiState.value.isNotificationsInProgress) {
                 Log.w(TAG, "Notification prompt did not come back, settling the row")
                 update(ChecklistItem.Notifications, ChecklistStatus.NeedsAttention, "Not granted")
-                advanceWhenReady()
             }
         }
     }
@@ -228,26 +252,6 @@ private val _commands = Channel<IntroCommand>(capacity = Channel.BUFFERED)
 
     private fun onPromptAnswered() {
         cancelPromptWatchdog()
-    }
-
-    private fun checkAdb() {
-        if (adbConnectionGate.isAuthorized) {
-            update(ChecklistItem.AdbDebugging, ChecklistStatus.Ready, "Connected")
-            advanceWhenReady()
-            return
-        }
-
-        adbJob = viewModelScope.launch {
-            adbConnectionGate.ensureAuthorized()
-                .onSuccess {
-                    update(ChecklistItem.AdbDebugging, ChecklistStatus.Ready, "Connected")
-                    advanceWhenReady()
-                }
-                .onFailure { error ->
-                    Log.w(TAG, "ADB access was not granted", error)
-                    update(ChecklistItem.AdbDebugging, ChecklistStatus.NeedsAttention, "Not authorized")
-                }
-        }
     }
 
     /**
@@ -265,7 +269,7 @@ private val _commands = Channel<IntroCommand>(capacity = Channel.BUFFERED)
         val allSatisfied = state.items.isNotEmpty() && state.items.all {
             it.status == ChecklistStatus.Ready || it.status == ChecklistStatus.NotNeeded
         }
-        if (!allSatisfied || state.isReady || hasNavigated) return
+        if (!allSatisfied || state.isReady || hasNavigated || verifyJob?.isActive == true) return
 
         verifyJob = viewModelScope.launch {
             acquireMonitoring()

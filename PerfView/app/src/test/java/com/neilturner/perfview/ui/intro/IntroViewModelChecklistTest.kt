@@ -168,7 +168,7 @@ class IntroViewModelChecklistTest {
 
     @Test
     fun `granting overlay access lets the gate finish`() = runTest {
-        val overlay = DeniedOverlay()
+        val overlay = MutableOverlay(granted = false)
         val viewModel = viewModel(
             gate = grantedGate(testScheduler),
             permissions = FakePermissions(required = true, granted = true),
@@ -178,16 +178,80 @@ class IntroViewModelChecklistTest {
         viewModel.accept(IntroIntent.Load)
         advanceUntilIdle()
 
-        val granting = object : OverlayAccessChecker {
-            override fun canDrawOverlays(): Boolean = true
-            override fun createGrantIntent(): Intent = Intent()
-        }
-        // Returning from Settings is what re-checks, so that is the intent the screen sends.
+        // Returning from Settings with overlay granted
+        overlay.granted = true
+        viewModel.accept(IntroIntent.OverlaySettingsResult)
+        advanceUntilIdle()
+        assertEquals(ChecklistStatus.Ready, overlayStatus(viewModel))
+    }
+
+    @Test
+    fun `denied overlay access leaves the overlay item failed`() = runTest {
+        val overlay = MutableOverlay(granted = false)
+        val viewModel = viewModel(
+            gate = grantedGate(testScheduler),
+            permissions = FakePermissions(required = true, granted = true),
+            overlay = overlay,
+        )
+
+        viewModel.accept(IntroIntent.Load)
+        advanceUntilIdle()
+
         viewModel.accept(IntroIntent.OverlaySettingsResult)
         advanceUntilIdle()
         assertEquals(ChecklistStatus.NeedsAttention, overlayStatus(viewModel))
+    }
 
-        assertNotNull(granting)
+    @Test
+    fun `permissions are checked sequentially and missing adb halts before notifications`() = runTest {
+        val permissions = FakePermissions(required = true, granted = false)
+        val viewModel = viewModel(
+            gate = AdbConnectionGate(
+                FailingAccessManager(),
+                dispatcher = StandardTestDispatcher(testScheduler),
+            ),
+            permissions = permissions,
+        )
+
+        val raised = mutableListOf<IntroCommand>()
+        val collector = launch { viewModel.commands.collect { raised += it } }
+
+        viewModel.accept(IntroIntent.Load)
+        advanceUntilIdle()
+
+        assertEquals(ChecklistStatus.NeedsAttention, adbStatus(viewModel))
+        // Notification permission should NOT have been requested because ADB failed first
+        assertFalse(
+            "notification prompt must not be raised while ADB is not verified: $raised",
+            raised.contains(IntroCommand.RequestNotificationPermission),
+        )
+        collector.cancel()
+    }
+
+    @Test
+    fun `denied notifications halts before overlay settings are opened`() = runTest {
+        val viewModel = viewModel(
+            gate = grantedGate(testScheduler),
+            permissions = FakePermissions(required = true, granted = false),
+            overlay = MutableOverlay(granted = false),
+        )
+
+        val raised = mutableListOf<IntroCommand>()
+        val collector = launch { viewModel.commands.collect { raised += it } }
+
+        viewModel.accept(IntroIntent.Load)
+        advanceUntilIdle()
+
+        viewModel.accept(IntroIntent.NotificationPermissionResult(granted = false))
+        advanceUntilIdle()
+
+        assertEquals(ChecklistStatus.NeedsAttention, notificationStatus(viewModel))
+        // Overlay settings should NOT have been requested because notification was denied
+        assertFalse(
+            "overlay settings must not be opened while notification is denied: $raised",
+            raised.contains(IntroCommand.OpenOverlaySettings),
+        )
+        collector.cancel()
     }
 
     @Test
@@ -250,6 +314,11 @@ class IntroViewModelChecklistTest {
 
     private class DeniedOverlay : OverlayAccessChecker {
         override fun canDrawOverlays(): Boolean = false
+        override fun createGrantIntent(): Intent = Intent()
+    }
+
+    private class MutableOverlay(var granted: Boolean = false) : OverlayAccessChecker {
+        override fun canDrawOverlays(): Boolean = granted
         override fun createGrantIntent(): Intent = Intent()
     }
 
