@@ -104,6 +104,7 @@ fun HomeScreen(
     val filteredVideos by viewModel.filteredVideos.collectAsState()
     val selectionCounts by viewModel.selectionCounts.collectAsState()
     val selectedCategoryCounts by viewModel.selectedCategoryCounts.collectAsState()
+    val freeSpaceBytes by viewModel.freeSpaceBytes.collectAsState()
 
     var focusSelectedRailItem by remember { mutableStateOf<(() -> Unit)?>(null) }
     var focusGrid by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -149,6 +150,7 @@ fun HomeScreen(
 
                         SelectionCounter(
                             counts = selectionCounts,
+                            freeSpaceBytes = freeSpaceBytes,
                             modifier = Modifier.fillMaxWidth(),
                         )
                     }
@@ -213,6 +215,7 @@ fun HomeScreen(
 @Composable
 private fun SelectionCounter(
     counts: SelectionCounts,
+    freeSpaceBytes: Long,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -232,7 +235,27 @@ private fun SelectionCounter(
             color = RailSelectedLabel,
             maxLines = 1,
         )
+        if (freeSpaceBytes > 0L) {
+            Text(
+                text = "Free space",
+                style = MaterialTheme.typography.labelSmall,
+                color = RailUnselectedLabel,
+                maxLines = 1,
+                modifier = Modifier.padding(top = 12.dp),
+            )
+            Text(
+                text = formatFreeSpace(freeSpaceBytes),
+                style = MaterialTheme.typography.titleMedium,
+                color = RailSelectedLabel,
+                maxLines = 1,
+            )
+        }
     }
+}
+
+private fun formatFreeSpace(bytes: Long): String {
+    val gibibytes = bytes / (1024.0 * 1024.0 * 1024.0)
+    return "%.1f GB".format(gibibytes)
 }
 
 @Composable

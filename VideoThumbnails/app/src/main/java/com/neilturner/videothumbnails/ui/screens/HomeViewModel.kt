@@ -1,5 +1,7 @@
 package com.neilturner.videothumbnails.ui.screens
 
+import android.os.Environment
+import android.os.StatFs
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neilturner.videothumbnails.data.AerialCategories
@@ -7,6 +9,7 @@ import com.neilturner.videothumbnails.data.Video
 import com.neilturner.videothumbnails.data.VideoCategory
 import com.neilturner.videothumbnails.data.VideoRepository
 import com.neilturner.videothumbnails.data.VideoSelectionStore
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +40,10 @@ class HomeViewModel(
 
     private val _selectedVideo = MutableStateFlow<Video?>(null)
     val selectedVideo: StateFlow<Video?> = _selectedVideo.asStateFlow()
+
+    // Available bytes on the device's data partition; 0 until first read completes.
+    private val _freeSpaceBytes = MutableStateFlow(0L)
+    val freeSpaceBytes: StateFlow<Long> = _freeSpaceBytes.asStateFlow()
 
     val categories: List<VideoCategory> = AerialCategories.all
 
@@ -95,6 +102,14 @@ class HomeViewModel(
 
     init {
         loadVideos()
+        refreshFreeSpace()
+    }
+
+    fun refreshFreeSpace() {
+        viewModelScope.launch(Dispatchers.IO) {
+            _freeSpaceBytes.value =
+                StatFs(Environment.getDataDirectory().path).availableBytes
+        }
     }
 
     private fun loadVideos() {
