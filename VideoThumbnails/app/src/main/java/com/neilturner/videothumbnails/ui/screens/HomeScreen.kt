@@ -92,6 +92,8 @@ private const val CARD_FOCUSED_SCALE = 1.1f
 private const val THUMBNAIL_REVEAL_STEP_MILLIS = 40
 private const val THUMBNAIL_REVEAL_MAX_MILLIS = 120
 
+private typealias FocusCallback = () -> Unit
+
 @Composable
 fun HomeScreen(
     modifier: Modifier = Modifier,
@@ -100,18 +102,43 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val selectedVideo by viewModel.selectedVideo.collectAsState()
     val selectedCategory by viewModel.selectedCategory.collectAsState()
+    val committedCategory by viewModel.committedCategory.collectAsState()
     val hiddenVideoIds by viewModel.hiddenVideoIds.collectAsState()
     val filteredVideos by viewModel.filteredVideos.collectAsState()
     val selectionCounts by viewModel.selectionCounts.collectAsState()
     val selectedCategoryCounts by viewModel.selectedCategoryCounts.collectAsState()
     val freeSpaceBytes by viewModel.freeSpaceBytes.collectAsState()
 
-    var focusSelectedRailItem by remember { mutableStateOf<(() -> Unit)?>(null) }
-    var focusGrid by remember { mutableStateOf<(() -> Unit)?>(null) }
+    // Stable references: a fresh bound reference on each recomposition would be a new
+    // instance, forcing the grid to remeasure and redraw every time the rail focus moves.
+    val onSelectCategory = remember(viewModel) { viewModel::selectCategory }
+    val onVideoClick = remember(viewModel) { viewModel::toggleVideoHidden }
+    val onVideoLongClick = remember(viewModel) { viewModel::selectVideo }
+    val onToggleCategoryVisibility = remember(viewModel) { viewModel::toggleCategoryVisibility }
+
+    val focusSelectedRailItemState = remember { mutableStateOf<FocusCallback?>(null) }
+    val focusGridState = remember { mutableStateOf<FocusCallback?>(null) }
     val showHideAllFocusRequester = remember { FocusRequester() }
 
     val density = LocalDensity.current
     var gridContentTopOffsetDp by remember { mutableStateOf(GRID_TOP_GAP_DP.dp) }
+
+    // Identity-stable callbacks for VideoGrid so rail focus moves do not invalidate it.
+    val onNavigateToCategoryRail: () -> Unit = remember {
+        { focusSelectedRailItemState.value?.invoke() }
+    }
+    val onNavigateToGrid: () -> Unit = remember {
+        { focusGridState.value?.invoke() }
+    }
+    val onNavigateToShowHideAllButton: () -> Unit = remember {
+        { showHideAllFocusRequester.requestFocus() }
+    }
+    val onGridFocusReady: (FocusCallback) -> Unit = remember {
+        { callback -> focusGridState.value = callback }
+    }
+    val onGridContentTopOffset: (Dp) -> Unit = remember {
+        { value: Dp -> gridContentTopOffsetDp = value }
+    }
 
     val isAllHiddenInCategory =
         selectedCategoryCounts.total > 0 && selectedCategoryCounts.selected == 0
@@ -141,9 +168,9 @@ fun HomeScreen(
                         CategoryRail(
                             categories = viewModel.categories,
                             selectedCategory = selectedCategory,
-                            onSelectCategory = viewModel::selectCategory,
-                            onSelectedFocusReady = { focusSelectedRailItem = it },
-                            onNavigateToGrid = { focusGrid?.invoke() },
+                            onSelectCategory = onSelectCategory,
+                            onSelectedFocusReady = { focusSelectedRailItemState.value = it },
+                            onNavigateToGrid = onNavigateToGrid,
                             contentTopPaddingDp = gridContentTopOffsetDp,
                             modifier = Modifier.weight(1f),
                         )
@@ -174,9 +201,9 @@ fun HomeScreen(
                         ) {
                             ShowHideAllButton(
                                 label = showHideAllLabel,
-                                onClick = viewModel::toggleCategoryVisibility,
-                                onNavigateDown = { focusGrid?.invoke() },
-                                onNavigateLeft = { focusSelectedRailItem?.invoke() },
+                                onClick = onToggleCategoryVisibility,
+                                onNavigateDown = onNavigateToGrid,
+                                onNavigateLeft = onNavigateToCategoryRail,
                                 modifier = Modifier.focusRequester(showHideAllFocusRequester),
                             )
                         }
@@ -184,13 +211,13 @@ fun HomeScreen(
                         VideoGrid(
                             videos = filteredVideos,
                             hiddenVideoIds = hiddenVideoIds,
-                            resetKey = selectedCategory.id,
-                            onVideoClick = viewModel::toggleVideoHidden,
-                            onVideoLongClick = viewModel::selectVideo,
-                            onNavigateToCategoryRail = { focusSelectedRailItem?.invoke() },
-                            onNavigateToShowHideAllButton = { showHideAllFocusRequester.requestFocus() },
-                            onGridFocusReady = { focusGrid = it },
-                            onContentTopOffsetDp = { gridContentTopOffsetDp = it },
+                            resetKey = committedCategory.id,
+                            onVideoClick = onVideoClick,
+                            onVideoLongClick = onVideoLongClick,
+                            onNavigateToCategoryRail = onNavigateToCategoryRail,
+                            onNavigateToShowHideAllButton = onNavigateToShowHideAllButton,
+                            onGridFocusReady = onGridFocusReady,
+                            onContentTopOffsetDp = onGridContentTopOffset,
                             modifier = Modifier.weight(1f),
                         )
                     }

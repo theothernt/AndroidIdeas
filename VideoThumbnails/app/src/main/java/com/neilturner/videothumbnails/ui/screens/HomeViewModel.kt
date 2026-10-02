@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -50,6 +51,13 @@ class HomeViewModel(
     private val _selectedCategory = MutableStateFlow(categories.first())
     val selectedCategory: StateFlow<VideoCategory> = _selectedCategory.asStateFlow()
 
+    // The rail selects on focus, so moving through it would otherwise rebuild the grid
+    // (and kick off thumbnail decodes) on every item. Commit only after focus settles.
+    val committedCategory: StateFlow<VideoCategory> =
+        _selectedCategory
+            .debounce(CATEGORY_COMMIT_DELAY_MILLIS)
+            .stateIn(viewModelScope, SharingStarted.Eagerly, categories.first())
+
     val hiddenVideoIds: StateFlow<Set<String>> =
         selectionStore.hiddenVideoIds
             .stateIn(
@@ -59,7 +67,7 @@ class HomeViewModel(
             )
 
     val filteredVideos: StateFlow<List<Video>> =
-        combine(_uiState, _selectedCategory) { state, category ->
+        combine(_uiState, committedCategory) { state, category ->
             if (state !is VideoUiState.Success) {
                 emptyList()
             } else {
@@ -72,7 +80,7 @@ class HomeViewModel(
         )
 
     val selectedCategoryCounts: StateFlow<SelectionCounts> =
-        combine(_uiState, _selectedCategory, selectionStore.hiddenVideoIds) { state, category, hiddenVideoIds ->
+        combine(_uiState, committedCategory, selectionStore.hiddenVideoIds) { state, category, hiddenVideoIds ->
             val videos = (state as? VideoUiState.Success)?.videos.orEmpty()
             val inCategory = videos.filter { video -> AerialCategories.forVideo(video) == category }
             val hidden = inCategory.count { video -> video.id in hiddenVideoIds }
@@ -136,7 +144,7 @@ class HomeViewModel(
     fun toggleCategoryVisibility() {
         viewModelScope.launch {
             val state = _uiState.value as? VideoUiState.Success ?: return@launch
-            val category = _selectedCategory.value
+            val category = committedCategory.value
             val categoryVideoIds =
                 state.videos
                     .filterTo(mutableSetOf()) { video -> AerialCategories.forVideo(video) == category }
@@ -160,6 +168,7 @@ class HomeViewModel(
 
     private companion object {
         const val STOP_TIMEOUT_MILLIS = 5_000L
+        const val CATEGORY_COMMIT_DELAY_MILLIS = 300L
     }
 }
 
