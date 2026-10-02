@@ -77,6 +77,8 @@ import coil3.size.Size
 import com.neilturner.videothumbnails.data.Video
 import com.neilturner.videothumbnails.ui.components.CategoryRail
 import com.neilturner.videothumbnails.ui.components.ShowHideAllButton
+import com.neilturner.videothumbnails.ui.components.THUMBNAIL_FOCUSED_SCALE
+import com.neilturner.videothumbnails.ui.components.VIDEO_LABEL_HEIGHT
 import com.neilturner.videothumbnails.ui.components.VideoItem
 import com.neilturner.videothumbnails.ui.theme.RailSelectedLabel
 import com.neilturner.videothumbnails.ui.theme.RailUnselectedLabel
@@ -88,7 +90,6 @@ private const val GRID_COLUMNS = 3
 private const val GRID_SPACING_DP = 25
 private const val GRID_TOP_GAP_DP = 16
 private const val GRID_EDGE_PADDING_DP = 16
-private const val CARD_FOCUSED_SCALE = 1.1f
 private const val THUMBNAIL_REVEAL_STEP_MILLIS = 40
 private const val THUMBNAIL_REVEAL_MAX_MILLIS = 120
 
@@ -318,8 +319,8 @@ fun VideoGrid(
                 (
                     (gridWidthPx - 2 * edgePaddingPx - (GRID_COLUMNS - 1) * spacingPx) / GRID_COLUMNS
                 ).coerceAtLeast(0f)
-            val cardHeightPx = cardWidthPx / 16f * 9f
-            (cardHeightPx * (CARD_FOCUSED_SCALE - 1f) / 2f).toDp()
+            val cardHeightPx = cardWidthPx / 16f * 9f + VIDEO_LABEL_HEIGHT.toPx()
+            (cardHeightPx * (THUMBNAIL_FOCUSED_SCALE - 1f) / 2f).toDp()
         }
     val gridTopPadding = (GRID_TOP_GAP_DP.dp - focusedCardOverflow).coerceAtLeast(0.dp)
     val focusedCardOverflowPx = with(density) { focusedCardOverflow.toPx() }
@@ -330,6 +331,9 @@ fun VideoGrid(
 
     LaunchedEffect(resetKey) {
         focusedVideoId = null
+        // Without this the grid keeps its scroll offset across a category change, so a
+        // new category opens part-way down instead of at its first item.
+        gridState.scrollToItem(0)
     }
 
     LaunchedEffect(Unit) {

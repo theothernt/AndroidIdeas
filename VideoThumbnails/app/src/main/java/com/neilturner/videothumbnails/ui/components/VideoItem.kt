@@ -4,11 +4,12 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -21,8 +22,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
@@ -30,6 +31,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Border
@@ -47,11 +49,10 @@ import com.neilturner.videothumbnails.data.Video
 import com.neilturner.videothumbnails.ui.theme.VideoThumbnailsTheme
 import kotlinx.coroutines.delay
 
+
 private const val HIDDEN_LABEL_ALPHA = 0.4f
 private const val GRAYSCALE_FADE_MILLIS = 300
 private const val THUMBNAIL_CROSSFADE_MILLIS = 120
-private const val THUMBNAIL_REVEAL_STEP_MILLIS = 40
-private const val THUMBNAIL_REVEAL_MAX_MILLIS = 320
 
 private val THUMBNAIL_SHAPE = RoundedCornerShape(12.dp)
 private val THUMBNAIL_BORDER =
@@ -60,6 +61,16 @@ private val THUMBNAIL_BORDER =
         inset = 0.dp,
         shape = THUMBNAIL_SHAPE,
     )
+
+/**
+ * Fixed height of the caption strip below the thumbnail. Fixed rather than wrap so
+ * VideoGrid can derive the card's full height (and therefore the focused card's
+ * overflow) from the column width alone.
+ */
+internal val VIDEO_LABEL_HEIGHT = 34.dp
+
+/** Focus zoom for the thumbnail. Shared with VideoGrid, which reserves overflow for it. */
+internal const val THUMBNAIL_FOCUSED_SCALE = 1.05f
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Stable
@@ -74,13 +85,6 @@ fun VideoItem(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
-    val gradientScrim =
-        remember {
-            Brush.verticalGradient(
-                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f)),
-                startY = 100f,
-            )
-        }
 
     var isFocusedCard by remember { mutableStateOf(false) }
     var isRevealed by remember(video.id) { mutableStateOf(false) }
@@ -125,65 +129,72 @@ fun VideoItem(
             )
         }
 
-    Card(
-        onClick = { onClick(video) },
-        onLongClick = { onLongClick(video) },
-        modifier =
-            modifier
-                .aspectRatio(16f / 9f)
-                .onFocusChanged { focusState ->
-                    isFocusedCard = focusState.isFocused
-                    if (focusState.isFocused) {
-                        isRevealed = true
-                        onReveal()
-                    }
-                },
-        shape = CardDefaults.shape(THUMBNAIL_SHAPE),
-        glow =
-            CardDefaults.glow(
-                glow = Glow.None,
-                focusedGlow = Glow.None,
-                pressedGlow = Glow.None,
-            ),
-        border =
-            CardDefaults.border(
-                border = Border.None,
-                focusedBorder = THUMBNAIL_BORDER,
-                pressedBorder = Border.None,
-            ),
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            val assetPath = video.thumbnailAssetPath
-            if (assetPath != null) {
-                Image(
-                    painter = painter,
-                    contentDescription = video.getDisplayTitle(),
-                    contentScale = ContentScale.Crop,
-                    colorFilter = grayscaleFilter.takeIf { grayscaleAmount > 0f },
-                    modifier =
-                        Modifier
-                            .fillMaxSize()
-                            .graphicsLayer { alpha = revealAlpha },
-                )
+    // The Card wraps only the thumbnail, so focus, zoom and the focus border apply to the
+    // image; the caption is a sibling that never takes focus.
+    Column(modifier = modifier) {
+        Card(
+            onClick = { onClick(video) },
+            onLongClick = { onLongClick(video) },
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .onFocusChanged { focusState ->
+                        isFocusedCard = focusState.isFocused
+                        if (focusState.isFocused) {
+                            isRevealed = true
+                            onReveal()
+                        }
+                    },
+            shape = CardDefaults.shape(THUMBNAIL_SHAPE),
+            colors = CardDefaults.colors(containerColor = Color.Transparent),
+            scale = CardDefaults.scale(focusedScale = THUMBNAIL_FOCUSED_SCALE),
+            glow =
+                CardDefaults.glow(
+                    glow = Glow.None,
+                    focusedGlow = Glow.None,
+                    pressedGlow = Glow.None,
+                ),
+            border =
+                CardDefaults.border(
+                    border = Border.None,
+                    focusedBorder = THUMBNAIL_BORDER,
+                    pressedBorder = Border.None,
+                ),
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                val assetPath = video.thumbnailAssetPath
+                if (assetPath != null) {
+                    Image(
+                        painter = painter,
+                        contentDescription = video.getDisplayTitle(),
+                        contentScale = ContentScale.Crop,
+                        colorFilter = grayscaleFilter.takeIf { grayscaleAmount > 0f },
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .clip(THUMBNAIL_SHAPE)
+                                .graphicsLayer { alpha = revealAlpha },
+                    )
+                }
             }
+        }
 
-            Box(
-                modifier =
+        Box(
+            modifier =
                     Modifier
-                        .fillMaxSize()
-                        .background(gradientScrim),
-            )
-
+                        .fillMaxWidth()
+                        .height(VIDEO_LABEL_HEIGHT),
+            contentAlignment = Alignment.Center,
+        ) {
             Text(
                 text = video.getDisplayTitle(),
                 style = MaterialTheme.typography.bodySmall,
                 color = Color.White.copy(alpha = if (isHidden) HIDDEN_LABEL_ALPHA else 1f),
                 textAlign = TextAlign.Center,
-                modifier =
-                    Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(8.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 8.dp),
             )
         }
     }
