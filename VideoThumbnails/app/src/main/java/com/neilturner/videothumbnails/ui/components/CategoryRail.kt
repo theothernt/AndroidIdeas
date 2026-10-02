@@ -49,7 +49,7 @@ import com.neilturner.videothumbnails.ui.theme.RailUnselectedLabel
 import kotlinx.coroutines.launch
 
 private const val RAIL_FADE_MILLIS = 200
-private const val RAIL_FOCUSED_SCALE = 1.02f
+private const val RAIL_FOCUSED_SCALE = 1.05f
 private val RAIL_PILL_SHAPE = RoundedCornerShape(percent = 50)
 
 @OptIn(ExperimentalTvMaterial3Api::class)

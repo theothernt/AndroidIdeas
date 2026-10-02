@@ -31,7 +31,7 @@ import com.neilturner.videothumbnails.ui.theme.RailFocusedLabel
 import com.neilturner.videothumbnails.ui.theme.RailFocusedPill
 
 private const val BUTTON_FADE_MILLIS = 200
-private const val BUTTON_FOCUSED_SCALE = 1.02f
+private const val BUTTON_FOCUSED_SCALE = 1.05f
 private val BUTTON_SHAPE = RoundedCornerShape(percent = 50)
 
 @OptIn(ExperimentalTvMaterial3Api::class)
