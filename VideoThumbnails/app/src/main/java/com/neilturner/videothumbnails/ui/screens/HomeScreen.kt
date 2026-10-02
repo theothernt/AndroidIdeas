@@ -53,9 +53,12 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
@@ -106,6 +109,9 @@ fun HomeScreen(
     var focusGrid by remember { mutableStateOf<(() -> Unit)?>(null) }
     val showHideAllFocusRequester = remember { FocusRequester() }
 
+    val density = LocalDensity.current
+    var gridContentTopOffsetDp by remember { mutableStateOf(GRID_TOP_GAP_DP.dp) }
+
     val isAllHiddenInCategory =
         selectedCategoryCounts.total > 0 && selectedCategoryCounts.selected == 0
     val showHideAllLabel = if (isAllHiddenInCategory) "Show All" else "Hide All"
@@ -137,6 +143,7 @@ fun HomeScreen(
                             onSelectCategory = viewModel::selectCategory,
                             onSelectedFocusReady = { focusSelectedRailItem = it },
                             onNavigateToGrid = { focusGrid?.invoke() },
+                            contentTopPaddingDp = gridContentTopOffsetDp,
                             modifier = Modifier.weight(1f),
                         )
 
@@ -156,7 +163,11 @@ fun HomeScreen(
                             modifier =
                                 Modifier
                                     .fillMaxWidth()
-                                    .padding(start = GRID_SPACING_DP.dp, end = GRID_SPACING_DP.dp, top = 16.dp),
+                                    .padding(
+                                        start = GRID_SPACING_DP.dp,
+                                        end = GRID_SPACING_DP.dp,
+                                        top = GRID_TOP_GAP_DP.dp,
+                                    ),
                             horizontalArrangement = Arrangement.End,
                         ) {
                             ShowHideAllButton(
@@ -177,6 +188,7 @@ fun HomeScreen(
                             onNavigateToCategoryRail = { focusSelectedRailItem?.invoke() },
                             onNavigateToShowHideAllButton = { showHideAllFocusRequester.requestFocus() },
                             onGridFocusReady = { focusGrid = it },
+                            onContentTopOffsetDp = { gridContentTopOffsetDp = it },
                             modifier = Modifier.weight(1f),
                         )
                     }
@@ -233,6 +245,7 @@ fun VideoGrid(
     onNavigateToCategoryRail: () -> Unit,
     onNavigateToShowHideAllButton: () -> Unit,
     onGridFocusReady: ((() -> Unit) -> Unit) = {},
+    onContentTopOffsetDp: (Dp) -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     val gridState = rememberLazyGridState()
@@ -240,9 +253,11 @@ fun VideoGrid(
     val focusedCardRequester = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
     val restoreCallback by rememberUpdatedState(onGridFocusReady)
+    val contentTopOffsetCallback by rememberUpdatedState(onContentTopOffsetDp)
     val revealedVideoIds = remember(resetKey) { mutableSetOf<String>() }
     var focusedVideoId by remember { mutableStateOf<String?>(null) }
     var gridWidthPx by remember { mutableIntStateOf(0) }
+    var gridTopInRootDp by remember { mutableStateOf(0.dp) }
 
     val density = LocalDensity.current
     val focusedCardOverflow =
@@ -258,6 +273,10 @@ fun VideoGrid(
         }
     val gridTopPadding = (GRID_TOP_GAP_DP.dp - focusedCardOverflow).coerceAtLeast(0.dp)
     val focusedCardOverflowPx = with(density) { focusedCardOverflow.toPx() }
+
+    LaunchedEffect(gridTopInRootDp, gridTopPadding, focusedCardOverflow) {
+        contentTopOffsetCallback(gridTopInRootDp + gridTopPadding + focusedCardOverflow)
+    }
 
     LaunchedEffect(resetKey) {
         focusedVideoId = null
@@ -332,6 +351,7 @@ fun VideoGrid(
             modifier
                 .fillMaxWidth()
                 .onSizeChanged { gridWidthPx = it.width }
+                .onGloballyPositioned { gridTopInRootDp = with(density) { it.positionInRoot().y.toDp() } }
                 .padding(top = gridTopPadding)
                 .focusRequester(gridFocusRequester)
                 .onPreviewKeyEvent { event ->

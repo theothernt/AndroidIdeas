@@ -35,6 +35,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
@@ -59,6 +60,7 @@ fun CategoryRail(
     onSelectCategory: (VideoCategory) -> Unit,
     onSelectedFocusReady: (() -> Unit) -> Unit = {},
     onNavigateToGrid: (() -> Unit)? = null,
+    contentTopPaddingDp: Dp = 24.dp,
     modifier: Modifier = Modifier,
 ) {
     val itemFocusRequesters =
@@ -81,7 +83,7 @@ fun CategoryRail(
 
     LazyColumn(
         modifier = modifier.fillMaxHeight(),
-        contentPadding = PaddingValues(vertical = 24.dp, horizontal = 12.dp),
+        contentPadding = PaddingValues(start = 12.dp, top = contentTopPaddingDp, end = 12.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         items(items = categories, key = { it.id }) { category ->
