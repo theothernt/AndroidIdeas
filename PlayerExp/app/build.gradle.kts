@@ -71,5 +71,5 @@ dependencies {
 	testImplementation(libs.junit)
 	debugImplementation(libs.androidx.compose.ui.test.manifest)
 	debugImplementation(libs.androidx.compose.ui.tooling)
-	debugImplementation("com.squareup.leakcanary:leakcanary-android:3.0-alpha-9")
+	debugImplementation(libs.leakcanary)
 }
