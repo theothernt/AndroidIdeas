@@ -44,6 +44,7 @@ import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckViewModel
 @Composable
 fun PlexOnDeckScreen(
     onPlay: (ratingKey: String, title: String) -> Unit,
+    onNavigateToShow: (showRatingKey: String, showTitle: String?) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PlexOnDeckViewModel = viewModel()
 ) {
@@ -76,7 +77,7 @@ fun PlexOnDeckScreen(
                 is PlexOnDeckUiState.Success -> if (current.shelves.isEmpty) {
                     StatusMessage(text = stringResource(R.string.plex_on_deck_empty))
                 } else {
-                    LatestShelves(current.shelves, posterSize, onPlay)
+                    LatestShelves(current.shelves, posterSize, onPlay, onNavigateToShow, viewModel)
                 }
             }
         }
@@ -89,13 +90,22 @@ fun PlexOnDeckScreen(
  * All three are drawn at the same card size, so the lower ones run past the bottom of the screen
  * rather than being shrunk to fit, and the page scrolls to bring them into view. A shelf with nothing
  * in it is left out rather than showing an empty heading.
+ *
+ * Opening an episode leaves the screen for its show page, so each shelf remembers the card the focus
+ * was on and which shelf it was on. Coming back puts the focus on that card again; the shelf the
+ * user was on claims the initial focus and the other two are reached by moving down as before.
  */
 @Composable
 private fun LatestShelves(
     shelves: PlexOnDeckShelves,
     posterSize: PosterSize,
-    onPlay: (ratingKey: String, title: String) -> Unit
+    onPlay: (ratingKey: String, title: String) -> Unit,
+    onNavigateToShow: (showRatingKey: String, showTitle: String?) -> Unit,
+    viewModel: PlexOnDeckViewModel
 ) {
+    // Null on a first visit, where Continue Watching is the shelf to land on.
+    val returningShelfId = viewModel.lastFocusedShelfId()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -113,17 +123,44 @@ private fun LatestShelves(
     ) {
         if (shelves.continueWatching.isNotEmpty()) {
             Shelf(stringResource(R.string.plex_on_deck_continue_watching)) {
-                OnDeckRow(shelves.continueWatching, posterSize, onPlay)
+                OnDeckRow(
+                    items = shelves.continueWatching,
+                    posterSize = posterSize,
+                    onPlay = onPlay,
+                    rememberedKey = viewModel.focusedRatingKey(SHELF_CONTINUE_WATCHING),
+                    claimsInitialFocus = returningShelfId == null || returningShelfId == SHELF_CONTINUE_WATCHING,
+                    onFocused = { viewModel.rememberShelfFocus(SHELF_CONTINUE_WATCHING, it) }
+                )
             }
         }
         if (shelves.latestEpisodes.isNotEmpty()) {
             Shelf(stringResource(R.string.plex_on_deck_latest_episodes)) {
-                LibraryShelfRow(shelves.latestEpisodes, posterSize, onPlay)
+                // Episodes open their show page rather than playing straight in, so the user can
+                // pick from the full episode list; movies have no show page and play straight away.
+                LibraryShelfRow(
+                    items = shelves.latestEpisodes,
+                    posterSize = posterSize,
+                    rememberedKey = viewModel.focusedRatingKey(SHELF_LATEST_EPISODES),
+                    claimsInitialFocus = returningShelfId == SHELF_LATEST_EPISODES,
+                    onFocused = { viewModel.rememberShelfFocus(SHELF_LATEST_EPISODES, it) },
+                    onItemSelected = { item ->
+                        val showKey = item.showRatingKey
+                        if (showKey != null) onNavigateToShow(showKey, item.showTitle)
+                        else onPlay(item.ratingKey, item.title.orEmpty())
+                    }
+                )
             }
         }
         if (shelves.latestMovies.isNotEmpty()) {
             Shelf(stringResource(R.string.plex_on_deck_latest_movies)) {
-                LibraryShelfRow(shelves.latestMovies, posterSize, onPlay)
+                LibraryShelfRow(
+                    items = shelves.latestMovies,
+                    posterSize = posterSize,
+                    rememberedKey = viewModel.focusedRatingKey(SHELF_LATEST_MOVIES),
+                    claimsInitialFocus = returningShelfId == SHELF_LATEST_MOVIES,
+                    onFocused = { viewModel.rememberShelfFocus(SHELF_LATEST_MOVIES, it) },
+                    onItemSelected = { onPlay(it.ratingKey, it.title.orEmpty()) }
+                )
             }
         }
     }
@@ -146,25 +183,35 @@ private fun Shelf(heading: String, content: @Composable () -> Unit) {
     }
 }
 
-/** A row of library items, which play the same way Continue Watching items do. */
+/**
+ * A row of library items, which play the same way Continue Watching items do.
+ *
+ * [rememberedKey] is the card this shelf held before the screen was left, so the row comes back to
+ * it. [claimsInitialFocus] is true only for the shelf the user was last on, so exactly one row ever
+ * asks for focus.
+ */
 @Composable
 private fun LibraryShelfRow(
     items: List<PlexLibraryItem>,
     posterSize: PosterSize,
-    onPlay: (ratingKey: String, title: String) -> Unit
+    rememberedKey: String?,
+    claimsInitialFocus: Boolean,
+    onFocused: (ratingKey: String) -> Unit,
+    onItemSelected: (PlexLibraryItem) -> Unit
 ) {
     PlexPosterRow(
         itemCount = items.size,
-        // Only the first shelf claims the initial focus; the others are reached by moving down.
-        claimsInitialFocus = false,
-        key = { index -> items[index].ratingKey }
+        claimsInitialFocus = claimsInitialFocus,
+        initialFocusIndex = items.indexOfFirst { it.ratingKey == rememberedKey }.coerceAtLeast(0),
+        key = { index -> items[index].ratingKey },
+        onItemFocused = { index -> onFocused(items[index].ratingKey) }
     ) { index, itemModifier ->
         val item = items[index]
         PlexPosterCard(
             imageUrl = item.thumb,
             posterSize = posterSize,
             modifier = itemModifier,
-            onPressed = { onPlay(item.ratingKey, item.title.orEmpty()) }
+            onPressed = { onItemSelected(item) }
         )
     }
 }
@@ -174,12 +221,18 @@ private fun LibraryShelfRow(
 private fun OnDeckRow(
     items: List<OnDeckItem>,
     posterSize: PosterSize,
-    onPlay: (ratingKey: String, title: String) -> Unit
+    onPlay: (ratingKey: String, title: String) -> Unit,
+    rememberedKey: String?,
+    claimsInitialFocus: Boolean,
+    onFocused: (ratingKey: String) -> Unit
 ) {
     PlexPosterRow(
         itemCount = items.size,
+        claimsInitialFocus = claimsInitialFocus,
+        initialFocusIndex = items.indexOfFirst { it.ratingKey == rememberedKey }.coerceAtLeast(0),
         // Keyed by ratingKey so focus and the remembered request follow the item, not the index.
-        key = { index -> items[index].ratingKey }
+        key = { index -> items[index].ratingKey },
+        onItemFocused = { index -> onFocused(items[index].ratingKey) }
     ) { index, itemModifier ->
         val item = items[index]
         PlexPosterCard(
@@ -209,7 +262,7 @@ private fun OnDeckRow(
  * sliver to read as progress, so the fill has a floor.
  */
 @Composable
-private fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
+fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
     Box(
         modifier = modifier
             .height(PROGRESS_BAR_HEIGHT)
@@ -228,16 +281,21 @@ private fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
 
 private val SHELF_SPACING = 12.dp
 
+/** Shelf identities for the remembered focus. Stable, so a rename cannot strand the focus. */
+private const val SHELF_CONTINUE_WATCHING = "continueWatching"
+private const val SHELF_LATEST_EPISODES = "latestEpisodes"
+private const val SHELF_LATEST_MOVIES = "latestMovies"
+
 /** Room at the top and bottom of the scrolling page for a shelf and its focused card. */
 private val SHELF_EDGE_PADDING = 16.dp
 private val SHELF_TITLE_GAP = 8.dp
-private val POSTER_BAR_INSET = 10.dp
-private val PROGRESS_BAR_HEIGHT = 4.dp
+val POSTER_BAR_INSET = 10.dp
+val PROGRESS_BAR_HEIGHT = 4.dp
 private val PROGRESS_BAR_RADIUS = 2.dp
-private val PROGRESS_BAR_SHAPE = RoundedCornerShape(PROGRESS_BAR_RADIUS)
+val PROGRESS_BAR_SHAPE = RoundedCornerShape(PROGRESS_BAR_RADIUS)
 
 /** Unwatched part of the bar: solid black, so it reads on pale artwork. */
-private val PROGRESS_TRACK_COLOR = Color.Black
+val PROGRESS_TRACK_COLOR = Color.Black
 
 /** Smallest fill the bar will draw, so a barely-started item still reads as in progress. */
-private const val MIN_PROGRESS_FRACTION = 0.05f
+const val MIN_PROGRESS_FRACTION = 0.05f

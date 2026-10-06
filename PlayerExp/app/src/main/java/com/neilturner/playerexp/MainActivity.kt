@@ -20,6 +20,7 @@ import com.neilturner.playerexp.ui.screens.PlexLibrariesScreen
 import com.neilturner.playerexp.ui.screens.PlexOnDeckScreen
 import com.neilturner.playerexp.ui.screens.PlexPlayerScreen
 import com.neilturner.playerexp.ui.screens.PlexSettingsScreen
+import com.neilturner.playerexp.ui.screens.PlexShowScreen
 import com.neilturner.playerexp.ui.theme.PlayerExpTheme
 
 import kotlinx.serialization.Serializable
@@ -48,6 +49,13 @@ data object PlexOnDeckRoute : PlayerExpRoute
 
 @Serializable
 data object PlexLibrariesRoute : PlayerExpRoute
+
+/** A TV show opened from an episode card on On Deck, showing its seasons and full episode list. */
+@Serializable
+data class ShowDetailRoute(
+    val showRatingKey: String,
+    val showTitle: String? = null
+) : PlayerExpRoute
 
 class MainActivity : ComponentActivity() {
     @UnstableApi
@@ -100,6 +108,18 @@ class MainActivity : ComponentActivity() {
                             entry<PlexOnDeckRoute> {
                                 PlexOnDeckScreen(
                                     onPlay = { ratingKey, title ->
+                                        backStack.add(PlexPlayerRoute(ratingKey, title))
+                                    },
+                                    onNavigateToShow = { showRatingKey, showTitle ->
+                                        backStack.add(ShowDetailRoute(showRatingKey, showTitle))
+                                    }
+                                )
+                            }
+                            entry<ShowDetailRoute> { route ->
+                                PlexShowScreen(
+                                    showRatingKey = route.showRatingKey,
+                                    showTitle = route.showTitle,
+                                    onNavigateToPlayer = { ratingKey, title ->
                                         backStack.add(PlexPlayerRoute(ratingKey, title))
                                     }
                                 )

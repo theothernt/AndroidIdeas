@@ -12,18 +12,46 @@ import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
+import io.ktor.client.request.put
+import io.ktor.client.request.setBody
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.Parameters
 import io.ktor.http.URLBuilder
 import io.ktor.http.URLProtocol
+import io.ktor.client.request.forms.FormDataContent
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
 import kotlinx.coroutines.CancellationException
+
+// Matches the lenient, ignore-unknown parser the rest of the Plex calls expect: Plex responses
+// carry plenty of fields this screen never reads.
+val plexJson = Json { ignoreUnknownKeys = true; isLenient = true }
+
+/**
+ * Reduces an item key to the bare rating key every request here builds its URL from.
+ *
+ * Plex reports the same item's key in two shapes: a bare rating key (`40543`) in most responses,
+ * but a full library path (`/library/metadata/40543`) in others — `grandparentKey` on a recently
+ * added episode is the path form. Every endpoint here appends the key to `/library/metadata/`,
+ * so a path handed straight to it produces a doubled URL that Plex answers with a 404 HTML page
+ * rather than JSON. Taking the last segment covers both shapes.
+ */
+internal fun plexRatingKey(key: String?): String? {
+    val trimmed = key?.trim().orEmpty()
+    if (trimmed.isEmpty()) return null
+    // A path that stops at a slash names a collection, not an item, so there is no key to take.
+    if (trimmed.endsWith('/')) return null
+    return trimmed.substringAfterLast('/').takeIf { it.isNotBlank() }
+}
 
 @Serializable
 data class PlexPin(
@@ -116,6 +144,7 @@ data class PlexEpisodeMetadata(
     val ratingKey: String? = null,
     val title: String? = null,
     val grandparentTitle: String? = null,
+    val grandparentKey: String? = null,
     val parentIndex: Int? = null,
     val index: Int? = null,
     val thumb: String? = null,
@@ -468,11 +497,201 @@ class PlexApi(private val clientIdentifier: String) {
                     .joinToString(" - ")
                     .ifEmpty { null },
                 thumb = PlexImageUrl.build(serverUrl, accountToken, poster, posterWidthPx, posterHeightPx),
-                addedAt = item.addedAt
+                addedAt = item.addedAt,
+                // Episodes open their show's detail page; movies have no parent show to navigate to.
+                // Plex sends grandparentKey as a full `/library/metadata/{key}` path here, so it is
+                // reduced to a bare rating key the show screen can build its own URL from.
+                showRatingKey = if (type == PLEX_ITEM_TYPE_EPISODE) plexRatingKey(item.grandparentKey) else null,
+                showTitle = if (type == PLEX_ITEM_TYPE_EPISODE) item.grandparentTitle else null
             )
         }
         Log.d(API_LOG_TAG, "Recently added in $sectionKey (type=$type): ${items.size} of ${response.mediaContainer?.totalSize ?: items.size}")
         return items
+    }
+
+    /**
+     * The summary for a show: title, description, year and artwork, plus the season and episode
+     * counts Plex reports on the metadata itself. Posters are requested at the size the header
+     * draws them, the same as every other screen; [artWidthPx]/[artHeightPx] size the wide backdrop
+     * separately, since it is fetched at full screen width rather than at poster size.
+     */
+    suspend fun showDetails(
+        serverUrl: String,
+        accountToken: String,
+        showRatingKey: String,
+        posterWidthPx: Int,
+        posterHeightPx: Int,
+        artWidthPx: Int,
+        artHeightPx: Int
+    ): PlexShow {
+        val key = plexRatingKey(showRatingKey)
+        if (key == null) {
+            Log.w(API_LOG_TAG, "Show details called with a blank rating key")
+            return PlexShow(
+                ratingKey = "",
+                title = null,
+                summary = null,
+                year = null,
+                posterUrl = null,
+                seasonCount = null,
+                episodeCount = null
+            )
+        }
+        val url = "${serverUrl.trimEnd('/')}/library/metadata/$key"
+        Log.d(API_LOG_TAG, "Show details request: $url")
+        val response = apiCall("Show details") {
+            client.get(url) {
+                plexHeaders(accountToken)
+            }
+        }
+        Log.d(API_LOG_TAG, "Show details: status=${response.status.value}, contentType=${response.headers[HttpHeaders.ContentType]}")
+        val bodyString = response.bodyAsText()
+        Log.d(API_LOG_TAG, "Show details body: ${bodyString.take(800)}")
+
+        val parsed = plexJson.decodeFromString<PlexShowDetailsResponse>(bodyString)
+        val metadata = parsed.mediaContainer?.metadata.orEmpty().firstOrNull()
+        Log.d(
+            API_LOG_TAG,
+            "Show details parsed: title=${metadata?.title}, seasons=${metadata?.childCount}, episodes=${metadata?.leafCount}"
+        )
+
+        val posterUrl = metadata?.thumb
+            ?.let { PlexImageUrl.build(serverUrl, accountToken, it, posterWidthPx, posterHeightPx) }
+
+        // A show with no art of its own still has a poster, and a backdrop is better than none.
+        val artUrl = (metadata?.art ?: metadata?.thumb)
+            ?.let { PlexImageUrl.build(serverUrl, accountToken, it, artWidthPx, artHeightPx) }
+
+        return PlexShow(
+            ratingKey = plexRatingKey(metadata?.ratingKey) ?: key,
+            title = metadata?.title,
+            summary = metadata?.summary,
+            year = metadata?.year,
+            posterUrl = posterUrl,
+            seasonCount = metadata?.childCount,
+            episodeCount = metadata?.leafCount,
+            artUrl = artUrl,
+            contentRating = metadata?.contentRating,
+            rating = metadata?.audienceRating,
+            tagline = metadata?.tagline,
+            watchedEpisodeCount = metadata?.viewedLeafCount
+        )
+    }
+
+    /**
+     * Every episode in a show, for the carousel to draw and the row to split into seasons.
+     * `/allLeaves?type=4` returns the show's whole episode set in one response, so the screen makes
+     * a single request rather than one per season. `allLeaves` rather than `/all`: the latter
+     * answers 404 on current Plex servers, while `allLeaves` is the same leaf set it used to return.
+     *
+     * The stills, headshots and poster are fetched at the sizes the screen draws them, since a card
+     * asking Plex for an oversized image downloads the whole original.
+     */
+    suspend fun showEpisodes(
+        serverUrl: String,
+        accountToken: String,
+        showRatingKey: String,
+        stillWidthPx: Int,
+        stillHeightPx: Int,
+        avatarPx: Int
+    ): List<PlexShowEpisode> {
+        val key = plexRatingKey(showRatingKey)
+        if (key == null) {
+            Log.w(API_LOG_TAG, "Show episodes called with a blank rating key")
+            return emptyList()
+        }
+        val url = "${serverUrl.trimEnd('/')}/library/metadata/$key/allLeaves"
+        Log.d(API_LOG_TAG, "Show episodes request: $url?type=${PLEX_ITEM_TYPE_EPISODE}")
+        val response = apiCall("Show episodes") {
+            client.get(url) {
+                parameter("type", PLEX_ITEM_TYPE_EPISODE)
+                plexHeaders(accountToken)
+            }
+        }
+        Log.d(API_LOG_TAG, "Show episodes: status=${response.status.value}, contentType=${response.headers[HttpHeaders.ContentType]}")
+        val bodyString = response.bodyAsText()
+        Log.d(API_LOG_TAG, "Show episodes body: ${bodyString.take(800)}")
+
+        val parsed = plexJson.decodeFromString<PlexShowEpisodesResponse>(bodyString)
+        val episodes = parsed.mediaContainer?.metadata.orEmpty().mapNotNull { item ->
+            // Reduced the same way as the show key: the player builds `/library/metadata/{key}`
+            // from whatever this row navigates with, so it must never be a path.
+            val ratingKey = plexRatingKey(item.ratingKey) ?: return@mapNotNull null
+            fun sized(path: String?, widthPx: Int, heightPx: Int): String? =
+                path?.takeIf { it.isNotBlank() }
+                    ?.let { PlexImageUrl.build(serverUrl, accountToken, it, widthPx, heightPx) }
+
+            PlexShowEpisode(
+                ratingKey = ratingKey,
+                title = item.title,
+                seasonNumber = item.parentIndex,
+                episodeNumber = item.index,
+                duration = item.duration,
+                viewOffset = item.viewOffset,
+                seasonTitle = item.parentTitle,
+                thumbUrl = sized(item.thumb, stillWidthPx, stillHeightPx),
+                summary = item.summary,
+                airDate = item.originallyAvailableAt,
+                contentRating = item.contentRating,
+                rating = item.audienceRating,
+                ratingSource = item.audienceRatingImage,
+                isWatched = (item.viewCount ?: 0) > 0,
+                // Plex bills cast in `role` and crew in `director`; both carry a headshot for the
+                // Cast and Crew row, at its own smaller size.
+                directors = item.director.orEmpty().mapNotNull { person ->
+                    person.toShowPerson(serverUrl, accountToken, avatarPx)
+                },
+                actors = item.role.orEmpty().mapNotNull { person ->
+                    person.toShowPerson(serverUrl, accountToken, avatarPx)
+                }
+            )
+        }
+        Log.d(API_LOG_TAG, "Show episodes for $showRatingKey: ${episodes.size}")
+        return episodes
+    }
+
+    /** A credited person, or null when Plex left them unnamed. */
+    private fun PlexPerson.toShowPerson(
+        serverUrl: String,
+        accountToken: String,
+        avatarPx: Int
+    ): PlexShowPerson? {
+        val name = tag?.takeIf { it.isNotBlank() } ?: return null
+        val imageUrl = thumb?.takeIf { it.isNotBlank() }
+            ?.let { PlexImageUrl.build(serverUrl, accountToken, it, avatarPx, avatarPx) }
+        return PlexShowPerson(name = name, imageUrl = imageUrl)
+    }
+
+    /**
+     * Marks an episode watched or unwatched, which is what the check button under the focused
+     * episode does. Plex files this as a scrobble against the library plugin, with the item's own
+     * rating key in both the query and the form body.
+     */
+    suspend fun setEpisodeWatched(
+        serverUrl: String,
+        accountToken: String,
+        ratingKey: String,
+        watched: Boolean
+    ) {
+        val key = plexRatingKey(ratingKey)
+        if (key == null) {
+            Log.w(API_LOG_TAG, "setEpisodeWatched called with a blank rating key")
+            return
+        }
+        val url = "${serverUrl.trimEnd('/')}/:/scrobble"
+        Log.d(API_LOG_TAG, "Scrobble $key as ${if (watched) "watched" else "unwatched"}")
+        apiCall("Mark ${if (watched) "watched" else "unwatched"}") {
+            client.put(url) {
+                parameter("key", key)
+                parameter("identifier", PLEX_LIBRARY_PLUGIN_ID)
+                if (!watched) parameter("unwatched", 1)
+                plexHeaders(accountToken)
+                setBody(FormDataContent(Parameters.build {
+                    append("ratingKey", key)
+                    append("identifier", PLEX_LIBRARY_PLUGIN_ID)
+                }))
+            }
+        }
     }
 
     /**

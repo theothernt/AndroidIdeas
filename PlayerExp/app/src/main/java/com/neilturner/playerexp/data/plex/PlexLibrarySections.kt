@@ -16,7 +16,11 @@ data class PlexLibraryItem(
     val title: String?,
     val thumb: String,
     /** When Plex added it, which is what the shelves are ordered by. */
-    val addedAt: Long?
+    val addedAt: Long?,
+    /** The show's rating key for an episode card, so the episode can open its show page. Null for movies. */
+    val showRatingKey: String? = null,
+    /** The show's title for an episode card, used as the navigation title when the card plays it. */
+    val showTitle: String? = null
 )
 
 /** A library and its contents, as the screen needs it. */
@@ -91,6 +95,9 @@ object PlexLibrarySections {
 /** Plex's own item type numbers, which the `type` query parameter wants as digits. */
 const val PLEX_ITEM_TYPE_MOVIE = 1
 const val PLEX_ITEM_TYPE_EPISODE = 4
+
+/** The library agent's plugin id, which Plex requires on any scrobble or rating call. */
+const val PLEX_LIBRARY_PLUGIN_ID = "com.plexapp.plugins.library"
 
 @Serializable
 internal data class PlexSectionItemsResponse(

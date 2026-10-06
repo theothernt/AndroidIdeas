@@ -3,6 +3,10 @@ package com.neilturner.playerexp.ui.viewmodels
 import android.app.Application
 import android.util.Log
 import androidx.compose.runtime.Immutable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.unit.IntSize
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -96,6 +100,32 @@ class PlexOnDeckViewModel(application: Application) : AndroidViewModel(applicati
     val uiState: StateFlow<PlexOnDeckUiState> = _uiState.asStateFlow()
 
     private var requestedPosterSize: IntSize? = null
+
+    /**
+     * Where the focus was when the screen was last on, per shelf, so coming back from a show page
+     * lands on the card the user left rather than at the top of the page.
+     *
+     * Keyed on the item's rating key rather than its position: a shelf that refetches while the user
+     * is away can reorder or lengthen, and an index would then point at a different episode. This
+     * lives on the ViewModel, which navigation keeps for as long as the screen is on the back stack,
+     * so it outlives the composition without needing to be saved.
+     */
+    private val shelfFocus = mutableStateMapOf<String, String>()
+    private var activeShelfId by mutableStateOf<String?>(null)
+
+    /** The rating key the focus was on in [shelfId], or null if the shelf has never held it. */
+    fun focusedRatingKey(shelfId: String): String? = shelfFocus[shelfId]
+
+    /**
+     * The shelf that should take focus when the screen opens: the one the user was last on, or
+     * null on a first visit, which leaves the screen to fall back to its own default.
+     */
+    fun lastFocusedShelfId(): String? = activeShelfId
+
+    fun rememberShelfFocus(shelfId: String, ratingKey: String) {
+        shelfFocus[shelfId] = ratingKey
+        activeShelfId = shelfId
+    }
 
     /**
      * Refetches are requested through a conflated channel and run on a single consumer, so a burst

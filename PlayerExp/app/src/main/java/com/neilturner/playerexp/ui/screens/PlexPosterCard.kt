@@ -91,6 +91,20 @@ fun rememberPosterSize(): PosterSize {
     }
 }
 
+@Composable
+fun rememberHeaderPosterSize(): PosterSize {
+    val screenHeightDp = LocalConfiguration.current.screenHeightDp
+    val density = LocalDensity.current
+    return remember(screenHeightDp, density) {
+        val height = (screenHeightDp * HEADER_POSTER_HEIGHT_FRACTION).dp.coerceAtMost(HEADER_POSTER_MAX_HEIGHT)
+        val heightPx = with(density) { height.roundToPx() }
+        PosterSize(
+            height = height,
+            pixels = IntSize((heightPx * POSTER_ASPECT_RATIO).roundToInt(), heightPx)
+        )
+    }
+}
+
 /**
  * A horizontal shelf of poster cards.
  *
@@ -103,6 +117,11 @@ fun rememberPosterSize(): PosterSize {
  * asking for focus again on that would yank the user back while they browse. A screen stacking
  * several rows leaves [claimsInitialFocus] false on all but the one the user should land on, so two
  * rows never ask at once.
+ *
+ * [initialFocusIndex] is the card that claim lands on, and [onItemFocused] reports where the focus
+ * actually went. Together they let a screen put the user back on the card they left, rather than
+ * always on the first one: returning to On Deck from a show page should land on the shelf and the
+ * episode that were being browsed, not at the top of the page.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -110,11 +129,16 @@ fun PlexPosterRow(
     itemCount: Int,
     modifier: Modifier = Modifier,
     claimsInitialFocus: Boolean = true,
+    initialFocusIndex: Int = 0,
     key: (index: Int) -> String,
+    onItemFocused: (index: Int) -> Unit = {},
     content: @Composable (index: Int, itemModifier: Modifier) -> Unit
 ) {
     val focusRequester = remember { FocusRequester() }
     var focusRequested by remember { mutableStateOf(false) }
+    // Clamped here rather than at each call site so a remembered card that has since fallen off the
+    // end of a shorter list still resolves to a real card.
+    val focusIndex = initialFocusIndex.coerceIn(0, (itemCount - 1).coerceAtLeast(0))
 
     LaunchedEffect(claimsInitialFocus, itemCount > 0) {
         if (claimsInitialFocus && itemCount > 0 && !focusRequested) {
@@ -140,13 +164,10 @@ fun PlexPosterRow(
             items(count = itemCount, key = { index -> key(index) }) { index ->
                 // The requester has to sit on the focusable card itself, so it is handed down
                 // rather than applied to a wrapper here.
+                val reportFocus = Modifier.onFocusChanged { if (it.isFocused) onItemFocused(index) }
                 content(
                     index,
-                    if (index == 0) {
-                        Modifier.focusRequester(focusRequester)
-                    } else {
-                        Modifier
-                    }
+                    if (index == focusIndex) reportFocus.focusRequester(focusRequester) else reportFocus
                 )
             }
         }
@@ -299,6 +320,9 @@ const val POSTER_HEIGHT_FRACTION = 0.33f
 val POSTER_CORNER_RADIUS = 12.dp
 val POSTER_SHAPE = RoundedCornerShape(POSTER_CORNER_RADIUS)
 const val FOCUSED_POSTER_SCALE = 1.06f
+
+private const val HEADER_POSTER_HEIGHT_FRACTION = 0.48f
+private val HEADER_POSTER_MAX_HEIGHT = 420.dp
 
 /**
  * The glow TV Material 3 draws around a focused card: an even halo all the way round it, the way the

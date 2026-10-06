@@ -32,4 +32,24 @@
     <string name="plex_libraries_movies">Movies</string>
     <string name="plex_libraries_empty">Nothing in this library</string>
     <string name="plex_libraries_none_found">No TV show or movie library found on this server</string>
+    <plurals name="plex_show_season">
+        <item quantity="one">%1$d Season</item>
+        <item quantity="other">%1$d Seasons</item>
+    </plurals>
+    <plurals name="plex_show_episode">
+        <item quantity="one">%1$d Episode</item>
+        <item quantity="other">%1$d Episodes</item>
+    </plurals>
+    <plurals name="plex_show_episodes_in_season">
+        <item quantity="one">%1$d episode</item>
+        <item quantity="other">%1$d episodes</item>
+    </plurals>
+    <string name="plex_show_no_episodes">No episodes found in this show</string>
+    <string name="plex_show_error">Could not load show: %1$s</string>
+    <string name="plex_show_play">Play episode</string>
+    <string name="plex_show_mark_watched">Mark as watched</string>
+    <string name="plex_show_mark_unwatched">Mark as unwatched</string>
+    <string name="plex_show_watched_short">Watched</string>
+    <string name="plex_show_cast_crew">Cast &amp; Crew</string>
+    <string name="plex_show_directed_by">Directed by %1$s</string>
 </resources>
