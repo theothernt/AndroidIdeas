@@ -1,9 +1,10 @@
-@file:OptIn(ExperimentalTvMaterial3Api::class)
+@file:OptIn(ExperimentalTvMaterial3Api::class, ExperimentalFoundationApi::class)
 
 package com.neilturner.playerexp.ui.screens
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -17,12 +18,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -66,6 +69,7 @@ import com.neilturner.playerexp.data.plex.PlexShowPerson
 import com.neilturner.playerexp.data.plex.PlexShowSeason
 import com.neilturner.playerexp.data.plex.displayTitle
 import com.neilturner.playerexp.data.plex.ratingLabel
+import com.neilturner.playerexp.ui.modifiers.rememberLeftEdgeSpec
 import com.neilturner.playerexp.ui.viewmodels.PlexShowImageSizes
 import com.neilturner.playerexp.ui.viewmodels.PlexShowUiState
 import com.neilturner.playerexp.ui.viewmodels.PlexShowViewModel
@@ -184,9 +188,7 @@ private fun ShowPage(
             )
 
             Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = SCREEN_HORIZONTAL_PADDING),
+                modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.Top
             ) {
                 Spacer(modifier = Modifier.height(HERO_TOP_GAP))
@@ -197,7 +199,8 @@ private fun ShowPage(
                     episode = focusedEpisode,
                     episodePosition = if (episodes.isEmpty()) null else safeEpisodeIndex + 1,
                     episodeCount = episodes.size,
-                    showTitle = showTitle
+                    showTitle = showTitle,
+                    modifier = Modifier.padding(horizontal = SCREEN_HORIZONTAL_PADDING)
                 )
 
                 Spacer(modifier = Modifier.height(HERO_TO_CAROUSEL_GAP))
@@ -323,9 +326,10 @@ private fun ShowHero(
     episode: PlexShowEpisode?,
     episodePosition: Int?,
     episodeCount: Int,
-    showTitle: String?
+    showTitle: String?,
+    modifier: Modifier = Modifier
 ) {
-    Column(modifier = Modifier.fillMaxWidth()) {
+    Column(modifier = modifier.fillMaxWidth()) {
         Text(
             text = show.title ?: showTitle.orEmpty(),
             style = MaterialTheme.typography.headlineLarge,
@@ -355,15 +359,14 @@ private fun ShowHero(
 
         EpisodeRatingRow(episode = episode)
 
-        if (!episode?.summary.isNullOrBlank()) {
-            Text(
-                text = episode.summary,
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.92f),
-                maxLines = EPISODE_SUMMARY_MAX_LINES,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+        Text(
+            text = episode?.summary.orEmpty(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.92f),
+            minLines = EPISODE_SUMMARY_MAX_LINES,
+            maxLines = EPISODE_SUMMARY_MAX_LINES,
+            overflow = TextOverflow.Ellipsis
+        )
 
         val directors = episode?.directors?.map { it.name }.orEmpty()
         if (directors.isNotEmpty()) {
@@ -465,31 +468,34 @@ private fun EpisodeCarousel(
         }
     }
 
-    LazyRow(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(ROW_ITEM_SPACING),
-        // The row starts in from the left edge, under the title, but runs off the right one: the
-        // next still should be half on screen so the row reads as continuing, the way Plex's own
-        // season carousel does.
-        contentPadding = PaddingValues(
-            start = SCREEN_HORIZONTAL_PADDING,
-            end = 0.dp,
-            top = FOCUSED_POSTER_OVERHANG,
-            bottom = POSTER_ROW_BOTTOM_PADDING
-        )
-    ) {
-        itemsIndexed(episodes, key = { _, episode -> episode.ratingKey }) { index, episode ->
-            EpisodeStillCard(
-                episode = episode,
-                size = stillSize,
-                // The requester has to sit on a single card, the first, so the row is usable the
-                // moment it appears. It is never asked for again: moving between seasons replaces
-                // the list, and re-claiming focus on every arrival would drag the user back to
-                // episode one mid-browse.
-                modifier = if (index == 0) Modifier.focusRequester(focusRequester) else Modifier,
-                onFocused = { onFocused(index) },
-                onPlay = { onPlay(episode) }
+    val leftEdgeSpec = rememberLeftEdgeSpec(leadingInset = SCREEN_HORIZONTAL_PADDING)
+    CompositionLocalProvider(LocalBringIntoViewSpec provides leftEdgeSpec) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(ROW_ITEM_SPACING),
+            // The row starts in from the left edge, under the title, but runs off the right one: the
+            // next still should be half on screen so the row reads as continuing, the way Plex's own
+            // season carousel does.
+            contentPadding = PaddingValues(
+                start = SCREEN_HORIZONTAL_PADDING,
+                end = 0.dp,
+                top = FOCUSED_POSTER_OVERHANG,
+                bottom = POSTER_ROW_BOTTOM_PADDING
             )
+        ) {
+            itemsIndexed(episodes, key = { _, episode -> episode.ratingKey }) { index, episode ->
+                EpisodeStillCard(
+                    episode = episode,
+                    size = stillSize,
+                    // The requester has to sit on a single card, the first, so the row is usable the
+                    // moment it appears. It is never asked for again: moving between seasons replaces
+                    // the list, and re-claiming focus on every arrival would drag the user back to
+                    // episode one mid-browse.
+                    modifier = if (index == 0) Modifier.focusRequester(focusRequester) else Modifier,
+                    onFocused = { onFocused(index) },
+                    onPlay = { onPlay(episode) }
+                )
+            }
         }
     }
 }
