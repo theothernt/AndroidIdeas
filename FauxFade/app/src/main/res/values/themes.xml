@@ -1,0 +1,15 @@
+<resources>
+
+    <!--
+      Parent is the platform Material theme rather than an AppCompat one: MainActivity is a
+      ComponentActivity, and nothing here uses an AppCompat widget, so AppCompat only added the
+      dependency.
+
+      The window background is black so the launch does not flash white before the first frame of
+      video. It used to inherit DayNight from AppCompat, which could put a light background behind
+      a surface that is always dark.
+    -->
+    <style name="Theme.FauxFade" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@android:color/black</item>
+    </style>
+</resources>
