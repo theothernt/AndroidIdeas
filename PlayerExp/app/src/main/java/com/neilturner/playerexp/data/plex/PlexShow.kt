@@ -32,6 +32,9 @@ data class PlexShowMetadata(
     val art: String? = null,
     val contentRating: String? = null,
     val audienceRating: Float? = null,
+    val audienceRatingImage: String? = null,
+    val rating: Float? = null,
+    val ratingImage: String? = null,
     val tagline: String? = null,
     /** Number of direct children: the seasons in the library. */
     val childCount: Int? = null,
@@ -86,6 +89,8 @@ data class PlexShowEpisodeMetadata(
     val audienceRating: Float? = null,
     /** Which service the rating came from, as a Plex URI: `themoviedb://image.rating`. */
     val audienceRatingImage: String? = null,
+    val rating: Float? = null,
+    val ratingImage: String? = null,
     val director: List<PlexPerson>? = null,
     val role: List<PlexPerson>? = null
 )
@@ -220,6 +225,7 @@ fun PlexShowEpisode.ratingLabel(): String? {
     val source = ratingSource.orEmpty()
     return when {
         source.contains("imdb", ignoreCase = true) -> "IMDb"
+        source.contains("thetvdb", ignoreCase = true) || source.contains("tvdb", ignoreCase = true) -> "TVDB"
         source.contains("themoviedb", ignoreCase = true) || source.contains("tmdb", ignoreCase = true) -> "TMDB"
         source.contains("rottentomatoes", ignoreCase = true) -> "RT"
         else -> null

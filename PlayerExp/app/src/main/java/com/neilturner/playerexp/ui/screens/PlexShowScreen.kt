@@ -197,8 +197,6 @@ private fun ShowPage(
                     show = show,
                     season = season,
                     episode = focusedEpisode,
-                    episodePosition = if (episodes.isEmpty()) null else safeEpisodeIndex + 1,
-                    episodeCount = episodes.size,
                     showTitle = showTitle,
                     modifier = Modifier.padding(horizontal = SCREEN_HORIZONTAL_PADDING)
                 )
@@ -324,8 +322,6 @@ private fun ShowHero(
     show: PlexShow,
     season: PlexShowSeason,
     episode: PlexShowEpisode?,
-    episodePosition: Int?,
-    episodeCount: Int,
     showTitle: String?,
     modifier: Modifier = Modifier
 ) {
@@ -352,12 +348,8 @@ private fun ShowHero(
 
         EpisodeMetaLine(
             episode = episode,
-            episodePosition = episodePosition,
-            episodeCount = episodeCount,
             contentRating = show.contentRating
         )
-
-        EpisodeRatingRow(episode = episode)
 
         Text(
             text = episode?.summary.orEmpty(),
@@ -381,14 +373,14 @@ private fun ShowHero(
     }
 }
 
-/** "S2 • E1   Aug 27, 2026   53m", plus the season count when the show has more than one. */
+/** "S2 • E1   Aug 27, 2026   53m   TV-MA   IMDb 7.5" */
 @Composable
 private fun EpisodeMetaLine(
     episode: PlexShowEpisode?,
-    episodePosition: Int?,
-    episodeCount: Int,
     contentRating: String?
 ) {
+    val episodeRating = episode?.rating
+    val label = episode?.ratingLabel()
     val parts = buildList {
         episode?.let {
             val season = it.seasonNumber
@@ -400,15 +392,14 @@ private fun EpisodeMetaLine(
         }
         episode?.airDate?.let { add(formatAirDate(it)) }
         episode?.duration?.takeIf { it > 0 }?.let { add(formatRuntime(it)) }
-        episode?.let { if (it.isWatched) add(stringResource(R.string.plex_show_watched_short)) }
-        if (episodePosition != null && episodeCount > 0) add("$episodePosition/$episodeCount")
         contentRating?.takeIf { it.isNotBlank() }?.let { add(it) }
     }
-    if (parts.isEmpty()) return
+    if (parts.isEmpty() && (episodeRating == null || label == null)) return
 
     Row(
         modifier = Modifier.padding(vertical = META_LINE_VERTICAL_PADDING),
-        horizontalArrangement = Arrangement.spacedBy(META_LINE_GAP)
+        horizontalArrangement = Arrangement.spacedBy(META_LINE_GAP),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         parts.forEach { part ->
             Text(
@@ -417,33 +408,25 @@ private fun EpisodeMetaLine(
                 color = Color.White.copy(alpha = 0.85f)
             )
         }
-    }
-}
-
-/** "IMDb 7.5  TMDB 7.9", or nothing at all when the episode carries no rating. */
-@Composable
-private fun EpisodeRatingRow(episode: PlexShowEpisode?) {
-    val episodeRating = episode?.rating
-    val label = episode?.ratingLabel()
-    if (episodeRating == null || label == null) return
-
-    Row(
-        modifier = Modifier.padding(bottom = META_LINE_VERTICAL_PADDING),
-        horizontalArrangement = Arrangement.spacedBy(RATING_GAP),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color.White.copy(alpha = 0.7f)
-        )
-        Text(
-            text = formatRating(episodeRating),
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color.White
-        )
+        if (episodeRating != null && label != null) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(RATING_GAP),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White.copy(alpha = 0.7f)
+                )
+                Text(
+                    text = formatRating(episodeRating),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White
+                )
+            }
+        }
     }
 }
 
@@ -541,6 +524,26 @@ private fun EpisodeStillCard(
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                 )
+            }
+
+            // The episode length sits in the top left corner (like the episode number on the right).
+            val durationText = episode.duration?.takeIf { it > 0 }?.let { formatRuntime(it) }
+            if (durationText != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(STILL_BADGE_PADDING)
+                        .background(BADGE_COLOR, BADGE_SHAPE)
+                        .padding(horizontal = BADGE_HORIZONTAL_PADDING, vertical = BADGE_VERTICAL_PADDING),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = durationText,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
+                }
             }
 
             // The episode number sits in the top corner; a watched episode ticks beside it, which

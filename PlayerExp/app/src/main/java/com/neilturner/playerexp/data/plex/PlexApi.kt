@@ -572,7 +572,7 @@ class PlexApi(private val clientIdentifier: String) {
             episodeCount = metadata?.leafCount,
             artUrl = artUrl,
             contentRating = metadata?.contentRating,
-            rating = metadata?.audienceRating,
+            rating = metadata?.audienceRating ?: metadata?.rating,
             tagline = metadata?.tagline,
             watchedEpisodeCount = metadata?.viewedLeafCount
         )
@@ -633,8 +633,8 @@ class PlexApi(private val clientIdentifier: String) {
                 summary = item.summary,
                 airDate = item.originallyAvailableAt,
                 contentRating = item.contentRating,
-                rating = item.audienceRating,
-                ratingSource = item.audienceRatingImage,
+                rating = item.audienceRating ?: item.rating,
+                ratingSource = item.audienceRatingImage ?: item.ratingImage,
                 isWatched = (item.viewCount ?: 0) > 0,
                 // Plex bills cast in `role` and crew in `director`; both carry a headshot for the
                 // Cast and Crew row, at its own smaller size.
