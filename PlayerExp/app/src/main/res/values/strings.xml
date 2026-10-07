@@ -46,10 +46,6 @@
     </plurals>
     <string name="plex_show_no_episodes">No episodes found in this show</string>
     <string name="plex_show_error">Could not load show: %1$s</string>
-    <string name="plex_show_play">Play episode</string>
-    <string name="plex_show_mark_watched">Mark as watched</string>
-    <string name="plex_show_mark_unwatched">Mark as unwatched</string>
-    <string name="plex_show_watched_short">Watched</string>
     <string name="plex_show_cast_crew">Cast &amp; Crew</string>
     <string name="plex_show_directed_by">Directed by %1$s</string>
 </resources>

@@ -113,8 +113,7 @@ fun PlexShowScreen(
                 show = current.show,
                 showTitle = showTitle,
                 sizes = sizes,
-                onNavigateToPlayer = onNavigateToPlayer,
-                onSetWatched = { ratingKey, watched -> viewModel.setWatched(ratingKey, watched) }
+                onNavigateToPlayer = onNavigateToPlayer
             )
         }
     }
@@ -157,7 +156,6 @@ private fun ShowPage(
     showTitle: String?,
     sizes: PlexShowImageSizes,
     onNavigateToPlayer: (ratingKey: String, title: String) -> Unit,
-    onSetWatched: (ratingKey: String, watched: Boolean) -> Unit
 ) {
     if (show.seasons.isEmpty()) {
         ShowBackdrop(show = show, sizes = sizes)
@@ -211,16 +209,6 @@ private fun ShowPage(
                     onPlay = { episode ->
                         onNavigateToPlayer(episode.ratingKey, episode.displayTitle(showTitle))
                     }
-                )
-
-                Spacer(modifier = Modifier.height(ACTION_ROW_TOP_GAP))
-
-                EpisodeActions(
-                    episode = focusedEpisode,
-                    onPlay = { episode ->
-                        onNavigateToPlayer(episode.ratingKey, episode.displayTitle(showTitle))
-                    },
-                    onToggleWatched = { episode -> onSetWatched(episode.ratingKey, !episode.isWatched) }
                 )
 
                 Spacer(modifier = Modifier.height(CAST_SECTION_TOP_GAP))
@@ -596,93 +584,6 @@ private fun EpisodeStillCard(
     }
 }
 
-/**
- * The two controls that act on the focused episode. Plex shows a wider set here, but anything not
- * yet wired to the server is left off rather than drawn as a button that does nothing.
- */
-@Composable
-private fun EpisodeActions(
-    episode: PlexShowEpisode?,
-    onPlay: (PlexShowEpisode) -> Unit,
-    onToggleWatched: (PlexShowEpisode) -> Unit
-) {
-    if (episode == null) return
-
-    Row(
-        modifier = Modifier.padding(start = SCREEN_HORIZONTAL_PADDING),
-        horizontalArrangement = Arrangement.spacedBy(ACTION_BUTTON_GAP)
-    ) {
-        ActionButton(
-            onClick = { onPlay(episode) },
-            contentDescription = stringResource(R.string.plex_show_play)
-        ) {
-            Canvas(modifier = Modifier.size(ACTION_GLYPH_SIZE)) {
-                val inset = this.size.width * 0.28f
-                drawPath(
-                    path = Path().apply {
-                        moveTo(inset, this@Canvas.size.height * 0.18f)
-                        lineTo(this@Canvas.size.width - inset, this@Canvas.size.height * 0.5f)
-                        lineTo(inset, this@Canvas.size.height * 0.82f)
-                        close()
-                    },
-                    color = Color.White
-                )
-            }
-        }
-
-        ActionButton(
-            onClick = { onToggleWatched(episode) },
-            contentDescription = stringResource(
-                if (episode.isWatched) R.string.plex_show_mark_unwatched else R.string.plex_show_mark_watched
-            )
-        ) {
-            WatchedGlyph(checked = episode.isWatched)
-        }
-    }
-}
-
-@Composable
-private fun ActionButton(
-    onClick: () -> Unit,
-    contentDescription: String,
-    content: @Composable () -> Unit
-) {
-    Button(
-        onClick = onClick,
-        modifier = Modifier.size(ACTION_BUTTON_SIZE),
-        shape = ButtonDefaults.shape(shape = CircleShape),
-        colors = ButtonDefaults.colors(containerColor = ACTION_BUTTON_COLOR),
-        scale = ButtonDefaults.scale(focusedScale = ACTION_FOCUSED_SCALE, pressedScale = PRESSED_CHIP_SCALE),
-        border = ButtonDefaults.border(focusedBorder = Border(border = BorderStroke(ACTION_FOCUS_BORDER_WIDTH, Color.White), shape = CircleShape))
-    ) {
-        Box(modifier = Modifier.size(ACTION_BUTTON_SIZE), contentAlignment = Alignment.Center) { content() }
-    }
-}
-
-/** A ticked circle when the episode is watched, an empty one when it is not. */
-@Composable
-private fun WatchedGlyph(checked: Boolean) {
-    Canvas(modifier = Modifier.size(ACTION_GLYPH_SIZE)) {
-        val stroke = this.size.minDimension * 0.1f
-        drawCircle(
-            color = Color.White,
-            radius = this.size.minDimension / 2f - stroke,
-            style = Stroke(width = stroke)
-        )
-        if (checked) {
-            drawPath(
-                path = Path().apply {
-                    moveTo(this@Canvas.size.width * 0.28f, this@Canvas.size.height * 0.52f)
-                    lineTo(this@Canvas.size.width * 0.44f, this@Canvas.size.height * 0.68f)
-                    lineTo(this@Canvas.size.width * 0.74f, this@Canvas.size.height * 0.34f)
-                },
-                color = Color.White,
-                style = Stroke(width = stroke * 1.4f, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-            )
-        }
-    }
-}
-
 /** Whoever is credited on the focused episode, as the headshots Plex files them under. */
 @Composable
 private fun CastAndCrew(episode: PlexShowEpisode?) {
@@ -783,18 +684,10 @@ private val HERO_TOP_GAP = 12.dp
 private val HERO_TO_CAROUSEL_GAP = 8.dp
 private const val EPISODE_SUMMARY_MAX_LINES = 3
 private val META_LINE_VERTICAL_PADDING = 6.dp
-private val META_LINE_GAP = 16.dp
-private val RATING_GAP = 6.dp
+ private val META_LINE_GAP = 16.dp
+ private val RATING_GAP = 6.dp
 
-private val ACTION_ROW_TOP_GAP = 4.dp
-private val ACTION_BUTTON_SIZE = 52.dp
-private val ACTION_GLYPH_SIZE = 24.dp
-private val ACTION_BUTTON_GAP = 20.dp
-private val ACTION_BUTTON_COLOR = Color.White.copy(alpha = 0.14f)
-private const val ACTION_FOCUSED_SCALE = 1.1f
-private val ACTION_FOCUS_BORDER_WIDTH = 2.dp
-
-private val CAST_SECTION_TOP_GAP = 12.dp
+ private val CAST_SECTION_TOP_GAP = 12.dp
 private val CAST_ROW_TOP_GAP = 8.dp
 
 private val STILL_BADGE_PADDING = 8.dp

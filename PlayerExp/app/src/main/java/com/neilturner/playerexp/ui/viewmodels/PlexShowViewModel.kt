@@ -130,47 +130,6 @@ class PlexShowViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    /**
-     * Marks the focused episode watched or unwatched and folds the change straight into the state
-     * already on screen, so the badge and the check button update without waiting for a refetch.
-     */
-    fun setWatched(episodeRatingKey: String, watched: Boolean) {
-        viewModelScope.launch {
-            val token = store.accountToken() ?: return@launch
-            var serverUrl = store.serverUrl()
-            if (serverUrl == null) {
-                val info = api.serverInfo(token)
-                serverUrl = info?.uri
-                if (serverUrl != null) store.saveLinkedAccount(token, info.name, serverUrl)
-            }
-            if (serverUrl == null) return@launch
-
-            withContext(Dispatchers.IO) {
-                runCatching { api.setEpisodeWatched(serverUrl, token, episodeRatingKey, watched) }
-                    .onFailure { Log.w(LOG_TAG, "Could not mark $episodeRatingKey watched=$watched", it) }
-            }
-
-            val current = _uiState.value
-            if (current is PlexShowUiState.Success) {
-                _uiState.value = PlexShowUiState.Success(
-                    current.show.copy(
-                        seasons = current.show.seasons.map { season ->
-                            season.copy(
-                                episodes = season.episodes.map { episode ->
-                                    if (episode.ratingKey == episodeRatingKey) {
-                                        episode.copy(isWatched = watched, viewOffset = null)
-                                    } else {
-                                        episode
-                                    }
-                                }
-                            )
-                        }
-                    )
-                )
-            }
-        }
-    }
-
     /** Runs on [Dispatchers.IO]: the Ktor parses, URL building and logging all happen here. */
     private suspend fun fetchShow(showRatingKey: String, sizes: PlexShowImageSizes): LoadResult {
         val token = store.accountToken() ?: return LoadResult.NotAuthorised
