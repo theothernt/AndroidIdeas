@@ -50,11 +50,16 @@ data object PlexOnDeckRoute : PlayerExpRoute
 @Serializable
 data object PlexLibrariesRoute : PlayerExpRoute
 
-/** A TV show opened from an episode card on On Deck, showing its seasons and full episode list. */
+/**
+ * A TV show opened from an episode card on On Deck, showing its seasons and full episode list.
+ * [initialEpisodeRatingKey] is the episode that was picked on the previous screen, so the show page
+ * can land focus on it rather than always on the first episode.
+ */
 @Serializable
 data class ShowDetailRoute(
     val showRatingKey: String,
-    val showTitle: String? = null
+    val showTitle: String? = null,
+    val initialEpisodeRatingKey: String? = null
 ) : PlayerExpRoute
 
 class MainActivity : ComponentActivity() {
@@ -110,8 +115,8 @@ class MainActivity : ComponentActivity() {
                                     onPlay = { ratingKey, title ->
                                         backStack.add(PlexPlayerRoute(ratingKey, title))
                                     },
-                                    onNavigateToShow = { showRatingKey, showTitle ->
-                                        backStack.add(ShowDetailRoute(showRatingKey, showTitle))
+                                    onNavigateToShow = { showRatingKey, showTitle, episodeRatingKey ->
+                                        backStack.add(ShowDetailRoute(showRatingKey, showTitle, episodeRatingKey))
                                     }
                                 )
                             }
@@ -119,6 +124,7 @@ class MainActivity : ComponentActivity() {
                                 PlexShowScreen(
                                     showRatingKey = route.showRatingKey,
                                     showTitle = route.showTitle,
+                                    initialEpisodeRatingKey = route.initialEpisodeRatingKey,
                                     onNavigateToPlayer = { ratingKey, title ->
                                         backStack.add(PlexPlayerRoute(ratingKey, title))
                                     }

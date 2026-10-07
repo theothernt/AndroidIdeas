@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
@@ -90,6 +91,7 @@ import kotlin.math.roundToInt
 fun PlexShowScreen(
     showRatingKey: String,
     showTitle: String? = null,
+    initialEpisodeRatingKey: String? = null,
     modifier: Modifier = Modifier,
     onNavigateToPlayer: (ratingKey: String, title: String) -> Unit,
     viewModel: PlexShowViewModel = viewModel()
@@ -113,6 +115,7 @@ fun PlexShowScreen(
                 show = current.show,
                 showTitle = showTitle,
                 sizes = sizes,
+                initialEpisodeRatingKey = initialEpisodeRatingKey,
                 onNavigateToPlayer = onNavigateToPlayer
             )
         }
@@ -155,6 +158,7 @@ private fun ShowPage(
     show: PlexShow,
     showTitle: String?,
     sizes: PlexShowImageSizes,
+    initialEpisodeRatingKey: String?,
     onNavigateToPlayer: (ratingKey: String, title: String) -> Unit,
 ) {
     if (show.seasons.isEmpty()) {
@@ -163,8 +167,21 @@ private fun ShowPage(
         return
     }
 
-    var seasonIndex by remember { mutableIntStateOf(0) }
-    var episodeIndex by remember { mutableIntStateOf(0) }
+    // Where the focus lands on first appearance: the requested episode if it is in this show,
+    // otherwise the first one. Resolved once per show (keyed on the rating key) so a background
+    // refresh from a socket event does not yank focus back to it mid-browse.
+    val (initialSeasonIndex, initialEpisodeIndex) = remember(show.ratingKey, initialEpisodeRatingKey) {
+        if (initialEpisodeRatingKey != null) {
+            findEpisodeIndex(show, initialEpisodeRatingKey) ?: Pair(0, 0)
+        } else {
+            Pair(0, 0)
+        }
+    }
+    var seasonIndex by remember(show.ratingKey) { mutableIntStateOf(initialSeasonIndex) }
+    var episodeIndex by remember(show.ratingKey) { mutableIntStateOf(initialEpisodeIndex) }
+    // Settled once the initial focus has been handed to the card, so the season-switch reset below
+    // does not also fire on first appearance and clobber the landing episode.
+    var initialFocusSettled by remember(show.ratingKey) { mutableStateOf(false) }
 
     val safeSeasonIndex = seasonIndex.coerceIn(0, show.seasons.lastIndex)
     val season = show.seasons[safeSeasonIndex]
@@ -172,8 +189,12 @@ private fun ShowPage(
     val safeEpisodeIndex = episodeIndex.coerceIn(0, (episodes.lastIndex).coerceAtLeast(0))
     val focusedEpisode = episodes.getOrNull(safeEpisodeIndex)
 
-    // A different season means a different set of episodes, so the focus goes back to its first.
-    LaunchedEffect(safeSeasonIndex) { episodeIndex = 0 }
+    // A different season means a different set of episodes, so the focus goes back to its first —
+    // except on the very first appearance, where the landing episode still has to be left in place.
+    LaunchedEffect(safeSeasonIndex) {
+        if (initialFocusSettled) episodeIndex = 0
+        initialFocusSettled = true
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         ShowBackdrop(show = show, sizes = sizes)
@@ -422,6 +443,7 @@ private fun EpisodeMetaLine(
  * The season's episodes as landscape stills. The focused card takes focus itself, so D-pad left and
  * right move along the row and [onFocused] keeps the hero block in step with it.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EpisodeCarousel(
     episodes: List<PlexShowEpisode>,
@@ -431,25 +453,44 @@ private fun EpisodeCarousel(
     onPlay: (PlexShowEpisode) -> Unit
 ) {
     val focusRequester = remember { FocusRequester() }
+    val lazyListState = rememberLazyListState()
     var focusRequested by remember { mutableStateOf(false) }
+
+    // Snapshot the index to land on the first time this set of episodes appears, so the requester
+    // below stays attached to a single card even as focus drifts during browsing.
+    val initialFocusIndex = remember(episodes.firstOrNull()?.ratingKey) {
+        focusedIndex.coerceIn(0, episodes.lastIndex.coerceAtLeast(0))
+    }
+
     LaunchedEffect(episodes.firstOrNull()?.ratingKey) {
         if (episodes.isNotEmpty() && !focusRequested) {
             focusRequested = true
+            // Scroll the card that should hold focus into view first, since a requested episode
+            // further down the row is not composed until it is scrolled near.
+            lazyListState.scrollToItem(initialFocusIndex)
             focusRequester.requestFocus()
         }
     }
 
     val leftEdgeSpec = rememberLeftEdgeSpec(leadingInset = SCREEN_HORIZONTAL_PADDING)
+    // A focused still grows: the 1.06x scale adds half its overflow past each edge, and the focus
+    // border adds 3dp on each side. The trailing still is the one that lands flush against the row's
+    // right edge when the user scrolls to the end, so that growth needs somewhere to land or Plex clips
+    // it off. The inset is sized to the still so it holds on any screen, from a phone up to a 4K TV.
+    val trailingFocusInset = with(LocalDensity.current) {
+        val scaleOverflow = stillSize.width * (FOCUSED_POSTER_SCALE - 1f) / 2f
+        (scaleOverflow + FOCUS_BORDER_WIDTH.toPx() + 4f).toDp()
+    }
     CompositionLocalProvider(LocalBringIntoViewSpec provides leftEdgeSpec) {
         LazyRow(
+            state = lazyListState,
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(ROW_ITEM_SPACING),
-            // The row starts in from the left edge, under the title, but runs off the right one: the
-            // next still should be half on screen so the row reads as continuing, the way Plex's own
-            // season carousel does.
+            // The row starts in from the left edge, under the title, and the end is inset by just
+            // enough for a focused still to grow into instead of being clipped by the viewport edge.
             contentPadding = PaddingValues(
                 start = SCREEN_HORIZONTAL_PADDING,
-                end = 0.dp,
+                end = trailingFocusInset,
                 top = FOCUSED_POSTER_OVERHANG,
                 bottom = POSTER_ROW_BOTTOM_PADDING
             )
@@ -458,17 +499,26 @@ private fun EpisodeCarousel(
                 EpisodeStillCard(
                     episode = episode,
                     size = stillSize,
-                    // The requester has to sit on a single card, the first, so the row is usable the
+                    // The requester sits on the card the row should land on, so it is usable the
                     // moment it appears. It is never asked for again: moving between seasons replaces
-                    // the list, and re-claiming focus on every arrival would drag the user back to
-                    // episode one mid-browse.
-                    modifier = if (index == 0) Modifier.focusRequester(focusRequester) else Modifier,
+                    // the list, and re-claiming focus on every arrival would drag the user back
+                    // mid-browse.
+                    modifier = if (index == initialFocusIndex) Modifier.focusRequester(focusRequester) else Modifier,
                     onFocused = { onFocused(index) },
                     onPlay = { onPlay(episode) }
                 )
             }
         }
     }
+}
+
+/** The (seasonIndex, episodeIndex) of the episode with [ratingKey], or null if it is not present. */
+internal fun findEpisodeIndex(show: PlexShow, ratingKey: String): Pair<Int, Int>? {
+    show.seasons.forEachIndexed { seasonIndex, season ->
+        val episodeIndex = season.episodes.indexOfFirst { it.ratingKey == ratingKey }
+        if (episodeIndex >= 0) return seasonIndex to episodeIndex
+    }
+    return null
 }
 
 @Composable

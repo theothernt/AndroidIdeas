@@ -44,7 +44,7 @@ import com.neilturner.playerexp.ui.viewmodels.PlexOnDeckViewModel
 @Composable
 fun PlexOnDeckScreen(
     onPlay: (ratingKey: String, title: String) -> Unit,
-    onNavigateToShow: (showRatingKey: String, showTitle: String?) -> Unit,
+    onNavigateToShow: (showRatingKey: String, showTitle: String?, episodeRatingKey: String?) -> Unit,
     modifier: Modifier = Modifier,
     viewModel: PlexOnDeckViewModel = viewModel()
 ) {
@@ -100,7 +100,7 @@ private fun LatestShelves(
     shelves: PlexOnDeckShelves,
     posterSize: PosterSize,
     onPlay: (ratingKey: String, title: String) -> Unit,
-    onNavigateToShow: (showRatingKey: String, showTitle: String?) -> Unit,
+    onNavigateToShow: (showRatingKey: String, showTitle: String?, episodeRatingKey: String?) -> Unit,
     viewModel: PlexOnDeckViewModel
 ) {
     // Null on a first visit, where Continue Watching is the shelf to land on.
@@ -145,7 +145,7 @@ private fun LatestShelves(
                     onFocused = { viewModel.rememberShelfFocus(SHELF_LATEST_EPISODES, it) },
                     onItemSelected = { item ->
                         val showKey = item.showRatingKey
-                        if (showKey != null) onNavigateToShow(showKey, item.showTitle)
+                        if (showKey != null) onNavigateToShow(showKey, item.showTitle, item.ratingKey)
                         else onPlay(item.ratingKey, item.title.orEmpty())
                     }
                 )
