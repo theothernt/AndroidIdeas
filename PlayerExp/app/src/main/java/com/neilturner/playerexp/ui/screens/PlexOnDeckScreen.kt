@@ -7,7 +7,6 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -17,15 +16,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.animation.core.tween
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.ExperimentalTvMaterial3Api
@@ -260,9 +261,19 @@ private fun OnDeckRow(
  * Thin bar drawn inside the poster bounds, inset from the bottom and sides. Everything in this row
  * is something worth resuming, so the bar always draws. A position of a few seconds is too small a
  * sliver to read as progress, so the fill has a floor.
+ *
+ * The width is animated rather than set directly: a play position moves a few seconds at a time, and
+ * snapping the bar to each new value reads as a stutter. Animating it also keeps the recomposition
+ * cheap — only the width value moves, the surrounding layout is untouched.
  */
 @Composable
 fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
+    val target = fraction.coerceAtLeast(MIN_PROGRESS_FRACTION)
+    val width by animateFloatAsState(
+        targetValue = target,
+        animationSpec = tween(PROGRESS_ANIMATION_MILLIS),
+        label = "progressWidth"
+    )
     Box(
         modifier = modifier
             .height(PROGRESS_BAR_HEIGHT)
@@ -271,7 +282,7 @@ fun ProgressOverlay(fraction: Float, modifier: Modifier = Modifier) {
     ) {
         Box(
             modifier = Modifier
-                .fillMaxWidth(fraction.coerceAtLeast(MIN_PROGRESS_FRACTION))
+                .fillMaxWidth(width)
                 .fillMaxHeight()
                 .clip(PROGRESS_BAR_SHAPE)
                 .background(PlexAmber)
@@ -299,3 +310,6 @@ val PROGRESS_TRACK_COLOR = Color.Black
 
 /** Smallest fill the bar will draw, so a barely-started item still reads as in progress. */
 const val MIN_PROGRESS_FRACTION = 0.05f
+
+/** How long the bar takes to slide to a new position, in milliseconds. */
+const val PROGRESS_ANIMATION_MILLIS = 350

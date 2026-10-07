@@ -67,7 +67,14 @@ private const val MEMBERSHIP_HINT_QUIET_MILLIS = 3_000L
 private const val CONTINUE_WATCHING_ITEM_LIMIT = 4
 
 /** How many items each of the added-later shelves holds. A shelf is a starting point, not a library. */
-private const val SHELF_ITEM_LIMIT = 30
+    private const val SHELF_ITEM_LIMIT = 30
+
+    /**
+     * Frames quieter than this are worth applying. A play position moves a few hundred milliseconds
+     * at a time, so anything faster only nudges a bar a little; settling them cuts the row's
+     * recompositions from several a second to a couple a minute without the bar lagging noticeably.
+     */
+    private const val PROGRESS_DEBOUNCE_MILLIS = 250L
 
 
 /**
@@ -147,12 +154,15 @@ class PlexOnDeckViewModel(application: Application) : AndroidViewModel(applicati
             }
         }
         // Progress frames arrive several a second while something is playing, and each one only
-        // redraws a bar on a card that is already on screen, so they are applied as they arrive.
-        // They are deliberately not debounced: a steady stream of them would keep resetting the
-        // timer below and a real library change would never get its refresh.
+        // moves a bar on a card that is already on screen. Applying them as they arrive meant
+        // recomposing the whole row per frame, so they are settled first: a burst collapses into
+        // one apply, which is all a bar needs. The membership hint below still fires on its own
+        // quiet period, and the gaps between bursts are long enough that this never delays a
+        // refresh.
         viewModelScope.launch {
             PlexWebSocketObserver.events
                 .filterIsInstance<PlexLibraryEvent.ProgressChanged>()
+                .debounce(PROGRESS_DEBOUNCE_MILLIS)
                 .collect { event ->
                     if (!applyProgress(event)) {
                         // A position for something the row does not hold is the only hint that it
