@@ -3,7 +3,6 @@
 package com.neilturner.playerexp.ui.screens
 
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,8 +40,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -103,7 +100,7 @@ fun PlexShowScreen(
         viewModel.loadShow(showRatingKey, sizes)
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when (val current = state) {
             is PlexShowUiState.Loading -> CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
 
@@ -167,9 +164,6 @@ private fun ShowPage(
         return
     }
 
-    // Where the focus lands on first appearance: the requested episode if it is in this show,
-    // otherwise the first one. Resolved once per show (keyed on the rating key) so a background
-    // refresh from a socket event does not yank focus back to it mid-browse.
     val (initialSeasonIndex, initialEpisodeIndex) = remember(show.ratingKey, initialEpisodeRatingKey) {
         if (initialEpisodeRatingKey != null) {
             findEpisodeIndex(show, initialEpisodeRatingKey) ?: Pair(0, 0)
@@ -179,8 +173,6 @@ private fun ShowPage(
     }
     var seasonIndex by remember(show.ratingKey) { mutableIntStateOf(initialSeasonIndex) }
     var episodeIndex by remember(show.ratingKey) { mutableIntStateOf(initialEpisodeIndex) }
-    // Settled once the initial focus has been handed to the card, so the season-switch reset below
-    // does not also fire on first appearance and clobber the landing episode.
     var initialFocusSettled by remember(show.ratingKey) { mutableStateOf(false) }
 
     val safeSeasonIndex = seasonIndex.coerceIn(0, show.seasons.lastIndex)
@@ -189,8 +181,6 @@ private fun ShowPage(
     val safeEpisodeIndex = episodeIndex.coerceIn(0, (episodes.lastIndex).coerceAtLeast(0))
     val focusedEpisode = episodes.getOrNull(safeEpisodeIndex)
 
-    // A different season means a different set of episodes, so the focus goes back to its first —
-    // except on the very first appearance, where the landing episode still has to be left in place.
     LaunchedEffect(safeSeasonIndex) {
         if (initialFocusSettled) episodeIndex = 0
         initialFocusSettled = true
@@ -486,8 +476,6 @@ private fun EpisodeCarousel(
             state = lazyListState,
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(ROW_ITEM_SPACING),
-            // The row starts in from the left edge, under the title, and the end is inset by just
-            // enough for a focused still to grow into instead of being clipped by the viewport edge.
             contentPadding = PaddingValues(
                 start = SCREEN_HORIZONTAL_PADDING,
                 end = trailingFocusInset,
@@ -599,18 +587,14 @@ private fun EpisodeStillCard(
                     horizontalArrangement = Arrangement.spacedBy(BADGE_INNER_GAP)
                 ) {
                     if (episode.isWatched) {
-                        Canvas(modifier = Modifier.size(BADGE_CHECK_SIZE)) {
-                            val stroke = this.size.minDimension * 0.14f
-                            drawPath(
-                                path = Path().apply {
-                                    moveTo(this@Canvas.size.width * 0.16f, this@Canvas.size.height * 0.52f)
-                                    lineTo(this@Canvas.size.width * 0.42f, this@Canvas.size.height * 0.76f)
-                                    lineTo(this@Canvas.size.width * 0.86f, this@Canvas.size.height * 0.24f)
-                                },
-                                color = Color.White,
-                                style = Stroke(width = stroke, cap = androidx.compose.ui.graphics.StrokeCap.Round)
-                            )
-                        }
+                        Text(
+                            text = "✓",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            modifier = Modifier.size(BADGE_CHECK_SIZE),
+                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        )
                     }
                     Text(
                         text = episode.episodeNumber?.let { "E$it" } ?: episode.seasonNumber?.let { "S$it" } ?: "",

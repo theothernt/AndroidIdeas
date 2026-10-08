@@ -53,7 +53,7 @@ fun PlexLibrariesScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
-            contentAlignment = Alignment.TopCenter
+            contentAlignment = Alignment.Center
         ) {
             when (val current = state) {
                 is PlexLibrariesUiState.Loading -> CircularProgressIndicator(

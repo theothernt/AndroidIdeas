@@ -61,8 +61,7 @@ fun PlexOnDeckScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize(),
-            // The shelves start at the top rather than floating in the middle of the screen.
-            contentAlignment = Alignment.TopCenter
+            contentAlignment = Alignment.Center
         ) {
             when (val current = state) {
                 is PlexOnDeckUiState.Loading -> CircularProgressIndicator(
