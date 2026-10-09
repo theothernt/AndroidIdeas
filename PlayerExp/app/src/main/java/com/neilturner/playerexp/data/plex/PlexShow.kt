@@ -62,10 +62,10 @@ data class PlexShowEpisodesContainer(
 /**
  * One episode from `/library/metadata/{showKey}/allLeaves`.
  *
- * This is the whole shape the screen draws from, so the still, the air date, the rating and the
- * people on the episode all arrive with the list rather than costing a request each. `parentTitle`
- * is the season's own name — Plex files a season as "Season 3" unless it has a real one — which is
- * what the season chip and the hero subtitle both show.
+ * This is the whole shape the screen draws from, so the still, the air date and the rating all
+ * arrive with the list rather than costing a request each. `parentTitle` is the season's own name
+ * — Plex files a season as "Season 3" unless it has a real one — which is what the season chip and
+ * the hero subtitle both show.
  */
 @Serializable
 data class PlexShowEpisodeMetadata(
@@ -90,23 +90,7 @@ data class PlexShowEpisodeMetadata(
     /** Which service the rating came from, as a Plex URI: `themoviedb://image.rating`. */
     val audienceRatingImage: String? = null,
     val rating: Float? = null,
-    val ratingImage: String? = null,
-    val director: List<PlexPerson>? = null,
-    val role: List<PlexPerson>? = null
-)
-
-/** A person credited on an episode: cast or crew. Plex names them in `tag`. */
-@Serializable
-data class PlexPerson(
-    val id: String? = null,
-    val tag: String? = null,
-    val thumb: String? = null
-)
-
-/** Someone shown as a headshot: Cast and Crew. */
-data class PlexShowPerson(
-    val name: String,
-    val imageUrl: String? = null
+    val ratingImage: String? = null
 )
 
 /**
@@ -165,9 +149,7 @@ data class PlexShowEpisode(
     val contentRating: String? = null,
     val rating: Float? = null,
     val ratingSource: String? = null,
-    val isWatched: Boolean = false,
-    val directors: List<PlexShowPerson> = emptyList(),
-    val actors: List<PlexShowPerson> = emptyList()
+    val isWatched: Boolean = false
 ) {
     val progressFraction: Float
         get() = if (duration != null && duration > 0L && viewOffset != null && viewOffset > 0L) {
@@ -175,9 +157,6 @@ data class PlexShowEpisode(
         } else 0f
 
     val hasProgress: Boolean get() = progressFraction > 0f
-
-    /** People for the Cast and Crew row: whoever is billed on this episode, cast first. */
-    val people: List<PlexShowPerson> get() = actors + directors
 }
 
 /**

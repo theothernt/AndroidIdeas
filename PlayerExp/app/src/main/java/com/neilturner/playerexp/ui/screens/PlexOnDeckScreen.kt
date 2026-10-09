@@ -17,6 +17,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.core.animateFloatAsState
@@ -103,8 +104,15 @@ private fun LatestShelves(
     onNavigateToShow: (showRatingKey: String, showTitle: String?, episodeRatingKey: String?) -> Unit,
     viewModel: PlexOnDeckViewModel
 ) {
-    // Null on a first visit, where Continue Watching is the shelf to land on.
-    val returningShelfId = viewModel.lastFocusedShelfId()
+    // The focus memory is snapshot state the rows write to on every focus move, so reading it where
+    // the rows are drawn made each move recompose the whole shelves page: three shelf items and
+    // their rows, twice per D-pad step, once for the key write and once for the active-shelf write.
+    // It is read here and once per screen entry instead, which is what the values mean anyway —
+    // where the focus was when this screen was last on, settled before the first card takes focus.
+    val returningShelfId = remember { viewModel.lastFocusedShelfId() }
+    val continueWatchingKey = remember { viewModel.focusedRatingKey(SHELF_CONTINUE_WATCHING) }
+    val latestEpisodesKey = remember { viewModel.focusedRatingKey(SHELF_LATEST_EPISODES) }
+    val latestMoviesKey = remember { viewModel.focusedRatingKey(SHELF_LATEST_MOVIES) }
 
     // The shelves run to the edges of the screen, so the padding that keeps a row and its focused
     // card clear of the top and bottom edges lives inside the scroll rather than around it. A
@@ -127,7 +135,7 @@ private fun LatestShelves(
                         items = shelves.continueWatching,
                         posterSize = posterSize,
                         onPlay = onPlay,
-                        rememberedKey = viewModel.focusedRatingKey(SHELF_CONTINUE_WATCHING),
+                        rememberedKey = continueWatchingKey,
                         claimsInitialFocus = returningShelfId == null || returningShelfId == SHELF_CONTINUE_WATCHING,
                         onFocused = { viewModel.rememberShelfFocus(SHELF_CONTINUE_WATCHING, it) }
                     )
@@ -142,7 +150,7 @@ private fun LatestShelves(
                     LibraryShelfRow(
                         items = shelves.latestEpisodes,
                         posterSize = posterSize,
-                        rememberedKey = viewModel.focusedRatingKey(SHELF_LATEST_EPISODES),
+                        rememberedKey = latestEpisodesKey,
                         claimsInitialFocus = returningShelfId == SHELF_LATEST_EPISODES,
                         onFocused = { viewModel.rememberShelfFocus(SHELF_LATEST_EPISODES, it) },
                         onItemSelected = { item ->
@@ -160,7 +168,7 @@ private fun LatestShelves(
                     LibraryShelfRow(
                         items = shelves.latestMovies,
                         posterSize = posterSize,
-                        rememberedKey = viewModel.focusedRatingKey(SHELF_LATEST_MOVIES),
+                        rememberedKey = latestMoviesKey,
                         claimsInitialFocus = returningShelfId == SHELF_LATEST_MOVIES,
                         onFocused = { viewModel.rememberShelfFocus(SHELF_LATEST_MOVIES, it) },
                         onItemSelected = { onPlay(it.ratingKey, it.title.orEmpty()) }

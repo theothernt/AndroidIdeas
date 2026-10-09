@@ -46,6 +46,4 @@
     </plurals>
     <string name="plex_show_no_episodes">No episodes found in this show</string>
     <string name="plex_show_error">Could not load show: %1$s</string>
-    <string name="plex_show_cast_crew">Cast &amp; Crew</string>
-    <string name="plex_show_directed_by">Directed by %1$s</string>
 </resources>

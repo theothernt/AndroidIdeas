@@ -48,8 +48,7 @@ sealed interface PlexShowUiState {
 data class PlexShowImageSizes(
     val poster: IntSize,
     val art: IntSize,
-    val still: IntSize,
-    val avatar: IntSize
+    val still: IntSize
 )
 
 /**
@@ -167,8 +166,7 @@ class PlexShowViewModel(application: Application) : AndroidViewModel(application
                         accountToken = token,
                         showRatingKey = showRatingKey,
                         stillWidthPx = sizes.still.width,
-                        stillHeightPx = sizes.still.height,
-                        avatarPx = sizes.avatar.width
+                        stillHeightPx = sizes.still.height
                     )
                 }
 

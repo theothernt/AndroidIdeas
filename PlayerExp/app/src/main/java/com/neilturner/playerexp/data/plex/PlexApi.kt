@@ -592,8 +592,7 @@ class PlexApi(private val clientIdentifier: String) {
         accountToken: String,
         showRatingKey: String,
         stillWidthPx: Int,
-        stillHeightPx: Int,
-        avatarPx: Int
+        stillHeightPx: Int
     ): List<PlexShowEpisode> {
         val key = plexRatingKey(showRatingKey)
         if (key == null) {
@@ -635,36 +634,16 @@ class PlexApi(private val clientIdentifier: String) {
                 contentRating = item.contentRating,
                 rating = item.audienceRating ?: item.rating,
                 ratingSource = item.audienceRatingImage ?: item.ratingImage,
-                isWatched = (item.viewCount ?: 0) > 0,
-                // Plex bills cast in `role` and crew in `director`; both carry a headshot for the
-                // Cast and Crew row, at its own smaller size.
-                directors = item.director.orEmpty().mapNotNull { person ->
-                    person.toShowPerson(serverUrl, accountToken, avatarPx)
-                },
-                actors = item.role.orEmpty().mapNotNull { person ->
-                    person.toShowPerson(serverUrl, accountToken, avatarPx)
-                }
+                isWatched = (item.viewCount ?: 0) > 0
             )
         }
         Log.d(API_LOG_TAG, "Show episodes for $showRatingKey: ${episodes.size}")
         return episodes
     }
 
-    /** A credited person, or null when Plex left them unnamed. */
-    private fun PlexPerson.toShowPerson(
-        serverUrl: String,
-        accountToken: String,
-        avatarPx: Int
-    ): PlexShowPerson? {
-        val name = tag?.takeIf { it.isNotBlank() } ?: return null
-        val imageUrl = thumb?.takeIf { it.isNotBlank() }
-            ?.let { PlexImageUrl.build(serverUrl, accountToken, it, avatarPx, avatarPx) }
-        return PlexShowPerson(name = name, imageUrl = imageUrl)
-    }
-
     /**
      * Marks an episode watched or unwatched, which is what the check button under the focused
-     * episode does. Plex files this as a scrobble against the library plugin, with the item's own
+     * episode does. Plex files it as a scrobble against the library plugin, with the item's own
      * rating key in both the query and the form body.
      */
     suspend fun setEpisodeWatched(

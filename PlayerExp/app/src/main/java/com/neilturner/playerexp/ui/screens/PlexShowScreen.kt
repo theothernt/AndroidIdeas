@@ -21,7 +21,6 @@ import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
@@ -63,7 +62,6 @@ import coil3.compose.AsyncImage
 import com.neilturner.playerexp.R
 import com.neilturner.playerexp.data.plex.PlexShow
 import com.neilturner.playerexp.data.plex.PlexShowEpisode
-import com.neilturner.playerexp.data.plex.PlexShowPerson
 import com.neilturner.playerexp.data.plex.PlexShowSeason
 import com.neilturner.playerexp.data.plex.displayTitle
 import com.neilturner.playerexp.data.plex.ratingLabel
@@ -138,14 +136,12 @@ fun rememberShowImageSizes(): PlexShowImageSizes {
         val stillWidth = (configuration.screenWidthDp * STILL_WIDTH_FRACTION).dp
         // 16:9 landscape, so the height is the width times the ratio, not divided by it.
         val stillHeight = stillWidth * STILL_ASPECT_RATIO
-        val avatar = (configuration.screenHeightDp * AVATAR_HEIGHT_FRACTION).dp
         val art = configuration.screenWidthDp.dp
 
         PlexShowImageSizes(
             poster = IntSize(pixels((configuration.screenHeightDp * 0.48f).dp), pixels((configuration.screenHeightDp * 0.32f).dp)),
             art = IntSize(pixels(art), pixels(configuration.screenHeightDp.dp)),
-            still = IntSize(pixels(stillWidth), pixels(stillHeight)),
-            avatar = IntSize(pixels(avatar), pixels(avatar))
+            still = IntSize(pixels(stillWidth), pixels(stillHeight))
         )
     }
 }
@@ -221,10 +217,6 @@ private fun ShowPage(
                         onNavigateToPlayer(episode.ratingKey, episode.displayTitle(showTitle))
                     }
                 )
-
-                Spacer(modifier = Modifier.height(CAST_SECTION_TOP_GAP))
-
-                CastAndCrew(episode = focusedEpisode)
             }
         }
     }
@@ -358,17 +350,6 @@ private fun ShowHero(
             maxLines = EPISODE_SUMMARY_MAX_LINES,
             overflow = TextOverflow.Ellipsis
         )
-
-        val directors = episode?.directors?.map { it.name }.orEmpty()
-        if (directors.isNotEmpty()) {
-            Text(
-                text = stringResource(R.string.plex_show_directed_by, directors.joinToString(", ")),
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.White.copy(alpha = 0.75f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
     }
 }
 
@@ -618,64 +599,6 @@ private fun EpisodeStillCard(
     }
 }
 
-/** Whoever is credited on the focused episode, as the headshots Plex files them under. */
-@Composable
-private fun CastAndCrew(episode: PlexShowEpisode?) {
-    val people = remember(episode?.ratingKey) { episode?.people.orEmpty() }
-    if (people.isEmpty()) return
-
-    Column {
-        Text(
-            text = stringResource(R.string.plex_show_cast_crew),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            modifier = Modifier.padding(start = SCREEN_HORIZONTAL_PADDING, bottom = CAST_ROW_TOP_GAP)
-        )
-        LazyRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(ROW_ITEM_SPACING),
-            contentPadding = PaddingValues(
-                start = SCREEN_HORIZONTAL_PADDING,
-                end = SCREEN_HORIZONTAL_PADDING,
-                top = FOCUSED_POSTER_OVERHANG,
-                bottom = POSTER_ROW_BOTTOM_PADDING
-            )
-        ) {
-            itemsIndexed(people, key = { _, person -> person.name }) { _, person ->
-                CastAvatar(person = person)
-            }
-        }
-    }
-}
-
-@Composable
-private fun CastAvatar(person: PlexShowPerson) {
-    Box(
-        modifier = Modifier
-            .size(AVATAR_SIZE)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .border(1.dp, Color.White.copy(alpha = 0.2f), CircleShape),
-        contentAlignment = Alignment.Center
-    ) {
-        if (person.imageUrl != null) {
-            AsyncImage(
-                model = rememberPosterRequest(person.imageUrl, AVATAR_PIXELS),
-                contentDescription = person.name,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            Text(
-                text = person.name.take(1).uppercase(),
-                style = MaterialTheme.typography.titleMedium,
-                color = Color.White.copy(alpha = 0.7f)
-            )
-        }
-    }
-}
-
 /** `2026-01-05` reads as "Jan 5, 2026"; anything Plex sends in another shape is left alone. */
 private fun formatAirDate(raw: String): String = runCatching {
     LocalDate.parse(raw).format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
@@ -698,9 +621,6 @@ private fun formatRating(rating: Float): String =
 
 private val STILL_ASPECT_RATIO = 9f / 16f
 private const val STILL_WIDTH_FRACTION = 0.28f
-private const val AVATAR_HEIGHT_FRACTION = 0.075f
-private val AVATAR_SIZE = 84.dp
-private val AVATAR_PIXELS = IntSize(252, 252)
 
 private val STILL_SHAPE = RoundedCornerShape(10.dp)
 private val CHIP_SHAPE = RoundedCornerShape(50)
@@ -718,11 +638,8 @@ private val HERO_TOP_GAP = 12.dp
 private val HERO_TO_CAROUSEL_GAP = 8.dp
 private const val EPISODE_SUMMARY_MAX_LINES = 3
 private val META_LINE_VERTICAL_PADDING = 6.dp
- private val META_LINE_GAP = 16.dp
- private val RATING_GAP = 6.dp
-
- private val CAST_SECTION_TOP_GAP = 12.dp
-private val CAST_ROW_TOP_GAP = 8.dp
+private val META_LINE_GAP = 16.dp
+private val RATING_GAP = 6.dp
 
 private val STILL_BADGE_PADDING = 8.dp
 private val BADGE_COLOR = Color.Black.copy(alpha = 0.6f)
