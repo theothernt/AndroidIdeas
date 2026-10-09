@@ -33,7 +33,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -71,7 +70,6 @@ import com.neilturner.playerexp.ui.viewmodels.PlexShowUiState
 import com.neilturner.playerexp.ui.viewmodels.PlexShowViewModel
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
-import kotlin.math.roundToInt
 
 /**
  * A season page, laid out the way Plex lays its own out: the show's backdrop behind everything, a

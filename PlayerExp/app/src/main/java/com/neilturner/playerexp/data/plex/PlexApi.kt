@@ -1,6 +1,7 @@
 package com.neilturner.playerexp.data.plex
 
 import android.util.Log
+import androidx.compose.runtime.Immutable
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -28,8 +29,6 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
 import kotlinx.coroutines.CancellationException
 
 // Matches the lenient, ignore-unknown parser the rest of the Plex calls expect: Plex responses
@@ -110,6 +109,7 @@ data class PlexMediaContainerResponse(
 private const val EPISODE_TYPE = "episode"
 
 /** One Continue Watching item. [thumb] is an absolute URL the UI can load directly. */
+@Immutable
 data class OnDeckItem(
     val ratingKey: String,
     val title: String?,
