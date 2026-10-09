@@ -1,17 +1,17 @@
 package com.neilturner.playerexp.ui.screens
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
@@ -106,61 +106,66 @@ private fun LatestShelves(
     // Null on a first visit, where Continue Watching is the shelf to land on.
     val returningShelfId = viewModel.lastFocusedShelfId()
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            // The shelves run to the edges of the screen, so the padding that keeps a row and its
-            // focused card clear of the top and bottom edges lives inside the scroll rather than
-            // around it. A focused card grows past the height it is laid out at and would otherwise
-            // be clipped, and an inset outside the scroll draws a visible edge across the screen that
-            // content is cut off at.
-            .padding(
-                top = SHELF_EDGE_PADDING,
-                bottom = SHELF_EDGE_PADDING
-            ),
+    // The shelves run to the edges of the screen, so the padding that keeps a row and its focused
+    // card clear of the top and bottom edges lives inside the scroll rather than around it. A
+    // focused card grows past the height it is laid out at and would otherwise be clipped, and an
+    // inset outside the scroll draws a visible edge across the screen that content is cut off at.
+    //
+    // Lazy rather than a scrolling column: a column composes every shelf on the page, and each
+    // shelf's row still composes its first card and asks Plex for its poster even when the shelf
+    // has been scrolled past. One item per shelf, keyed, so a refetch that reorders or lengthens a
+    // list leaves the page where the user was.
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(top = SHELF_EDGE_PADDING, bottom = SHELF_EDGE_PADDING),
         verticalArrangement = Arrangement.spacedBy(SHELF_SPACING)
     ) {
         if (shelves.continueWatching.isNotEmpty()) {
-            Shelf(stringResource(R.string.plex_on_deck_continue_watching)) {
-                OnDeckRow(
-                    items = shelves.continueWatching,
-                    posterSize = posterSize,
-                    onPlay = onPlay,
-                    rememberedKey = viewModel.focusedRatingKey(SHELF_CONTINUE_WATCHING),
-                    claimsInitialFocus = returningShelfId == null || returningShelfId == SHELF_CONTINUE_WATCHING,
-                    onFocused = { viewModel.rememberShelfFocus(SHELF_CONTINUE_WATCHING, it) }
-                )
+            item(key = SHELF_CONTINUE_WATCHING) {
+                Shelf(stringResource(R.string.plex_on_deck_continue_watching)) {
+                    OnDeckRow(
+                        items = shelves.continueWatching,
+                        posterSize = posterSize,
+                        onPlay = onPlay,
+                        rememberedKey = viewModel.focusedRatingKey(SHELF_CONTINUE_WATCHING),
+                        claimsInitialFocus = returningShelfId == null || returningShelfId == SHELF_CONTINUE_WATCHING,
+                        onFocused = { viewModel.rememberShelfFocus(SHELF_CONTINUE_WATCHING, it) }
+                    )
+                }
             }
         }
         if (shelves.latestEpisodes.isNotEmpty()) {
-            Shelf(stringResource(R.string.plex_on_deck_latest_episodes)) {
-                // Episodes open their show page rather than playing straight in, so the user can
-                // pick from the full episode list; movies have no show page and play straight away.
-                LibraryShelfRow(
-                    items = shelves.latestEpisodes,
-                    posterSize = posterSize,
-                    rememberedKey = viewModel.focusedRatingKey(SHELF_LATEST_EPISODES),
-                    claimsInitialFocus = returningShelfId == SHELF_LATEST_EPISODES,
-                    onFocused = { viewModel.rememberShelfFocus(SHELF_LATEST_EPISODES, it) },
-                    onItemSelected = { item ->
-                        val showKey = item.showRatingKey
-                        if (showKey != null) onNavigateToShow(showKey, item.showTitle, item.ratingKey)
-                        else onPlay(item.ratingKey, item.title.orEmpty())
-                    }
-                )
+            item(key = SHELF_LATEST_EPISODES) {
+                Shelf(stringResource(R.string.plex_on_deck_latest_episodes)) {
+                    // Episodes open their show page rather than playing straight in, so the user can
+                    // pick from the full episode list; movies have no show page and play straight away.
+                    LibraryShelfRow(
+                        items = shelves.latestEpisodes,
+                        posterSize = posterSize,
+                        rememberedKey = viewModel.focusedRatingKey(SHELF_LATEST_EPISODES),
+                        claimsInitialFocus = returningShelfId == SHELF_LATEST_EPISODES,
+                        onFocused = { viewModel.rememberShelfFocus(SHELF_LATEST_EPISODES, it) },
+                        onItemSelected = { item ->
+                            val showKey = item.showRatingKey
+                            if (showKey != null) onNavigateToShow(showKey, item.showTitle, item.ratingKey)
+                            else onPlay(item.ratingKey, item.title.orEmpty())
+                        }
+                    )
+                }
             }
         }
         if (shelves.latestMovies.isNotEmpty()) {
-            Shelf(stringResource(R.string.plex_on_deck_latest_movies)) {
-                LibraryShelfRow(
-                    items = shelves.latestMovies,
-                    posterSize = posterSize,
-                    rememberedKey = viewModel.focusedRatingKey(SHELF_LATEST_MOVIES),
-                    claimsInitialFocus = returningShelfId == SHELF_LATEST_MOVIES,
-                    onFocused = { viewModel.rememberShelfFocus(SHELF_LATEST_MOVIES, it) },
-                    onItemSelected = { onPlay(it.ratingKey, it.title.orEmpty()) }
-                )
+            item(key = SHELF_LATEST_MOVIES) {
+                Shelf(stringResource(R.string.plex_on_deck_latest_movies)) {
+                    LibraryShelfRow(
+                        items = shelves.latestMovies,
+                        posterSize = posterSize,
+                        rememberedKey = viewModel.focusedRatingKey(SHELF_LATEST_MOVIES),
+                        claimsInitialFocus = returningShelfId == SHELF_LATEST_MOVIES,
+                        onFocused = { viewModel.rememberShelfFocus(SHELF_LATEST_MOVIES, it) },
+                        onItemSelected = { onPlay(it.ratingKey, it.title.orEmpty()) }
+                    )
+                }
             }
         }
     }

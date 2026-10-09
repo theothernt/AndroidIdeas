@@ -1,18 +1,20 @@
 package com.neilturner.playerexp.ui.screens
 
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -82,13 +84,19 @@ private fun LibrariesShelves(shelves: List<PlexLibraryShelf>, posterSize: Poster
     // Both shelves are drawn at the same card size, which means the lower one runs past the bottom
     // of the screen rather than being shrunk to fit. The column scrolls instead, so moving down to
     // the Movies shelf brings it fully into view.
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState()),
+    //
+    // Lazy rather than a scrolling column: a column composes every shelf on the page, and each
+    // shelf's row still composes its first card and asks Plex for its poster even when the shelf
+    // has been scrolled past. A shelf that scrolls away and back is composed again, and a row that
+    // claims focus on each of those arrivals would drag the focus back to the top of the page, so
+    // the claim stands down once any card has taken focus, which is the moment it has been browsed.
+    var browsed by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(SHELF_SPACING)
     ) {
-        shelves.forEachIndexed { shelfIndex, shelf ->
+        itemsIndexed(shelves, key = { _, shelf -> shelf.sectionKey }) { shelfIndex, shelf ->
             Column {
                 Text(
                     text = shelf.sectionTitle,
@@ -111,7 +119,8 @@ private fun LibrariesShelves(shelves: List<PlexLibraryShelf>, posterSize: Poster
                     PlexPosterRow(
                         itemCount = shelf.items.size,
                         // Focus lands on the first shelf; moving down reaches the others.
-                        claimsInitialFocus = shelfIndex == 0,
+                        claimsInitialFocus = shelfIndex == 0 && !browsed,
+                        onItemFocused = { browsed = true },
                         key = { index -> shelf.items[index].ratingKey }
                     ) { index, itemModifier ->
                         PlexPosterCard(

@@ -32,6 +32,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -148,7 +149,12 @@ fun PlexPosterRow(
     }
 
     val leftEdgeSpec = rememberLeftEdgeSpec(leadingInset = FOCUSED_CARD_LEADING_INSET)
-    CompositionLocalProvider(LocalBringIntoViewSpec provides leftEdgeSpec) {
+    // The glow tuning is read once per row rather than once per card: reading it where the card is
+    // drawn ran two `getprop` processes for every poster the row composed.
+    CompositionLocalProvider(
+        LocalBringIntoViewSpec provides leftEdgeSpec,
+        LocalGlowTuning provides rememberGlowTuning()
+    ) {
         LazyRow(
             modifier = modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(ROW_ITEM_SPACING),
@@ -198,7 +204,7 @@ fun PlexPosterCard(
         animationSpec = tween(POSTER_FADE_IN_MILLIS),
         label = "posterFadeIn"
     )
-    val glowTuning = rememberGlowTuning()
+    val glowTuning = LocalGlowTuning.current
     // Animated rather than switched, so the card lights as it takes focus instead of snapping on,
     // and zero elevation costs nothing when the card is not focused.
     val glowElevation by animateDpAsState(
@@ -370,7 +376,15 @@ private fun debugFloatProperty(name: String, fallback: Float): Float =
             .toFloat()
     }.getOrDefault(fallback)
 
-/** TEMPORARY: see the two `debug.playerexp.glow*` properties. */
+/**
+ * TEMPORARY: the glow's tuning, read once per row of cards rather than once per card.
+ *
+ * Reading the properties where the card is drawn cost two `getprop` process spawns on the
+ * composition thread for every poster the row composed, which is tens of them across a shelf that
+ * scrolls. The properties still apply per visit: a row recomposes from scratch when its screen is
+ * re-entered, which is how they are meant to be tuned (`adb shell setprop`, then leave and come
+ * back).
+ */
 @Composable
 private fun rememberGlowTuning(): GlowTuning = remember {
     GlowTuning(
@@ -382,6 +396,19 @@ private fun rememberGlowTuning(): GlowTuning = remember {
 }
 
 private data class GlowTuning(val enabled: Boolean, val alpha: Float, val spread: Dp)
+
+/**
+ * TEMPORARY: how the focused card's glow is tuned, shared by the cards of one row (see
+ * [rememberGlowTuning]). The default is the compile-time constants with the glow off, so a card
+ * drawn outside a row keeps the platform's border and zoom without spending any property reads.
+ */
+private val LocalGlowTuning = staticCompositionLocalOf {
+    GlowTuning(
+        enabled = false,
+        alpha = FOCUSED_POSTER_GLOW_ALPHA,
+        spread = FOCUSED_POSTER_GLOW_SPREAD
+    )
+}
 
 /** How long a poster takes to fade in over its placeholder. */
 const val POSTER_FADE_IN_MILLIS = 250
