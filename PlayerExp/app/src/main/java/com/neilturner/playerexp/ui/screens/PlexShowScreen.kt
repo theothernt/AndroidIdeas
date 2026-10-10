@@ -136,10 +136,16 @@ fun rememberShowImageSizes(): PlexShowImageSizes {
         val stillHeight = stillWidth * STILL_ASPECT_RATIO
         val art = configuration.screenWidthDp.dp
 
+        // Title art is a wide transparent logo, drawn in the slot the text title used to take, so it
+        // is fetched at a box of that shape: wide enough to read the logo, tall enough to fit it.
+        val titleArtWidth = (configuration.screenWidthDp * TITLE_ART_WIDTH_FRACTION).dp
+        val titleArtHeight = titleArtWidth * TITLE_ART_ASPECT_RATIO
+
         PlexShowImageSizes(
             poster = IntSize(pixels((configuration.screenHeightDp * 0.48f).dp), pixels((configuration.screenHeightDp * 0.32f).dp)),
             art = IntSize(pixels(art), pixels(configuration.screenHeightDp.dp)),
-            still = IntSize(pixels(stillWidth), pixels(stillHeight))
+            still = IntSize(pixels(stillWidth), pixels(stillHeight)),
+            title = IntSize(pixels(titleArtWidth), pixels(titleArtHeight))
         )
     }
 }
@@ -201,6 +207,7 @@ private fun ShowPage(
                     season = season,
                     episode = focusedEpisode,
                     showTitle = showTitle,
+                    titleArtSize = sizes.title,
                     modifier = Modifier.padding(horizontal = SCREEN_HORIZONTAL_PADDING)
                 )
 
@@ -303,7 +310,7 @@ private fun SeasonChip(label: String, selected: Boolean, onClick: () -> Unit) {
 }
 
 /**
- * The show's title and, underneath it, whatever episode the carousel is on. Plex puts the show's
+ * The show's title art and, underneath it, whatever episode the carousel is on. Plex puts the show's
  * logo here and the episode's plot under the ratings; only the plot moves as the focus moves.
  */
 @Composable
@@ -312,17 +319,11 @@ private fun ShowHero(
     season: PlexShowSeason,
     episode: PlexShowEpisode?,
     showTitle: String?,
+    titleArtSize: IntSize,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = show.title ?: showTitle.orEmpty(),
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.ExtraBold,
-            color = Color.White,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        ShowTitleBlock(show = show, showTitle = showTitle, titleArtSize = titleArtSize)
 
         if (!season.displayTitle.isNullOrBlank() && season.displayTitle != season.title) {
             Text(
@@ -348,6 +349,56 @@ private fun ShowHero(
             maxLines = EPISODE_SUMMARY_MAX_LINES,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+/**
+ * The show's title art where the server keeps one, and the plain text title where it does not.
+ *
+ * A logo is transparent art made to sit on the backdrop rather than fill a box, so it is fitted
+ * into a slot of that box's shape and the hero does not move once it arrives. The text title is
+ * kept underneath for as long as the logo has not drawn: a logo the server offers but cannot
+ * deliver leaves the show with the title it always had.
+ */
+@Composable
+private fun ShowTitleBlock(show: PlexShow, showTitle: String?, titleArtSize: IntSize) {
+    val logoUrl = show.clearLogoUrl
+    val fallbackText = show.title ?: showTitle
+
+    val titleText: @Composable () -> Unit = {
+        Text(
+            text = fallbackText.orEmpty(),
+            style = MaterialTheme.typography.headlineLarge,
+            fontWeight = FontWeight.ExtraBold,
+            color = Color.White,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+
+    if (logoUrl.isNullOrBlank()) {
+        titleText()
+        return
+    }
+
+    val density = LocalDensity.current
+    val widthDp = with(density) { titleArtSize.width.toDp() }
+    val heightDp = with(density) { titleArtSize.height.toDp() }
+    var logoDrawn by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier.size(width = widthDp, height = heightDp),
+        contentAlignment = Alignment.Center
+    ) {
+        AsyncImage(
+            model = rememberPosterRequest(logoUrl, titleArtSize),
+            contentDescription = fallbackText,
+            contentScale = ContentScale.Fit,
+            modifier = Modifier.fillMaxSize(),
+            onSuccess = { logoDrawn = true }
+        )
+        if (!logoDrawn) {
+            titleText()
+        }
     }
 }
 
@@ -619,6 +670,10 @@ private fun formatRating(rating: Float): String =
 
 private val STILL_ASPECT_RATIO = 9f / 16f
 private const val STILL_WIDTH_FRACTION = 0.28f
+
+/** A wide logo's typical shape, so the fetched copy has room for the artwork without dead space. */
+private val TITLE_ART_ASPECT_RATIO = 5f / 12f
+private const val TITLE_ART_WIDTH_FRACTION = 0.21f
 
 private val STILL_SHAPE = RoundedCornerShape(10.dp)
 private val CHIP_SHAPE = RoundedCornerShape(50)

@@ -48,7 +48,9 @@ sealed interface PlexShowUiState {
 data class PlexShowImageSizes(
     val poster: IntSize,
     val art: IntSize,
-    val still: IntSize
+    val still: IntSize,
+    /** The box the show's title art is fetched at, so the hero asks for the size it draws. */
+    val title: IntSize
 )
 
 /**
@@ -114,7 +116,8 @@ class PlexShowViewModel(application: Application) : AndroidViewModel(application
                 Log.d(
                     LOG_TAG,
                     "Loaded show: ${result.show.title}, seasons=${result.show.seasonCount}, " +
-                        "episodes=${result.show.episodeCount}, rows=${result.show.seasons.size}"
+                        "episodes=${result.show.episodeCount}, rows=${result.show.seasons.size}, " +
+                        "titleArt=${result.show.clearLogoUrl != null}"
                 )
             }
 
@@ -157,7 +160,9 @@ class PlexShowViewModel(application: Application) : AndroidViewModel(application
                         posterWidthPx = sizes.poster.width,
                         posterHeightPx = sizes.poster.height,
                         artWidthPx = sizes.art.width,
-                        artHeightPx = sizes.art.height
+                        artHeightPx = sizes.art.height,
+                        logoWidthPx = sizes.title.width,
+                        logoHeightPx = sizes.title.height
                     )
                 }
                 val episodes = async {
@@ -172,11 +177,24 @@ class PlexShowViewModel(application: Application) : AndroidViewModel(application
 
                 val show = details.await()
                 val grouped = groupEpisodesBySeason(episodes.await())
+                // The metadata carries the logo only on servers that put it there; most keep it on
+                // the clearLogos listing instead, and that listing is only worth asking for when the
+                // metadata had none.
+                val logoUrl = show.clearLogoUrl ?: async {
+                    api.showTitleArt(
+                        serverUrl = serverUrl,
+                        accountToken = token,
+                        showRatingKey = showRatingKey,
+                        widthPx = sizes.title.width,
+                        heightPx = sizes.title.height
+                    )
+                }.await()
                 LoadResult.Authorised(
                     show.copy(
                         seasons = grouped,
                         episodeCount = grouped.sumOf { it.episodes.size },
-                        watchedEpisodeCount = grouped.sumOf { season -> season.episodes.count { it.isWatched } }
+                        watchedEpisodeCount = grouped.sumOf { season -> season.episodes.count { it.isWatched } },
+                        clearLogoUrl = logoUrl
                     )
                 )
             }

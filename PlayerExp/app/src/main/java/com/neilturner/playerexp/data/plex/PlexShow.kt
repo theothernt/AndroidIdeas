@@ -30,6 +30,12 @@ data class PlexShowMetadata(
     val thumb: String? = null,
     /** Wide backdrop, the one drawn behind the whole screen rather than in a poster slot. */
     val art: String? = null,
+    /**
+     * The show's title art — its logo — where the server keeps one. Plex attaches it to the
+     * metadata beside the poster and backdrop art; a show the agent gave no logo to has no
+     * clearLogo here, and clients fall back to the plain title text.
+     */
+    val clearLogo: String? = null,
     val contentRating: String? = null,
     val audienceRating: Float? = null,
     val audienceRatingImage: String? = null,
@@ -109,6 +115,11 @@ data class PlexShow(
     val seasons: List<PlexShowSeason> = emptyList(),
     /** Wide backdrop behind the screen. Falls back to the poster when a show has no art. */
     val artUrl: String? = null,
+    /**
+     * The show's title art, sized for the hero block. Null where the server keeps no logo for the
+     * show, in which case the hero shows the plain text title instead.
+     */
+    val clearLogoUrl: String? = null,
     val contentRating: String? = null,
     val rating: Float? = null,
     val tagline: String? = null,

@@ -287,6 +287,45 @@ private data class PlaybackDecisionResult(
     val decisionText: String?
 )
 
+@Serializable
+internal data class PlexClearLogosResponse(
+    @SerialName("MediaContainer") val mediaContainer: PlexClearLogosContainer? = null
+)
+
+@Serializable
+internal data class PlexClearLogosContainer(
+    @SerialName("Metadata") val metadata: List<PlexClearLogoPhoto>? = null
+)
+
+/**
+ * One logo the item carries. [key] is the artwork itself — an absolute URL for a logo pulled from
+ * a metadata provider, a local file path for one Plex scanned or the user uploaded — while [thumb]
+ * is the same art already resized by the server. [selected] marks the logo Plex itself shows, with
+ * the rest being the alternatives a user can pick between.
+ */
+@Serializable
+internal data class PlexClearLogoPhoto(
+    val key: String? = null,
+    val thumb: String? = null,
+    val selected: Boolean? = null,
+    val provider: String? = null
+)
+
+/**
+ * Which logo a listing points at: the one Plex flagged as selected, or the first on offer where
+ * the server has no selection. Null for an empty listing, which is how a server with no logo for
+ * the item at all answers.
+ */
+internal fun chosenClearLogo(photos: List<PlexClearLogoPhoto>): PlexClearLogoPhoto? =
+    photos.firstOrNull { it.selected == true } ?: photos.firstOrNull()
+
+/**
+ * The image to fetch for that logo: its own artwork where Plex gives one, the already-resized copy
+ * as the fallback, and null where the chosen logo carries nothing usable.
+ */
+internal fun clearLogoImagePath(photo: PlexClearLogoPhoto?): String? =
+    photo?.let { (it.key ?: it.thumb)?.takeIf { path -> path.isNotBlank() } }
+
 class PlexApi(private val clientIdentifier: String) {
     private val client = HttpClient(OkHttp) {
         install(ContentNegotiation) {
@@ -514,6 +553,8 @@ class PlexApi(private val clientIdentifier: String) {
      * counts Plex reports on the metadata itself. Posters are requested at the size the header
      * draws them, the same as every other screen; [artWidthPx]/[artHeightPx] size the wide backdrop
      * separately, since it is fetched at full screen width rather than at poster size.
+     * [logoWidthPx]/[logoHeightPx] size the title art, the logo the hero leads with where the
+     * server keeps one.
      */
     suspend fun showDetails(
         serverUrl: String,
@@ -522,7 +563,9 @@ class PlexApi(private val clientIdentifier: String) {
         posterWidthPx: Int,
         posterHeightPx: Int,
         artWidthPx: Int,
-        artHeightPx: Int
+        artHeightPx: Int,
+        logoWidthPx: Int,
+        logoHeightPx: Int
     ): PlexShow {
         val key = plexRatingKey(showRatingKey)
         if (key == null) {
@@ -534,7 +577,8 @@ class PlexApi(private val clientIdentifier: String) {
                 year = null,
                 posterUrl = null,
                 seasonCount = null,
-                episodeCount = null
+                episodeCount = null,
+                clearLogoUrl = null
             )
         }
         val url = "${serverUrl.trimEnd('/')}/library/metadata/$key"
@@ -562,6 +606,12 @@ class PlexApi(private val clientIdentifier: String) {
         val artUrl = (metadata?.art ?: metadata?.thumb)
             ?.let { PlexImageUrl.build(serverUrl, accountToken, it, artWidthPx, artHeightPx) }
 
+        // The title art, asked for at the size the hero draws it. Plex serves it through the same
+        // photo transcode path as the poster, so a show without one costs nothing beyond the parse.
+        val clearLogoUrl = metadata?.clearLogo
+            ?.takeIf { it.isNotBlank() }
+            ?.let { PlexImageUrl.build(serverUrl, accountToken, it, logoWidthPx, logoHeightPx) }
+
         return PlexShow(
             ratingKey = plexRatingKey(metadata?.ratingKey) ?: key,
             title = metadata?.title,
@@ -571,6 +621,7 @@ class PlexApi(private val clientIdentifier: String) {
             seasonCount = metadata?.childCount,
             episodeCount = metadata?.leafCount,
             artUrl = artUrl,
+            clearLogoUrl = clearLogoUrl,
             contentRating = metadata?.contentRating,
             rating = metadata?.audienceRating ?: metadata?.rating,
             tagline = metadata?.tagline,
@@ -579,7 +630,63 @@ class PlexApi(private val clientIdentifier: String) {
     }
 
     /**
-     * Every episode in a show, for the carousel to draw and the row to split into seasons.
+     * The show's title art, where the server keeps logos for it.
+     *
+     * Plex holds these one request away from the metadata: `/library/metadata/{key}/clearLogos`
+     * lists every logo the show has, with one flagged `selected` as the one Plex's own clients
+     * show. The chosen art goes through the same photo transcode path as every poster: Plex scales
+     * it to the box asked for here rather than sending the original, and keeps its own aspect
+     * ratio inside it.
+     *
+     * Decoration only, so a server that has no such endpoint — anything older than the artwork
+     * system that added it — costs nothing: the call is attempted, and answering with a 404 page
+     * falls back to the plain text title the hero had before.
+     */
+    suspend fun showTitleArt(
+        serverUrl: String,
+        accountToken: String,
+        showRatingKey: String,
+        widthPx: Int,
+        heightPx: Int
+    ): String? {
+        val key = plexRatingKey(showRatingKey)
+        if (key == null) {
+            Log.w(API_LOG_TAG, "Clear logos called with a blank rating key")
+            return null
+        }
+        val url = "${serverUrl.trimEnd('/')}/library/metadata/$key/clearLogos"
+        val chosen = try {
+            Log.d(API_LOG_TAG, "Clear logos request: $url")
+            val response = apiCall("Clear logos") {
+                client.get(url) {
+                    plexHeaders(accountToken)
+                }
+            }
+            val photos = plexJson.decodeFromString<PlexClearLogosResponse>(response.bodyAsText())
+                .mediaContainer?.metadata.orEmpty()
+            Log.d(API_LOG_TAG, "Clear logos: ${photos.size} for show $key")
+            chosenClearLogo(photos)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(API_LOG_TAG, "Clear logos failed for show $key: ${e.message}")
+            null
+        }
+
+        val imagePath = clearLogoImagePath(chosen)
+        if (imagePath == null) {
+            Log.d(API_LOG_TAG, "Clear logos: no usable art for show $key")
+            return null
+        }
+        Log.d(
+            API_LOG_TAG,
+            "Clear logos: show $key uses ${chosen?.provider} art (selected=${chosen?.selected == true})"
+        )
+        return PlexImageUrl.build(serverUrl, accountToken, imagePath, widthPx, heightPx)
+    }
+
+/**
+ * Every episode in a show, for the carousel to draw and the row to split into seasons.
      * `/allLeaves?type=4` returns the show's whole episode set in one response, so the screen makes
      * a single request rather than one per season. `allLeaves` rather than `/all`: the latter
      * answers 404 on current Plex servers, while `allLeaves` is the same leaf set it used to return.

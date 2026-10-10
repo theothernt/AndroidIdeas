@@ -99,6 +99,101 @@ class PlexShowTest {
         assertEquals(null, plexRatingKey("/library/metadata/"))
     }
 
+    @Test
+    fun `show details parse the title art beside the poster and backdrop`() {
+        // Plex reports the clearLogo on the same metadata element as the poster and backdrop art,
+        // and a show the agent kept no logo for simply has no such field.
+        val json = """
+            {
+              "MediaContainer": {
+                "Metadata": [
+                  {
+                    "ratingKey": "40543",
+                    "title": "Severance",
+                    "thumb": "/library/metadata/40543/thumb/1",
+                    "art": "/library/metadata/40543/art/2",
+                    "clearLogo": "/library/metadata/40543/clearLogo/3"
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val metadata = plexJson
+            .decodeFromString(PlexShowDetailsResponse.serializer(), json)
+            .mediaContainer?.metadata?.first()
+
+        assertEquals("Severance", metadata?.title)
+        assertEquals("/library/metadata/40543/thumb/1", metadata?.thumb)
+        assertEquals("/library/metadata/40543/art/2", metadata?.art)
+        assertEquals("/library/metadata/40543/clearLogo/3", metadata?.clearLogo)
+    }
+
+    @Test
+    fun `clear logo parse keeps every logo on the listing`() {
+        // The shape /library/metadata/{key}/clearLogos answers with: absolute provider URLs, and
+        // the one Plex picked as a local file path, with the selected one flagged.
+        val json = """
+            {
+              "MediaContainer": {
+                "size": 2,
+                "Metadata": [
+                  {
+                    "key": "https://metadata-static.plex.tv/d/1/aaa.png",
+                    "ratingKey": "https://metadata-static.plex.tv/d/1/aaa.png",
+                    "selected": false,
+                    "provider": "tmdb"
+                  },
+                  {
+                    "key": "/library/metadata/40941/file?url=metadata%3A%2F%2FclearLogos%2Ftv.plex.agents.series_27f5",
+                    "thumb": "/library/metadata/40941/file?url=metadata%3A%2F%2FclearLogos%2Ftv.plex.agents.series_27f5",
+                    "selected": true,
+                    "provider": "tmdb"
+                  }
+                ]
+              }
+            }
+        """.trimIndent()
+
+        val photos = plexJson
+            .decodeFromString(PlexClearLogosResponse.serializer(), json)
+            .mediaContainer?.metadata.orEmpty()
+
+        assertEquals(2, photos.size)
+        assertEquals(
+            "/library/metadata/40941/file?url=metadata%3A%2F%2FclearLogos%2Ftv.plex.agents.series_27f5",
+            clearLogoImagePath(chosenClearLogo(photos))
+        )
+    }
+
+    @Test
+    fun `clear logo picks the selected art and falls back to the first offered`() {
+        val selected = listOf(
+            PlexClearLogoPhoto(key = "http://one.png", selected = false),
+            PlexClearLogoPhoto(key = "http://two.png", selected = true)
+        )
+        val noneSelected = listOf(
+            PlexClearLogoPhoto(key = "http://one.png", selected = false),
+            PlexClearLogoPhoto(key = "http://two.png", selected = null)
+        )
+
+        assertEquals("http://two.png", clearLogoImagePath(chosenClearLogo(selected)))
+        assertEquals("http://one.png", clearLogoImagePath(chosenClearLogo(noneSelected)))
+    }
+
+    @Test
+    fun `clear logo image is null for a show with no usable logo`() {
+        assertEquals(null, clearLogoImagePath(chosenClearLogo(emptyList())))
+
+        // A chosen logo that carries neither artwork of its own nor a resized copy.
+        val blank = listOf(PlexClearLogoPhoto(key = "", thumb = "   ", selected = true))
+        assertEquals(null, clearLogoImagePath(chosenClearLogo(blank)))
+
+        // One with no key of its own falls back to the server-resized copy.
+        val keyless = listOf(PlexClearLogoPhoto(thumb = "http://resized.png", selected = true))
+        assertEquals("http://resized.png", clearLogoImagePath(chosenClearLogo(keyless)))
+    }
+
     private fun ep(
         ratingKey: String,
         season: Int? = 1,
