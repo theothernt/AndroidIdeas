@@ -10,6 +10,9 @@ import android.os.Build
  * Containers are limited to formats that the app's Media3 dependencies can demux. Video is
  * limited to hardware decoders on Android 10+ because a software decoder does not guarantee TV
  * playback performance.
+ *
+ * On an emulator the advertised set is narrowed to H.264 video with AAC audio: the emulator
+ * reports decoders it cannot reliably play, so anything else has to arrive transcoded.
  */
 data class PlexDeviceCapabilities(
     val videoCodecs: List<PlexVideoCodecCapability>,
@@ -53,11 +56,15 @@ data class PlexDeviceCapabilities(
                     )
                 }
             }
-            // Include hevc so the server stream-copies HEVC video instead of
-            // re-encoding to h264. Audio is still transcoded to AAC via audioCodec=aac.
+            // The transcode target lists the codecs the server may convert to: the universal
+            // transcoder emits H.264 or HEVC, but only for clients that can decode them, so an
+            // emulator advertising H.264 alone never receives an HEVC stream-copy it cannot play.
+            // Audio is transcoded to AAC.
+            val transcodeVideoCodecs = videoCodecNames.filter { it in TRANSCODE_CAPABLE_VIDEO_CODECS }
             add(
                 "add-transcode-target(type=videoProfile&context=streaming&protocol=hls" +
-                    "&container=mpegts&videoCodec=h264,hevc&audioCodec=aac&replace=true)"
+                    "&container=mpegts&videoCodec=${transcodeVideoCodecs.joinToString(",")}" +
+                    "&audioCodec=aac&replace=true)"
             )
         }
         return PlexPlaybackProfile(
@@ -88,6 +95,9 @@ data class PlexAudioCodecCapability(
     val plexName: String,
     val maximumChannelCount: Int
 )
+
+/** Codecs the universal transcoder can emit, so nothing else may be a transcode target. */
+private val TRANSCODE_CAPABLE_VIDEO_CODECS = setOf("h264", "hevc")
 
 data class PlexPlaybackProfile(
     val clientProfileExtra: String,
@@ -122,6 +132,11 @@ object AndroidPlexCapabilityProbe {
     )
 
     fun probe(): PlexDeviceCapabilities {
+        val probed = probeCodecs()
+        return if (isEmulator()) emulatorCapabilities(probed) else probed
+    }
+
+    private fun probeCodecs(): PlexDeviceCapabilities {
         val video = mutableMapOf<String, PlexVideoCodecCapability>()
         val audio = mutableMapOf<String, PlexAudioCodecCapability>()
 
@@ -184,6 +199,29 @@ object AndroidPlexCapabilityProbe {
             Build.MODEL.contains("Android SDK built for") ||
             Build.HARDWARE.contains("goldfish") ||
             Build.HARDWARE.contains("ranchu")
+
+    /**
+     * H.264 video with AAC audio only, so Plex transcodes everything else. The probed values are
+     * kept when the emulator does report them; the fallbacks are the pair the emulator is known to
+     * play, which keeps [PlexDeviceCapabilities.playbackProfile]'s H.264/AAC requirement satisfied.
+     */
+    private fun emulatorCapabilities(probed: PlexDeviceCapabilities): PlexDeviceCapabilities {
+        val h264 = probed.videoCodecs.firstOrNull { it.plexName == "h264" }
+            ?: PlexVideoCodecCapability(
+                plexName = "h264",
+                maximumWidth = 1920,
+                maximumHeight = 1080,
+                maximumFrameRate = 30
+            )
+        val aac = probed.audioCodecs.firstOrNull { it.plexName == "aac" }
+            ?: PlexAudioCodecCapability(plexName = "aac", maximumChannelCount = 2)
+        return PlexDeviceCapabilities(
+            videoCodecs = listOf(h264),
+            audioCodecs = listOf(aac),
+            supportsEac3Directly = false,
+            supportsAc3Directly = false
+        )
+    }
 
     private fun PlexVideoCodecCapability.merge(other: PlexVideoCodecCapability) = copy(
         maximumWidth = maxOf(maximumWidth, other.maximumWidth),
