@@ -739,8 +739,6 @@ class PlexApi(private val clientIdentifier: String) {
                 summary = item.summary,
                 airDate = item.originallyAvailableAt,
                 contentRating = item.contentRating,
-                rating = item.audienceRating ?: item.rating,
-                ratingSource = item.audienceRatingImage ?: item.ratingImage,
                 isWatched = (item.viewCount ?: 0) > 0
             )
         }

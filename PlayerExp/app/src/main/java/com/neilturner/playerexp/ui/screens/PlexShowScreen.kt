@@ -63,7 +63,6 @@ import com.neilturner.playerexp.data.plex.PlexShow
 import com.neilturner.playerexp.data.plex.PlexShowEpisode
 import com.neilturner.playerexp.data.plex.PlexShowSeason
 import com.neilturner.playerexp.data.plex.displayTitle
-import com.neilturner.playerexp.data.plex.ratingLabel
 import com.neilturner.playerexp.ui.modifiers.rememberLeftEdgeSpec
 import com.neilturner.playerexp.ui.viewmodels.PlexShowImageSizes
 import com.neilturner.playerexp.ui.viewmodels.PlexShowUiState
@@ -337,6 +336,8 @@ private fun ShowHero(
             titleArtSize = titleArtSize
         )
 
+        Spacer(modifier = Modifier.height(HERO_TITLE_TO_META_GAP))
+
         FocusedEpisodeDetails(episode = episode, contentRating = show.contentRating)
     }
 }
@@ -437,28 +438,18 @@ private fun ShowTitleBlock(show: PlexShow, showTitle: String?, titleArtSize: Int
     }
 }
 
-/** "S2 • E1   Aug 27, 2026   53m   TV-MA   IMDb 7.5" */
+/** "Aug 27, 2026   53m   TV-MA" */
 @Composable
 private fun EpisodeMetaLine(
     episode: PlexShowEpisode?,
     contentRating: String?
 ) {
-    val episodeRating = episode?.rating
-    val label = episode?.ratingLabel()
     val parts = buildList {
-        episode?.let {
-            val season = it.seasonNumber
-            val number = it.episodeNumber
-            when {
-                season != null && number != null -> add("S$season • E$number")
-                number != null -> add("E$number")
-            }
-        }
         episode?.airDate?.let { add(formatAirDate(it)) }
         episode?.duration?.takeIf { it > 0 }?.let { add(formatRuntime(it)) }
         contentRating?.takeIf { it.isNotBlank() }?.let { add(it) }
     }
-    if (parts.isEmpty() && (episodeRating == null || label == null)) return
+    if (parts.isEmpty()) return
 
     Row(
         modifier = Modifier.padding(vertical = META_LINE_VERTICAL_PADDING),
@@ -471,25 +462,6 @@ private fun EpisodeMetaLine(
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.85f)
             )
-        }
-        if (episodeRating != null && label != null) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(RATING_GAP),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White.copy(alpha = 0.7f)
-                )
-                Text(
-                    text = formatRating(episodeRating),
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White
-                )
-            }
         }
     }
 }
@@ -705,9 +677,6 @@ private fun formatRuntime(durationMs: Long): String {
     }
 }
 
-private fun formatRating(rating: Float): String =
-    if (rating % 1f == 0f) rating.toInt().toString() else String.format("%.1f", rating)
-
 private val STILL_ASPECT_RATIO = 9f / 16f
 private const val STILL_WIDTH_FRACTION = 0.28f
 private const val SEASON_CHIP_TYPE = "season-chip"
@@ -731,10 +700,12 @@ private val CHIP_RESTING_BORDER_WIDTH = 1.dp
 
 private val HERO_TOP_GAP = 12.dp
 private val HERO_TO_CAROUSEL_GAP = 8.dp
+
+/** Room between the show's title art and the episode's details underneath it. */
+private val HERO_TITLE_TO_META_GAP = 16.dp
 private const val EPISODE_SUMMARY_MAX_LINES = 3
 private val META_LINE_VERTICAL_PADDING = 6.dp
 private val META_LINE_GAP = 16.dp
-private val RATING_GAP = 6.dp
 
 private val STILL_BADGE_PADDING = 8.dp
 private val BADGE_COLOR = Color.Black.copy(alpha = 0.6f)

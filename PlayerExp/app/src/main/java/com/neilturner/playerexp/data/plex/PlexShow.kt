@@ -69,10 +69,10 @@ data class PlexShowEpisodesContainer(
 /**
  * One episode from `/library/metadata/{showKey}/allLeaves`.
  *
- * This is the whole shape the screen draws from, so the still, the air date and the rating all
- * arrive with the list rather than costing a request each. `parentTitle` is the season's own name
- * — Plex files a season as "Season 3" unless it has a real one — which is what the season chip and
- * the hero subtitle both show.
+ * This is the whole shape the screen draws from, so the still, the air date and the content rating
+ * all arrive with the list rather than costing a request each. `parentTitle` is the season's own
+ * name — Plex files a season as "Season 3" unless it has a real one — which is what the season chip
+ * and the hero subtitle both show.
  */
 @Serializable
 data class PlexShowEpisodeMetadata(
@@ -92,12 +92,7 @@ data class PlexShowEpisodeMetadata(
     val viewOffset: Long? = null,
     val viewCount: Int? = null,
     val originallyAvailableAt: String? = null,
-    val contentRating: String? = null,
-    val audienceRating: Float? = null,
-    /** Which service the rating came from, as a Plex URI: `themoviedb://image.rating`. */
-    val audienceRatingImage: String? = null,
-    val rating: Float? = null,
-    val ratingImage: String? = null
+    val contentRating: String? = null
 )
 
 /**
@@ -162,8 +157,6 @@ data class PlexShowEpisode(
     /** Air date as Plex reports it, `2026-01-05`. */
     val airDate: String? = null,
     val contentRating: String? = null,
-    val rating: Float? = null,
-    val ratingSource: String? = null,
     val isWatched: Boolean = false
 ) {
     val progressFraction: Float
@@ -209,19 +202,3 @@ fun groupEpisodesBySeason(episodes: List<PlexShowEpisode>): List<PlexShowSeason>
                 plexTitle = episodesInSeason.firstOrNull { !it.seasonTitle.isNullOrBlank() }?.seasonTitle
             )
         }
-
-/**
- * The label the rating is filed under, taken from the Plex URI in `audienceRatingImage`
- * (`themoviedb://image.rating` reads as "TMDB"). Null when the episode carries no rating.
- */
-fun PlexShowEpisode.ratingLabel(): String? {
-    if (rating == null) return null
-    val source = ratingSource.orEmpty()
-    return when {
-        source.contains("imdb", ignoreCase = true) -> "IMDb"
-        source.contains("thetvdb", ignoreCase = true) || source.contains("tvdb", ignoreCase = true) -> "TVDB"
-        source.contains("themoviedb", ignoreCase = true) || source.contains("tmdb", ignoreCase = true) -> "TMDB"
-        source.contains("rottentomatoes", ignoreCase = true) -> "RT"
-        else -> null
-    }
-}
