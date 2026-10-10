@@ -1,5 +1,6 @@
 package com.neilturner.playerexp.data.plex
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -11,6 +12,7 @@ import kotlinx.serialization.Serializable
  * "TV Shows" and would pass any rule that only looked at [type].
  */
 /** One show or movie in a library, with its poster already sized for the shelf it will be drawn on. */
+@Immutable
 data class PlexLibraryItem(
     val ratingKey: String,
     val title: String?,
@@ -24,6 +26,7 @@ data class PlexLibraryItem(
 )
 
 /** A library and its contents, as the screen needs it. */
+@Immutable
 data class PlexLibraryShelf(
     val sectionKey: String,
     val sectionTitle: String,

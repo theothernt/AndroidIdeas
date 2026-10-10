@@ -129,7 +129,7 @@ private fun LatestShelves(
         verticalArrangement = Arrangement.spacedBy(SHELF_SPACING)
     ) {
         if (shelves.continueWatching.isNotEmpty()) {
-            item(key = SHELF_CONTINUE_WATCHING) {
+            item(key = SHELF_CONTINUE_WATCHING, contentType = { SHELF_TYPE }) {
                 Shelf(stringResource(R.string.plex_on_deck_continue_watching)) {
                     OnDeckRow(
                         items = shelves.continueWatching,
@@ -143,7 +143,7 @@ private fun LatestShelves(
             }
         }
         if (shelves.latestEpisodes.isNotEmpty()) {
-            item(key = SHELF_LATEST_EPISODES) {
+            item(key = SHELF_LATEST_EPISODES, contentType = { SHELF_TYPE }) {
                 Shelf(stringResource(R.string.plex_on_deck_latest_episodes)) {
                     // Episodes open their show page rather than playing straight in, so the user can
                     // pick from the full episode list; movies have no show page and play straight away.
@@ -163,7 +163,7 @@ private fun LatestShelves(
             }
         }
         if (shelves.latestMovies.isNotEmpty()) {
-            item(key = SHELF_LATEST_MOVIES) {
+            item(key = SHELF_LATEST_MOVIES, contentType = { SHELF_TYPE }) {
                 Shelf(stringResource(R.string.plex_on_deck_latest_movies)) {
                     LibraryShelfRow(
                         items = shelves.latestMovies,
@@ -312,6 +312,9 @@ private const val SHELF_LATEST_MOVIES = "latestMovies"
 /** Room at the top and bottom of the scrolling page for a shelf and its focused card. */
 private val SHELF_EDGE_PADDING = 16.dp
 private val SHELF_TITLE_GAP = 8.dp
+
+/** The lazy item type every shelf reports, so the column reuses one composition as shelves scroll. */
+private const val SHELF_TYPE = "plex-shelf"
 val POSTER_BAR_INSET = 10.dp
 val PROGRESS_BAR_HEIGHT = 4.dp
 private val PROGRESS_BAR_RADIUS = 2.dp

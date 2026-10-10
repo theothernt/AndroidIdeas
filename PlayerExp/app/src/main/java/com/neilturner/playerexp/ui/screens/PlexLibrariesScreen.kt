@@ -96,7 +96,13 @@ private fun LibrariesShelves(shelves: List<PlexLibraryShelf>, posterSize: Poster
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(SHELF_SPACING)
     ) {
-        itemsIndexed(shelves, key = { _, shelf -> shelf.sectionKey }) { shelfIndex, shelf ->
+        itemsIndexed(
+            shelves,
+            key = { _, shelf -> shelf.sectionKey },
+            // Every shelf is the same block of a heading and a poster row, so the lazy column
+            // reuses one composition as shelves scroll past.
+            contentType = { _, _ -> SHELF_TYPE }
+        ) { shelfIndex, shelf ->
             Column {
                 Text(
                     text = shelf.sectionTitle,
@@ -137,3 +143,4 @@ private fun LibrariesShelves(shelves: List<PlexLibraryShelf>, posterSize: Poster
 
 private val SHELF_SPACING = 12.dp
 private val SHELF_TITLE_GAP = 8.dp
+private const val SHELF_TYPE = "plex-shelf"

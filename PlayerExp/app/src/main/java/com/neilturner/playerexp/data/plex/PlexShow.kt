@@ -1,5 +1,6 @@
 package com.neilturner.playerexp.data.plex
 
+import androidx.compose.runtime.Immutable
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -104,6 +105,7 @@ data class PlexShowEpisodeMetadata(
  * Episodes are fetched for the whole show up front and split here so the screen only makes one
  * request per visit, the same shape On Deck fetches in.
  */
+@Immutable
 data class PlexShow(
     val ratingKey: String,
     val title: String?,
@@ -126,6 +128,7 @@ data class PlexShow(
     val watchedEpisodeCount: Int? = null
 )
 
+@Immutable
 data class PlexShowSeason(
     val seasonNumber: Int?,
     val episodes: List<PlexShowEpisode>,
@@ -144,6 +147,7 @@ data class PlexShowSeason(
         get() = plexTitle?.takeIf { it.isNotBlank() && it != title } ?: title
 }
 
+@Immutable
 data class PlexShowEpisode(
     val ratingKey: String,
     val title: String?,

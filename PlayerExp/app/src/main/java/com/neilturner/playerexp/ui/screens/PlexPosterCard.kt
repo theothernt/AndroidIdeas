@@ -123,6 +123,7 @@ fun PlexPosterRow(
     modifier: Modifier = Modifier,
     claimsInitialFocus: Boolean = true,
     initialFocusIndex: Int = 0,
+    contentType: (index: Int) -> Any = { POSTER_CARD_TYPE },
     key: (index: Int) -> String,
     onItemFocused: (index: Int) -> Unit = {},
     content: @Composable (index: Int, itemModifier: Modifier) -> Unit
@@ -159,7 +160,13 @@ fun PlexPosterRow(
                 bottom = POSTER_ROW_BOTTOM_PADDING
             )
         ) {
-            items(count = itemCount, key = { index -> key(index) }) { index ->
+            items(
+                count = itemCount,
+                key = { index -> key(index) },
+                // One card type per row, so the lazy layout reuses a card's composition as the
+                // user scrolls rather than tearing each one down as it leaves.
+                contentType = contentType
+            ) { index ->
                 // The requester has to sit on the focusable card itself, so it is handed down
                 // rather than applied to a wrapper here.
                 val reportFocus = Modifier.onFocusChanged { if (it.isFocused) onItemFocused(index) }
@@ -351,6 +358,9 @@ private const val GLOW_FADE_MILLIS = 180
  * `adb shell setprop debug.playerexp.glowOn 1`.
  */
 private const val FOCUSED_POSTER_GLOW_ENABLED = false
+
+/** The lazy item type every poster row reports, so its cards pool and reuse one composition. */
+private const val POSTER_CARD_TYPE = "plex-poster"
 
 const val PRESSED_POSTER_SCALE = 0.94f
 const val PRESS_DOWN_MILLIS = 90

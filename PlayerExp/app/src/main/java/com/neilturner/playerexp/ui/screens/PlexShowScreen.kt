@@ -173,18 +173,12 @@ private fun ShowPage(
     }
     var seasonIndex by remember(show.ratingKey) { mutableIntStateOf(initialSeasonIndex) }
     var episodeIndex by remember(show.ratingKey) { mutableIntStateOf(initialEpisodeIndex) }
-    var initialFocusSettled by remember(show.ratingKey) { mutableStateOf(false) }
 
     val safeSeasonIndex = seasonIndex.coerceIn(0, show.seasons.lastIndex)
     val season = show.seasons[safeSeasonIndex]
     val episodes = season.episodes
     val safeEpisodeIndex = episodeIndex.coerceIn(0, (episodes.lastIndex).coerceAtLeast(0))
     val focusedEpisode = episodes.getOrNull(safeEpisodeIndex)
-
-    LaunchedEffect(safeSeasonIndex) {
-        if (initialFocusSettled) episodeIndex = 0
-        initialFocusSettled = true
-    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         ShowBackdrop(show = show, sizes = sizes)
@@ -193,7 +187,14 @@ private fun ShowPage(
             SeasonChips(
                 seasons = show.seasons,
                 selectedIndex = safeSeasonIndex,
-                onSelect = { seasonIndex = it }
+                onSelect = { index ->
+                    // Switching seasons starts the new season on its first episode, so the hero
+                    // and the carousel both begin at the top rather than at a clamped position.
+                    if (index != seasonIndex) {
+                        seasonIndex = index
+                        episodeIndex = 0
+                    }
+                }
             )
 
             Column(
@@ -274,7 +275,12 @@ private fun SeasonChips(
         horizontalArrangement = Arrangement.spacedBy(CHIP_SPACING),
         contentPadding = PaddingValues(horizontal = 0.dp)
     ) {
-        itemsIndexed(seasons, key = { index, season -> "season-${season.seasonNumber}" }) { index, season ->
+        itemsIndexed(
+            seasons,
+            key = { index, season -> "season-${season.seasonNumber}" },
+            // Every chip is the same pill, so the row reuses one composition as it scrolls.
+            contentType = { _, _ -> SEASON_CHIP_TYPE }
+        ) { index, season ->
             SeasonChip(
                 label = season.title,
                 selected = index == selectedIndex,
@@ -311,7 +317,8 @@ private fun SeasonChip(label: String, selected: Boolean, onClick: () -> Unit) {
 
 /**
  * The show's title art and, underneath it, whatever episode the carousel is on. Plex puts the show's
- * logo here and the episode's plot under the ratings; only the plot moves as the focus moves.
+ * logo here and the episode's plot under the ratings; only the plot moves as the focus moves, so the
+ * heading is a separate block from the episode details.
  */
 @Composable
 private fun ShowHero(
@@ -323,8 +330,27 @@ private fun ShowHero(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        ShowTitleBlock(show = show, showTitle = showTitle, titleArtSize = titleArtSize)
+        ShowHeading(
+            show = show,
+            season = season,
+            showTitle = showTitle,
+            titleArtSize = titleArtSize
+        )
 
+        FocusedEpisodeDetails(episode = episode, contentRating = show.contentRating)
+    }
+}
+
+/** The show's title art and the selected season's name, neither of which changes as focus moves. */
+@Composable
+private fun ShowHeading(
+    show: PlexShow,
+    season: PlexShowSeason,
+    showTitle: String?,
+    titleArtSize: IntSize
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        ShowTitleBlock(show = show, showTitle = showTitle, titleArtSize = titleArtSize)
         if (!season.displayTitle.isNullOrBlank() && season.displayTitle != season.title) {
             Text(
                 text = season.displayTitle,
@@ -335,10 +361,19 @@ private fun ShowHero(
                 overflow = TextOverflow.Ellipsis
             )
         }
+    }
+}
 
+/** The episode the carousel is on: its ratings line and its plot, the part that follows focus. */
+@Composable
+private fun FocusedEpisodeDetails(
+    episode: PlexShowEpisode?,
+    contentRating: String?
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
         EpisodeMetaLine(
             episode = episode,
-            contentRating = show.contentRating
+            contentRating = contentRating
         )
 
         Text(
@@ -513,7 +548,12 @@ private fun EpisodeCarousel(
                 bottom = POSTER_ROW_BOTTOM_PADDING
             )
         ) {
-            itemsIndexed(episodes, key = { _, episode -> episode.ratingKey }) { index, episode ->
+            itemsIndexed(
+                episodes,
+                key = { _, episode -> episode.ratingKey },
+                // Every card is the same still layout, so the row reuses one composition.
+                contentType = { _, _ -> EPISODE_STILL_TYPE }
+            ) { index, episode ->
                 EpisodeStillCard(
                     episode = episode,
                     size = stillSize,
@@ -670,6 +710,8 @@ private fun formatRating(rating: Float): String =
 
 private val STILL_ASPECT_RATIO = 9f / 16f
 private const val STILL_WIDTH_FRACTION = 0.28f
+private const val SEASON_CHIP_TYPE = "season-chip"
+private const val EPISODE_STILL_TYPE = "episode-still"
 
 /** A wide logo's typical shape, so the fetched copy has room for the artwork without dead space. */
 private val TITLE_ART_ASPECT_RATIO = 5f / 12f
