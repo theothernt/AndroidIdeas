@@ -3,6 +3,7 @@ package com.neilturner.playerexp.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -98,133 +99,51 @@ fun HomeScreen(
             )
             Spacer(modifier = Modifier.height(36.dp))
 
-            Button(
-                onClick = { onNavigateToPlayer("progressive") },
-                modifier = Modifier
-                    .focusRequester(focusRequesters[0])
-                    .onFocusChanged { if (it.isFocused) lastFocusedIndex = 0 }
-                    .width(360.dp)
-                    .height(56.dp)
+            // The menu reads better as a pair of columns: three rows of two, centred as a block,
+            // with the same spacing between and within rows.
+            val menuItems = listOf(
+                "Play MP4, MKV, etc" to { onNavigateToPlayer("progressive") },
+                "Play HLS Stream" to { onNavigateToPlayer("hls") },
+                stringResource(R.string.plex_player_button) to { onNavigateToPlexPlayer() },
+                stringResource(R.string.plex_on_deck_button) to { onNavigateToPlexOnDeck() },
+                stringResource(R.string.plex_libraries_button) to { onNavigateToPlexLibraries() },
+                stringResource(R.string.settings) to { onNavigateToSettings() }
+            )
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(20.dp)
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Play MP4, MKV, etc",
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Button(
-                onClick = { onNavigateToPlayer("hls") },
-                modifier = Modifier
-                    .focusRequester(focusRequesters[1])
-                    .onFocusChanged { if (it.isFocused) lastFocusedIndex = 1 }
-                    .width(360.dp)
-                    .height(56.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Play HLS Stream",
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Button(
-                onClick = onNavigateToPlexPlayer,
-                modifier = Modifier
-                    .focusRequester(focusRequesters[2])
-                    .onFocusChanged { if (it.isFocused) lastFocusedIndex = 2 }
-                    .width(360.dp)
-                    .height(56.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.plex_player_button),
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Button(
-                onClick = onNavigateToPlexOnDeck,
-                modifier = Modifier
-                    .focusRequester(focusRequesters[3])
-                    .onFocusChanged { if (it.isFocused) lastFocusedIndex = 3 }
-                    .width(360.dp)
-                    .height(56.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.plex_on_deck_button),
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Button(
-                onClick = onNavigateToPlexLibraries,
-                modifier = Modifier
-                    .focusRequester(focusRequesters[4])
-                    .onFocusChanged { if (it.isFocused) lastFocusedIndex = 4 }
-                    .width(360.dp)
-                    .height(56.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.plex_libraries_button),
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Center
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Button(
-                onClick = onNavigateToSettings,
-                modifier = Modifier
-                    .focusRequester(focusRequesters[5])
-                    .onFocusChanged { if (it.isFocused) lastFocusedIndex = 5 }
-                    .width(360.dp)
-                    .height(56.dp)
-            ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = stringResource(R.string.settings),
-                        style = MaterialTheme.typography.titleMedium,
-                        textAlign = TextAlign.Center
-                    )
+                menuItems.chunked(2).forEachIndexed { rowIndex, rowItems ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        rowItems.forEachIndexed { columnIndex, item ->
+                            Button(
+                                onClick = item.second,
+                                modifier = Modifier
+                                    .focusRequester(focusRequesters[rowIndex * 2 + columnIndex])
+                                    .onFocusChanged {
+                                        if (it.isFocused) lastFocusedIndex = rowIndex * 2 + columnIndex
+                                    }
+                                    .width(300.dp)
+                                    .height(56.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = item.first,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

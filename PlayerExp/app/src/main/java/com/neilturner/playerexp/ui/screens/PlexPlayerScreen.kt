@@ -178,35 +178,36 @@ fun PlexPlayerScreen(
                     modifier = modifier
                         .fillMaxSize()
                         .focusRequester(focusRequester)
-                        .playerDpadControls(
-                            onSeekBackward = {
-                                val target = maxOf(0L, player.currentPosition - 10_000L)
-                                Log.d("PlexPlayerScreen", "Seeking -10s from ${player.currentPosition} to $target")
-                                player.seekTo(target)
-                                Toast.makeText(context, "Seek -10s", Toast.LENGTH_SHORT).show()
-                            },
-                            onSeekForward = {
-                                val duration = player.duration
-                                val target = player.currentPosition + 30_000L
-                                val newPosition = if (duration != androidx.media3.common.C.TIME_UNSET && duration > 0L) {
-                                    minOf(duration, target)
-                                } else {
-                                    target
-                                }
-                                Log.d("PlexPlayerScreen", "Seeking +30s from ${player.currentPosition} to $newPosition")
-                                player.seekTo(newPosition)
-                                Toast.makeText(context, "Seek +30s", Toast.LENGTH_SHORT).show()
-                            },
-                            onTogglePlayPause = {
-                                if (player.isPlaying) {
-                                    Log.d("PlexPlayerScreen", "Pausing playback")
-                                    viewModel.pause()
-                                } else {
-                                    Log.d("PlexPlayerScreen", "Resuming playback")
-                                    viewModel.resume()
-                                }
-                            }
-                        )
+                        // TODO: Skip/seek controls commented out — will be replaced by Netflix-style overlay UI
+                // .playerDpadControls(
+                //     onSeekBackward = {
+                //         val target = maxOf(0L, player.currentPosition - 10_000L)
+                //         Log.d("PlexPlayerScreen", "Seeking -10s from ${player.currentPosition} to $target")
+                //         player.seekTo(target)
+                //         Toast.makeText(context, "Seek -10s", Toast.LENGTH_SHORT).show()
+                //     },
+                //     onSeekForward = {
+                //         val duration = player.duration
+                //         val target = player.currentPosition + 30_000L
+                //         val newPosition = if (duration != androidx.media3.common.C.TIME_UNSET && duration > 0L) {
+                //             minOf(duration, target)
+                //         } else {
+                //             target
+                //         }
+                //         Log.d("PlexPlayerScreen", "Seeking +30s from ${player.currentPosition} to $newPosition")
+                //         player.seekTo(newPosition)
+                //         Toast.makeText(context, "Seek +30s", Toast.LENGTH_SHORT).show()
+                //     },
+                //     onTogglePlayPause = {
+                //         if (player.isPlaying) {
+                //             Log.d("PlexPlayerScreen", "Pausing playback")
+                //             viewModel.pause()
+                //         } else {
+                //             Log.d("PlexPlayerScreen", "Resuming playback")
+                //             viewModel.resume()
+                //         }
+                //     }
+                // )
                 )
             } else {
                 Box(
