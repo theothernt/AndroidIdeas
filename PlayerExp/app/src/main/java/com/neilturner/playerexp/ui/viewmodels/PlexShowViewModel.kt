@@ -174,13 +174,11 @@ class PlexShowViewModel(application: Application) : AndroidViewModel(application
                         stillHeightPx = sizes.still.height
                     )
                 }
-
-                val show = details.await()
-                val grouped = groupEpisodesBySeason(episodes.await())
                 // The metadata carries the logo only on servers that put it there; most keep it on
                 // the clearLogos listing instead, and that listing is only worth asking for when the
-                // metadata had none.
-                val logoUrl = show.clearLogoUrl ?: async {
+                // metadata had none. It is started alongside the other two rather than after them so
+                // waiting for it never costs an extra round-trip on the way to painting the screen.
+                val titleArt = async {
                     api.showTitleArt(
                         serverUrl = serverUrl,
                         accountToken = token,
@@ -188,7 +186,11 @@ class PlexShowViewModel(application: Application) : AndroidViewModel(application
                         widthPx = sizes.title.width,
                         heightPx = sizes.title.height
                     )
-                }.await()
+                }
+
+                val show = details.await()
+                val grouped = groupEpisodesBySeason(episodes.await())
+                val logoUrl = show.clearLogoUrl ?: titleArt.await()
                 LoadResult.Authorised(
                     show.copy(
                         seasons = grouped,
