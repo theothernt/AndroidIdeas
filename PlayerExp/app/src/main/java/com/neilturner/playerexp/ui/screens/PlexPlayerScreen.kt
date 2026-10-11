@@ -6,6 +6,8 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.Arrangement
@@ -317,10 +319,13 @@ private fun PlaybackContent(
         AnimatedVisibility(
             visible = controls.isVisible,
             modifier = Modifier.align(Alignment.BottomCenter),
-            enter = fadeIn(animationSpec = tween(CONTROLS_FADE_MILLIS)),
-            // The fade is given a fixed duration so the back-press grace that follows it can be
-            // timed from its end rather than guessed at.
-            exit = fadeOut(animationSpec = tween(CONTROLS_FADE_MILLIS))
+            // The controls rise from the bottom edge, and sink back to it, over the fade's own
+            // fixed duration — one duration for the whole motion, so the back-press grace that
+            // follows it can still be timed from the end of the animation rather than guessed at.
+            enter = fadeIn(animationSpec = tween(CONTROLS_FADE_MILLIS)) +
+                slideInVertically(animationSpec = tween(CONTROLS_FADE_MILLIS)) { height -> height },
+            exit = fadeOut(animationSpec = tween(CONTROLS_FADE_MILLIS)) +
+                slideOutVertically(animationSpec = tween(CONTROLS_FADE_MILLIS)) { height -> height }
         ) {
             PlaybackProgressOverlay(
                 player = player,
