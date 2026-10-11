@@ -278,7 +278,14 @@ private fun PlaybackContent(
         }
     }
 
-    Box(modifier = modifier.playerOverlayControls(controls::reveal)) {
+    // The overlay is read-only information, so it never takes focus: the player box keeps it and
+    // the D-pad keeps revealing the overlay while it is up.
+    Box(
+        modifier = modifier.playerOverlayControls(
+            controlsVisible = controls.isVisible,
+            onRevealControls = controls::reveal
+        )
+    ) {
         Player(
             player = player,
             modifier = Modifier.fillMaxSize(),
@@ -314,7 +321,10 @@ private fun PlaybackContent(
             // timed from its end rather than guessed at.
             exit = fadeOut(animationSpec = tween(CONTROLS_FADE_MILLIS))
         ) {
-            PlaybackProgressOverlay(player = player, title = episodeTitle)
+            PlaybackProgressOverlay(
+                player = player,
+                title = episodeTitle
+            )
         }
     }
 }
@@ -425,7 +435,7 @@ private fun PlaybackProgressOverlay(
             .padding(horizontal = OVERLAY_HORIZONTAL_PADDING, vertical = OVERLAY_VERTICAL_PADDING),
         contentAlignment = Alignment.BottomStart
     ) {
-        Column {
+        Column(modifier = Modifier.fillMaxWidth()) {
             if (!title.isNullOrBlank()) {
                 Text(
                     text = title,
@@ -527,8 +537,9 @@ private const val BACK_GRACE_MILLIS = 300
 /** How often the overlay samples the play position while it is on screen. */
 private const val POSITION_POLL_INTERVAL_MILLIS = 250L
 
-/** Room for the scrim to fade out over the video rather than cut a hard edge. */
-private val OVERLAY_SCRIM_HEIGHT = 180.dp
+/** Room for the scrim to fade out over the video rather than cut a hard edge. It also has to hold
+ * the whole bottom bar inside its vertical padding. */
+private val OVERLAY_SCRIM_HEIGHT = 176.dp
 private val OVERLAY_HORIZONTAL_PADDING = 48.dp
 private val OVERLAY_VERTICAL_PADDING = 48.dp
 private val OVERLAY_TITLE_GAP = 12.dp

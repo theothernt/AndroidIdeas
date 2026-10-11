@@ -11,10 +11,20 @@ import androidx.compose.ui.input.key.type
 /**
  * Hands every D-pad and media-remote press on the player to [onRevealControls], which is what
  * shows the hidden progress overlay. Back and Escape are left alone so the screen can still be
- * left the usual way, and every other key is consumed: the player has nothing to focus, so
- * directional presses should reveal the overlay rather than wander.
+ * left the usual way.
+ *
+ * While the overlay is hidden a press is consumed: the player has nothing to focus, so a
+ * directional press should reveal the overlay rather than wander. Once it is up the press only
+ * counts as activity, which restarts the auto-hide timer, and is left unconsumed.
+ *
+ * A Back press while the overlay is visible is not handled here: the overlay draws nothing
+ * focusable, so the press reaches the screen's back handler, which dismisses the overlay instead
+ * of leaving playback.
  */
-fun Modifier.playerOverlayControls(onRevealControls: () -> Unit): Modifier = this
+fun Modifier.playerOverlayControls(
+    controlsVisible: Boolean,
+    onRevealControls: () -> Unit
+): Modifier = this
     .focusable()
     .onKeyEvent { keyEvent ->
         if (keyEvent.type != KeyEventType.KeyDown) {
@@ -23,7 +33,7 @@ fun Modifier.playerOverlayControls(onRevealControls: () -> Unit): Modifier = thi
             Key.Back, Key.Escape -> false
             else -> {
                 onRevealControls()
-                true
+                !controlsVisible
             }
         }
     }
