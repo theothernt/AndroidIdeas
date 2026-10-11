@@ -19,6 +19,7 @@
     <string name="plex_no_episodes">No TV show episodes found on your Plex server</string>
     <string name="plex_player_error">Could not load Plex episode: %1$s</string>
     <string name="plex_loading_episode">Finding random episode…</string>
+    <string name="plex_episode">Plex Episode</string>
     <string name="plex_on_deck_button">Latest TV and Movies</string>
     <string name="plex_on_deck_continue_watching">Continue Watching</string>
     <string name="plex_on_deck_latest_episodes">Latest TV Episodes</string>

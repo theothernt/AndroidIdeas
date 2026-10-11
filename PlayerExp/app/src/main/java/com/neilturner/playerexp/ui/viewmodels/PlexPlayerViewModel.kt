@@ -43,12 +43,28 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.util.UUID
 
+/**
+ * What is playing, in the pieces the overlay lays out: the show, the episode, and where the
+ * episode sits in its season.
+ *
+ * Each piece stands on its own rather than arriving pre-joined because the overlay shows them on
+ * separate lines, and because [PlexEpisode] fields go missing for real items — a special has no
+ * season number, and Plex guarantees none of the titles.
+ */
+@Immutable
+data class PlexPlaybackMetadata(
+    val showTitle: String?,
+    val episodeTitle: String?,
+    val seasonNumber: Int?,
+    val episodeNumber: Int?
+)
+
 @Immutable
 sealed interface PlexPlayerUiState {
     data object NotAuthorised : PlexPlayerUiState
     data object Loading : PlexPlayerUiState
     data class Ready(
-        val episodeTitle: String,
+        val metadata: PlexPlaybackMetadata,
         val playbackStatus: PlexPlaybackStatus? = null
     ) : PlexPlayerUiState
     data class Error(val message: String) : PlexPlayerUiState
@@ -189,11 +205,17 @@ class PlexPlayerViewModel(
             lastKnownPositionMillis = 0L
             lastKnownDurationMillis = 0L
 
-            val displayTitle = title
-                ?: listOfNotNull(selectedEpisode.showTitle, selectedEpisode.episodeTitle)
-                    .joinToString(" - ")
-                    .ifEmpty { "Plex Episode" }
-            _uiState.value = PlexPlayerUiState.Ready(displayTitle)
+            // The card's title stands in for an episode Plex gave no title of its own; everything
+            // else comes from the item, which is fetched before playback starts, so the overlay
+            // always has the full set of pieces to lay out.
+            _uiState.value = PlexPlayerUiState.Ready(
+                PlexPlaybackMetadata(
+                    showTitle = selectedEpisode.showTitle,
+                    episodeTitle = selectedEpisode.episodeTitle ?: title,
+                    seasonNumber = selectedEpisode.seasonNumber,
+                    episodeNumber = selectedEpisode.episodeNumber
+                )
+            )
             val prepareStartedAt = SystemClock.elapsedRealtime()
             p.addListener(playbackListener(playbackPlan.playbackStatus, prepareStartedAt))
 

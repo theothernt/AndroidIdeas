@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
+import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.playerexp.ui.viewmodels.HomeViewModel
@@ -120,17 +121,21 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        rowItems.forEachIndexed { columnIndex, item ->
-                            Button(
-                                onClick = item.second,
-                                modifier = Modifier
-                                    .focusRequester(focusRequesters[rowIndex * 2 + columnIndex])
-                                    .onFocusChanged {
-                                        if (it.isFocused) lastFocusedIndex = rowIndex * 2 + columnIndex
-                                    }
-                                    .width(300.dp)
-                                    .height(56.dp)
-                            ) {
+                rowItems.forEachIndexed { columnIndex, item ->
+                    Button(
+                        onClick = item.second,
+                        modifier = Modifier
+                            .focusRequester(focusRequesters[rowIndex * 2 + columnIndex])
+                            .onFocusChanged {
+                                if (it.isFocused) lastFocusedIndex = rowIndex * 2 + columnIndex
+                            }
+                            .width(300.dp)
+                            .height(56.dp),
+                        scale = ButtonDefaults.scale(
+                            focusedScale = FOCUSED_MENU_BUTTON_SCALE,
+                            pressedScale = PRESSED_MENU_BUTTON_SCALE
+                        )
+                    ) {
                                 Box(
                                     modifier = Modifier.fillMaxSize(),
                                     contentAlignment = Alignment.Center
@@ -149,3 +154,10 @@ fun HomeScreen(
         }
     }
 }
+
+/**
+ * The TV library grows a focused button by 1.1x, which is too much for a home menu that fits on
+ * screen; the cards and chips elsewhere in the app grow less, and these match them.
+ */
+private const val FOCUSED_MENU_BUTTON_SCALE = 1.04f
+private const val PRESSED_MENU_BUTTON_SCALE = 0.97f

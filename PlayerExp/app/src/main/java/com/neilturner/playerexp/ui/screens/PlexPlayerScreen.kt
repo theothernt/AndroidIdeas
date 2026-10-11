@@ -57,6 +57,7 @@ import com.neilturner.playerexp.data.plex.PlexPlaybackStatus
 import com.neilturner.playerexp.data.plex.PlexStreamPlayback
 import com.neilturner.playerexp.ui.modifiers.playerOverlayControls
 import com.neilturner.playerexp.ui.theme.PlexAmber
+import com.neilturner.playerexp.ui.viewmodels.PlexPlaybackMetadata
 import com.neilturner.playerexp.ui.viewmodels.PlexPlayerUiState
 import com.neilturner.playerexp.ui.viewmodels.PlexPlayerViewModel
 import kotlinx.coroutines.delay
@@ -189,7 +190,7 @@ fun PlexPlayerScreen(
                 PlaybackContent(
                     player = player,
                     playbackStatus = state.playbackStatus,
-                    episodeTitle = state.episodeTitle,
+                    metadata = state.metadata,
                     controls = controls,
                     modifier = modifier
                         .fillMaxSize()
@@ -254,7 +255,7 @@ fun PlexPlayerScreen(
 private fun PlaybackContent(
     player: androidx.media3.common.Player,
     playbackStatus: PlexPlaybackStatus?,
-    episodeTitle: String?,
+    metadata: PlexPlaybackMetadata,
     controls: PlaybackControlsState,
     modifier: Modifier = Modifier
 ) {
@@ -323,7 +324,7 @@ private fun PlaybackContent(
         ) {
             PlaybackProgressOverlay(
                 player = player,
-                title = episodeTitle
+                metadata = metadata
             )
         }
     }
@@ -396,7 +397,7 @@ private fun rememberPlaybackControlsState() = remember { PlaybackControlsState()
 @Composable
 private fun PlaybackProgressOverlay(
     player: androidx.media3.common.Player,
-    title: String?,
+    metadata: PlexPlaybackMetadata,
     modifier: Modifier = Modifier
 ) {
     var positionMillis by remember { mutableLongStateOf(player.currentPosition.coerceAtLeast(0L)) }
@@ -436,11 +437,26 @@ private fun PlaybackProgressOverlay(
         contentAlignment = Alignment.BottomStart
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            if (!title.isNullOrBlank()) {
+            val showLine = metadata.showTitle?.takeIf { it.isNotBlank() }
+            val episodeSubtitle = overlayEpisodeLine(metadata)
+            // An item Plex named nothing at all still gets a line, the way the plain title did.
+            val fallbackLine = stringResource(R.string.plex_episode)
+                .takeIf { showLine == null && episodeSubtitle == null }
+            if (showLine != null || fallbackLine != null) {
                 Text(
-                    text = title,
+                    text = showLine ?: fallbackLine.orEmpty(),
                     style = MaterialTheme.typography.headlineSmall,
                     color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(OVERLAY_TITLE_GAP))
+            }
+            if (episodeSubtitle != null) {
+                Text(
+                    text = episodeSubtitle,
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = Color.White.copy(alpha = 0.9f),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -478,6 +494,24 @@ private fun PlaybackProgressOverlay(
                 }
             }
         }
+    }
+}
+
+/**
+ * The line under the show name: "S2 · E5 — 8:00 AM", read as where the episode sits in its
+ * season and then what it is called. Every piece is optional, so a special with no season number
+ * is "E5 — Title", a film with neither is just its title, and nothing at all is no line.
+ */
+internal fun overlayEpisodeLine(metadata: PlexPlaybackMetadata): String? {
+    val title = metadata.episodeTitle?.takeIf { it.isNotBlank() }
+    val positions = listOfNotNull(
+        metadata.seasonNumber?.let { "S$it" },
+        metadata.episodeNumber?.let { "E$it" }
+    ).joinToString(" · ").ifEmpty { null }
+    return when {
+        positions != null && title != null -> "$positions — $title"
+        positions != null -> positions
+        else -> title
     }
 }
 
@@ -538,8 +572,9 @@ private const val BACK_GRACE_MILLIS = 300
 private const val POSITION_POLL_INTERVAL_MILLIS = 250L
 
 /** Room for the scrim to fade out over the video rather than cut a hard edge. It also has to hold
- * the whole bottom bar inside its vertical padding. */
-private val OVERLAY_SCRIM_HEIGHT = 176.dp
+ * the whole bottom bar — show name, episode line, times and the bar — inside its vertical
+ * padding. */
+private val OVERLAY_SCRIM_HEIGHT = 216.dp
 private val OVERLAY_HORIZONTAL_PADDING = 48.dp
 private val OVERLAY_VERTICAL_PADDING = 48.dp
 private val OVERLAY_TITLE_GAP = 12.dp
