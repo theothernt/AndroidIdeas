@@ -259,6 +259,9 @@ class PlexOnDeckViewModel(application: Application) : AndroidViewModel(applicati
      * Redraws one card's bar from a play position rather than refetching the row, so the bar keeps up
      * with playback in another client. Returns false when the row does not hold that item, which is
      * the caller's cue that the row membership itself may have moved.
+     *
+     * The bar only, and never the order: reordering here against what the server would say makes the
+     * item jump to the front on the way back from playback and snap back on the refresh that follows.
      */
     private fun applyProgress(event: PlexLibraryEvent.ProgressChanged): Boolean {
         val current = _uiState.value as? PlexOnDeckUiState.Success ?: return false
@@ -274,16 +277,6 @@ class PlexOnDeckViewModel(application: Application) : AndroidViewModel(applicati
         if (patched == item) return true
         items[index] = patched
         Log.d(LOG_TAG, "Progress for ${event.ratingKey}: ${patched.viewOffset}/${patched.duration}")
-
-        // Plex orders On Deck by most recently viewed, so picking an episode up again moves it to
-        // the front of the row. Doing it here means the card the user just started is where Plex
-        // would put it, instead of waiting for the next fetch; the periodic revalidation settles any
-        // disagreement with the server's own ordering.
-        if (index > 0) {
-            items.removeAt(index)
-            items.add(0, patched)
-            Log.d(LOG_TAG, "Moved ${event.ratingKey} to the front of the row")
-        }
 
         val updated = current.shelves.copy(continueWatching = items)
         _uiState.value = PlexOnDeckUiState.Success(updated)
