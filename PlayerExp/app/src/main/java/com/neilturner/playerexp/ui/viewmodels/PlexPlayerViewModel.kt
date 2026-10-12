@@ -233,7 +233,9 @@ class PlexPlayerViewModel(
                 sessionIdentifier = sessionIdentifier
             )
             stoppedSessionIdentifier = null
-            lastKnownPositionMillis = 0L
+            // The resume point seeds the timeline so the first progress report tells Plex the
+            // position playback actually opened at, not the start of the file.
+            lastKnownPositionMillis = selectedEpisode.viewOffset
             lastKnownDurationMillis = 0L
 
             // The card's title stands in for an episode Plex gave no title of its own; everything
@@ -253,6 +255,13 @@ class PlexPlayerViewModel(
             p.addListener(playbackListener(playbackPlan.playbackStatus, prepareStartedAt))
 
             p.setMediaItem(MediaItem.fromUri(playbackPlan.url))
+            // A seek set before prepare is where playback opens: ExoPlayer holds it as the start
+            // position, so playWhenReady begins mid-episode rather than at the first frame.
+            val resumeAtMillis = selectedEpisode.viewOffset
+            if (resumeAtMillis > 0L) {
+                p.seekTo(resumeAtMillis)
+                Log.d(PLAYBACK_LOG_TAG, "Resuming at ${resumeAtMillis}ms")
+            }
             Log.d(PLAYBACK_LOG_TAG, "Preparing ${playbackPlan::class.simpleName} media source")
             p.prepare()
             p.playWhenReady = true

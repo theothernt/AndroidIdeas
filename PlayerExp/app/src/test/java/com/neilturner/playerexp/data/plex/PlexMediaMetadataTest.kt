@@ -20,9 +20,12 @@ class PlexMediaMetadataTest {
                 "type": "episode",
                 "title": "8:00 AM",
                 "grandparentTitle": "Slow Horses",
+                "viewOffset": 600000,
+                "UserState": { "viewOffset": 600000, "viewCount": 1 },
                 "Media": [
                   {
                     "id": 1,
+                    "duration": 2700000,
                     "width": 3840,
                     "height": 2160,
                     "videoResolution": "uhd",
@@ -57,6 +60,7 @@ class PlexMediaMetadataTest {
 
         val media = response.mediaContainer?.metadata?.firstOrNull()?.media?.firstOrNull()
 
+        assertEquals(2_700_000L, media?.duration)
         assertEquals(3840, media?.width)
         assertEquals(2160, media?.height)
         assertEquals("uhd", media?.videoResolution)
@@ -79,6 +83,16 @@ class PlexMediaMetadataTest {
         assertEquals("23.976", videoStream?.frameRate)
         assertEquals("eac3", audioStream?.codec)
         assertNull(audioStream?.width)
+    }
+
+    @Test
+    fun `the resume position is captured from the episode metadata`() {
+        val response = json.decodeFromString<PlexMediaContainerResponse>(metadataJson)
+
+        val metadata = response.mediaContainer?.metadata?.firstOrNull()
+
+        assertEquals(600_000L, metadata?.viewOffset)
+        assertEquals(600_000L, metadata?.userState?.viewOffset)
     }
 
     @Test

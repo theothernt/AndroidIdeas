@@ -150,6 +150,12 @@ data class PlexEpisodeMetadata(
     val thumb: String? = null,
     val grandparentThumb: String? = null,
     val addedAt: Long? = null,
+    /**
+     * How far through the item the account stopped watching, millis from the start — the resume
+     * position playback should open at. Absent on an unwatched item.
+     */
+    val viewOffset: Long? = null,
+    @SerialName("UserState") val userState: PlexItemUserState? = null,
     @SerialName("Media") val media: List<PlexMediaItem>? = null
 )
 
@@ -176,12 +182,12 @@ private data class PlexOnDeckMetadata(
     val grandparentThumb: String? = null,
     val viewOffset: Long? = null,
     val duration: Long? = null,
-    @SerialName("UserState") val userState: PlexOnDeckUserState? = null
+    @SerialName("UserState") val userState: PlexItemUserState? = null
 )
 
 /** Plex reports per-user progress here on current servers; older ones only set the metadata fields. */
 @Serializable
-private data class PlexOnDeckUserState(
+data class PlexItemUserState(
     val viewOffset: Long? = null,
     val duration: Long? = null,
     val viewCount: Int? = null,
@@ -195,12 +201,15 @@ private data class PlexOnDeckUserState(
  * [videoFrameRate] its shorthand for it ("24p", "50p"), both what Plex's own clients label; the
  * numbers the file actually carries are [width] and [height]. The streams under the part are the
  * same detail per-stream, where [PlexMediaStream.frameRate] is exact ("23.976" rather than "24p").
- * Nothing reads these yet — they are kept because the response already has them, and anything that
- * wants to label a stream (or pick a version) should not have to re-fetch to learn them.
+ * [duration] is this version's length in millis, which is what a resume position is clamped
+ * against. Nothing reads these yet — they are kept because the response already has them, and
+ * anything that wants to label a stream (or pick a version) should not have to re-fetch to learn
+ * them.
  */
 @Serializable
 data class PlexMediaItem(
     @SerialName("Part") val part: List<PlexMediaPart>? = null,
+    val duration: Long? = null,
     val width: Int? = null,
     val height: Int? = null,
     val videoResolution: String? = null,
@@ -230,8 +239,30 @@ data class PlexEpisode(
     val episodeTitle: String?,
     val seasonNumber: Int?,
     val episodeNumber: Int?,
-    val partKey: String
+    val partKey: String,
+    /** Where playback opens, millis from the start; 0 for an item that starts fresh. */
+    val viewOffset: Long = 0L
 )
+
+/**
+ * Where playback should resume, in millis from the start.
+ *
+ * Plex puts the stop position at the top of the metadata, and older servers only inside the user
+ * state block, so both are tried. A position is only worth resuming when it lands part-way
+ * through: at or past the end means the item is finished, and one the server gave no duration for
+ * cannot be told from a finished one — both start from the beginning rather than jumping to the
+ * end.
+ */
+internal fun resolveViewOffset(
+    viewOffset: Long?,
+    userState: PlexItemUserState?,
+    duration: Long?
+): Long {
+    val offset = viewOffset ?: userState?.viewOffset ?: return 0L
+    if (offset <= 0L) return 0L
+    if (duration != null && duration > 0L && offset >= duration) return 0L
+    return offset
+}
 
 sealed interface PlexPlaybackPlan {
     val url: String
@@ -822,6 +853,7 @@ class PlexApi(private val clientIdentifier: String) {
         }.body<PlexMediaContainerResponse>()
 
         return response.mediaContainer?.metadata.orEmpty().firstNotNullOfOrNull { item ->
+            val media = item.media.orEmpty().firstOrNull()
             val partKey = item.media.orEmpty().firstNotNullOfOrNull { mediaItem ->
                 mediaItem.part.orEmpty().firstNotNullOfOrNull { it.key }
             } ?: return@firstNotNullOfOrNull null
@@ -832,7 +864,8 @@ class PlexApi(private val clientIdentifier: String) {
                 episodeTitle = item.title,
                 seasonNumber = item.parentIndex,
                 episodeNumber = item.index,
-                partKey = partKey
+                partKey = partKey,
+                viewOffset = resolveViewOffset(item.viewOffset, item.userState, media?.duration)
             )
         }
     }
