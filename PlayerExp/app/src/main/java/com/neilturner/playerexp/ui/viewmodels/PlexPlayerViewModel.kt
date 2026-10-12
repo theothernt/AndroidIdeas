@@ -32,6 +32,8 @@ import com.neilturner.playerexp.data.plex.PlexApi
 import com.neilturner.playerexp.data.plex.AndroidPlexCapabilityProbe
 import com.neilturner.playerexp.data.plex.PlexPlaybackProfile
 import com.neilturner.playerexp.data.plex.PlexPlaybackStatus
+import com.neilturner.playerexp.data.plex.PlexStreamMode
+import com.neilturner.playerexp.data.plex.PlexStreamPlayback
 import com.neilturner.playerexp.data.plex.SessionCleanup
 import com.neilturner.playerexp.data.plex.SessionCleanupManager
 import okhttp3.OkHttpClient
@@ -59,12 +61,41 @@ data class PlexPlaybackMetadata(
     val episodeNumber: Int?
 )
 
+/**
+ * What Plex decided to do with each stream, shown as a notice before playback starts.
+ *
+ * The decision is in hand before the player is prepared, so a transcode can be announced while
+ * the spinner is still up, rather than only after the wait it explains. Each stream stands alone
+ * because Plex commonly direct-plays video while transcoding audio — an EAC3 track on a device
+ * whose profile excludes it, for instance.
+ */
+@Immutable
+data class TranscodeNotice(
+    val video: PlexStreamPlayback,
+    val audio: PlexStreamPlayback
+) {
+    val videoTranscoded: Boolean get() = video.mode == PlexStreamMode.Transcoded
+    val audioTranscoded: Boolean get() = audio.mode == PlexStreamMode.Transcoded
+
+    companion object {
+        /**
+         * The notice Plex's decision calls for, or null when both streams direct-play and there
+         * is nothing to explain.
+         */
+        internal fun fromPlaybackStatus(status: PlexPlaybackStatus): TranscodeNotice? =
+            TranscodeNotice(status.video, status.audio).takeIf { notice ->
+                notice.videoTranscoded || notice.audioTranscoded
+            }
+    }
+}
+
 @Immutable
 sealed interface PlexPlayerUiState {
     data object NotAuthorised : PlexPlayerUiState
     data object Loading : PlexPlayerUiState
     data class Ready(
         val metadata: PlexPlaybackMetadata,
+        val transcodeNotice: TranscodeNotice? = null,
         val playbackStatus: PlexPlaybackStatus? = null
     ) : PlexPlayerUiState
     data class Error(val message: String) : PlexPlayerUiState
@@ -207,14 +238,16 @@ class PlexPlayerViewModel(
 
             // The card's title stands in for an episode Plex gave no title of its own; everything
             // else comes from the item, which is fetched before playback starts, so the overlay
-            // always has the full set of pieces to lay out.
+            // always has the full set of pieces to lay out. The transcode notice comes from the
+            // decision, which is already in hand, and stays until the first frame replaces it.
             _uiState.value = PlexPlayerUiState.Ready(
-                PlexPlaybackMetadata(
+                metadata = PlexPlaybackMetadata(
                     showTitle = selectedEpisode.showTitle,
                     episodeTitle = selectedEpisode.episodeTitle ?: title,
                     seasonNumber = selectedEpisode.seasonNumber,
                     episodeNumber = selectedEpisode.episodeNumber
-                )
+                ),
+                transcodeNotice = TranscodeNotice.fromPlaybackStatus(playbackPlan.playbackStatus)
             )
             val prepareStartedAt = SystemClock.elapsedRealtime()
             p.addListener(playbackListener(playbackPlan.playbackStatus, prepareStartedAt))

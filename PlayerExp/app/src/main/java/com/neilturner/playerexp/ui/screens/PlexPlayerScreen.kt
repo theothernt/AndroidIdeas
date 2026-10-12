@@ -56,12 +56,13 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.playerexp.R
 import com.neilturner.playerexp.data.plex.PlexPlaybackStatus
-import com.neilturner.playerexp.data.plex.PlexStreamPlayback
+import com.neilturner.playerexp.data.plex.PlexStreamMode
 import com.neilturner.playerexp.ui.modifiers.playerOverlayControls
 import com.neilturner.playerexp.ui.theme.PlexAmber
 import com.neilturner.playerexp.ui.viewmodels.PlexPlaybackMetadata
 import com.neilturner.playerexp.ui.viewmodels.PlexPlayerUiState
 import com.neilturner.playerexp.ui.viewmodels.PlexPlayerViewModel
+import com.neilturner.playerexp.ui.viewmodels.TranscodeNotice
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import java.util.Locale
@@ -192,6 +193,7 @@ fun PlexPlayerScreen(
                 PlaybackContent(
                     player = player,
                     playbackStatus = state.playbackStatus,
+                    transcodeNotice = state.transcodeNotice,
                     metadata = state.metadata,
                     controls = controls,
                     modifier = modifier
@@ -257,19 +259,11 @@ fun PlexPlayerScreen(
 private fun PlaybackContent(
     player: androidx.media3.common.Player,
     playbackStatus: PlexPlaybackStatus?,
+    transcodeNotice: TranscodeNotice?,
     metadata: PlexPlaybackMetadata,
     controls: PlaybackControlsState,
     modifier: Modifier = Modifier
 ) {
-    var showConnectionStatus by remember { mutableStateOf(false) }
-    LaunchedEffect(playbackStatus) {
-        if (playbackStatus != null) {
-            showConnectionStatus = true
-            delay(CONNECTION_STATUS_DURATION_MILLIS)
-            showConnectionStatus = false
-        }
-    }
-
     // The video plays unobstructed. Any D-pad press reveals how far into the episode you are, and
     // the overlay hides itself a few seconds after the last one, so glancing costs a single key.
     // The timer is keyed on a press count rather than the visibility flag so a second press while
@@ -300,21 +294,29 @@ private fun PlaybackContent(
                         .background(Color.Black),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.primary
-                    )
+                    // While the transcode notice is up it carries the spinner of its own,
+                    // so the shutter stays a plain black box and nothing spins twice.
+                    if (transcodeNotice == null || playbackStatus != null) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
             }
         )
+        // A transcode explains itself while the user waits for it: centred on the same black
+        // surface as the spinner, in place until the video starts. The first frame brings
+        // playbackStatus, which takes the notice down.
         AnimatedVisibility(
-            visible = showConnectionStatus && playbackStatus != null,
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(bottom = CONNECTION_STATUS_BOTTOM_MARGIN),
-            enter = fadeIn(),
-            exit = fadeOut()
+            visible = transcodeNotice != null && playbackStatus == null,
+            modifier = Modifier.align(Alignment.Center),
+            enter = fadeIn(animationSpec = tween(CONTROLS_FADE_MILLIS)),
+            exit = fadeOut(animationSpec = tween(CONTROLS_FADE_MILLIS))
         ) {
-            ConnectionStatusOverlay(playbackStatus = requireNotNull(playbackStatus))
+            val notice = transcodeNotice
+            if (notice != null) {
+                TranscodeNoticeContent(notice = notice)
+            }
         }
         AnimatedVisibility(
             visible = controls.isVisible,
@@ -520,6 +522,63 @@ internal fun overlayEpisodeLine(metadata: PlexPlaybackMetadata): String? {
     }
 }
 
+/**
+ * The pre-playback notice: a plain-language line about the wait, its technical detail, and the
+ * spinner they sit above — the one the black shutter leaves to the notice while it is up.
+ */
+@Composable
+private fun TranscodeNoticeContent(notice: TranscodeNotice, modifier: Modifier = Modifier) {
+    val headline = stringResource(
+        when {
+            notice.videoTranscoded && notice.audioTranscoded -> R.string.plex_transcoding_video_and_audio
+            notice.videoTranscoded -> R.string.plex_transcoding_video
+            else -> R.string.plex_transcoding_audio
+        }
+    )
+    Column(
+        modifier = modifier.padding(horizontal = NOTICE_HORIZONTAL_PADDING),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = headline,
+            style = MaterialTheme.typography.headlineSmall,
+            color = Color.White,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.height(NOTICE_TEXT_GAP))
+        Text(
+            text = transcodeDetailLine(notice),
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.White.copy(alpha = 0.9f),
+            textAlign = TextAlign.Center,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+        Spacer(modifier = Modifier.height(NOTICE_SPINNER_GAP))
+        CircularProgressIndicator(
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+/**
+ * The technical line under the headline, in the words the connection-status toast uses:
+ * "Video Transcoded · EAC3 · Audio Direct · H264". The codec is dropped when Plex reports none
+ * for a stream, so the line stays short on decisions that leave it out.
+ */
+internal fun transcodeDetailLine(notice: TranscodeNotice): String =
+    listOfNotNull(
+        transcodeStreamSegment("Video", notice.video.mode, notice.video.codec),
+        transcodeStreamSegment("Audio", notice.audio.mode, notice.audio.codec)
+    ).joinToString(TRANSCODE_SEGMENT_SEPARATOR)
+
+private fun transcodeStreamSegment(label: String, mode: PlexStreamMode, codec: String?): String {
+    val streamCodec = codec?.uppercase()?.let { " · $it" }.orEmpty()
+    return "$label ${mode.displayName}$streamCodec"
+}
+
 /** mm:ss, or h:mm:ss once the value runs past an hour. Negative values keep their minus sign. */
 private fun formatPlaybackTime(millis: Long): String {
     val roundedSeconds = (millis + 500) / 1000
@@ -536,36 +595,8 @@ private fun formatPlaybackTime(millis: Long): String {
     }
 }
 
-@Composable
-private fun ConnectionStatusOverlay(playbackStatus: PlexPlaybackStatus) {
-    Column(
-        modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(MaterialTheme.colorScheme.inverseSurface.copy(alpha = 0.92f))
-            .padding(horizontal = 20.dp, vertical = 12.dp)
-    ) {
-        ConnectionStatusRow("Video", playbackStatus.video)
-        ConnectionStatusRow("Audio", playbackStatus.audio)
-    }
-}
-
-@Composable
-private fun ConnectionStatusRow(label: String, status: PlexStreamPlayback) {
-    val codec = status.codec?.uppercase()?.let { " · $it" }.orEmpty()
-    Text(
-        text = "$label  ${status.mode.displayName}$codec",
-        style = MaterialTheme.typography.bodyLarge,
-        color = MaterialTheme.colorScheme.inverseOnSurface
-    )
-}
-
-private const val CONNECTION_STATUS_DURATION_MILLIS = 4_000L
-
-/** Margin above the very bottom, which keeps the start-up status above the progress overlay. */
-private val CONNECTION_STATUS_BOTTOM_MARGIN = 56.dp
-
-/** How long the progress overlay stays up after the last D-pad press. */
-private const val CONTROLS_AUTO_HIDE_MILLIS = 4_000L
+/** How often the overlay samples the play position while it is on screen. */
+private const val POSITION_POLL_INTERVAL_MILLIS = 250L
 
 /** How long the overlay takes to fade in and out. The back grace is timed from the fade's end. */
 private const val CONTROLS_FADE_MILLIS = 300
@@ -573,8 +604,8 @@ private const val CONTROLS_FADE_MILLIS = 300
 /** How long after the fade-out finishes a Back press is still read as "dismiss the overlay". */
 private const val BACK_GRACE_MILLIS = 300
 
-/** How often the overlay samples the play position while it is on screen. */
-private const val POSITION_POLL_INTERVAL_MILLIS = 250L
+/** How long the progress overlay stays up after the last D-pad press. */
+private const val CONTROLS_AUTO_HIDE_MILLIS = 4_000L
 
 /** Room for the scrim to fade out over the video rather than cut a hard edge. It also has to hold
  * the whole bottom bar — show name, episode line, times and the bar — inside its vertical
@@ -590,3 +621,14 @@ private val OVERLAY_PROGRESS_SHAPE = RoundedCornerShape(OVERLAY_PROGRESS_RADIUS)
 
 /** Matches the poster cards, so the bar moves the same way everywhere in the app. */
 private const val PLAYBACK_PROGRESS_ANIMATION_MILLIS = 350
+
+/** Side padding for the notice, so its lines stay clear of the screen edge on small displays. */
+private val NOTICE_HORIZONTAL_PADDING = 48.dp
+
+/** Gap between the notice's plain-language line and its technical one. */
+private val NOTICE_TEXT_GAP = 8.dp
+
+/** Gap between the notice's text and its spinner. */
+private val NOTICE_SPINNER_GAP = 24.dp
+
+private const val TRANSCODE_SEGMENT_SEPARATOR = " · "
