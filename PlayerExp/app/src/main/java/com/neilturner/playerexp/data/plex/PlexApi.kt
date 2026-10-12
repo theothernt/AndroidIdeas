@@ -188,15 +188,40 @@ private data class PlexOnDeckUserState(
     val played: Boolean? = null
 )
 
+/**
+ * One Media version of an item.
+ *
+ * [videoResolution] is Plex's own bucket for the height ("sd", "hd", "uhd") and
+ * [videoFrameRate] its shorthand for it ("24p", "50p"), both what Plex's own clients label; the
+ * numbers the file actually carries are [width] and [height]. The streams under the part are the
+ * same detail per-stream, where [PlexMediaStream.frameRate] is exact ("23.976" rather than "24p").
+ * Nothing reads these yet — they are kept because the response already has them, and anything that
+ * wants to label a stream (or pick a version) should not have to re-fetch to learn them.
+ */
 @Serializable
 data class PlexMediaItem(
-    @SerialName("Part") val part: List<PlexMediaPart>? = null
+    @SerialName("Part") val part: List<PlexMediaPart>? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val videoResolution: String? = null,
+    val videoFrameRate: String? = null
 )
 
 @Serializable
 data class PlexMediaPart(
     val id: Long? = null,
-    val key: String? = null
+    val key: String? = null,
+    @SerialName("Stream") val stream: List<PlexMediaStream>? = null
+)
+
+/** One stream on a part: [streamType] 1 is video, 2 is audio, as Plex numbers them. */
+@Serializable
+data class PlexMediaStream(
+    val streamType: Int? = null,
+    val codec: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val frameRate: String? = null
 )
 
 data class PlexEpisode(
