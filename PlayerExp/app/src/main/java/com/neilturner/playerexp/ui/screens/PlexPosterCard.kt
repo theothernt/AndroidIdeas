@@ -166,15 +166,20 @@ fun PlexPosterRow(
                 // One card type per row, so the lazy layout reuses a card's composition as the
                 // user scrolls rather than tearing each one down as it leaves.
                 contentType = contentType
-            ) { index ->
-                // The requester has to sit on the focusable card itself, so it is handed down
-                // rather than applied to a wrapper here.
-                val reportFocus = Modifier.onFocusChanged { if (it.isFocused) onItemFocused(index) }
-                content(
-                    index,
-                    if (index == focusIndex) reportFocus.focusRequester(focusRequester) else reportFocus
-                )
+        ) { index ->
+            // The requester has to sit on the focusable card itself, so it is handed down
+            // rather than applied to a wrapper here.
+            val reportFocus = Modifier.onFocusChanged { if (it.isFocused) onItemFocused(index) }
+            val focusClaim = if (index == focusIndex) {
+                reportFocus.focusRequester(focusRequester)
+            } else {
+                reportFocus
             }
+            // animateItem leads the chain so the whole card, focus border and all, travels as
+            // one piece when the row reorders, instead of only its content sliding under the
+            // border. Placement and fades are left on the defaults.
+            content(index, Modifier.animateItem().then(focusClaim))
+        }
         }
     }
 }
