@@ -90,6 +90,10 @@ private const val GRID_COLUMNS = 3
 private const val GRID_SPACING_DP = 25
 private const val GRID_TOP_GAP_DP = 16
 private const val GRID_EDGE_PADDING_DP = 16
+
+// The reveal stagger is a real performance control, not decoration - see the note in
+// VideoItem. Compose skips drawing at alpha 0, so spacing these out keeps each thumbnail's
+// GPU texture upload out of the frame the grid first composes in.
 private const val THUMBNAIL_REVEAL_STEP_MILLIS = 40
 private const val THUMBNAIL_REVEAL_MAX_MILLIS = 120
 

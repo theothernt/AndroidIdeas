@@ -33,14 +33,26 @@ class VideoThumbnailsApp :
         }
     }
 
-    override fun newImageLoader(context: PlatformContext): ImageLoader =
-        ImageLoader
-            .Builder(context)
-            .components {
-                // Prepend the VideoFrameDecoder so it's tested before the default image decoders
-                add(VideoFrameDecoder.Factory())
-                add(OkHttpNetworkFetcherFactory(callFactory = okHttpClient))
-            }.diskCache(null)
-            .logger(DebugLogger())
-            .build()
+    override fun newImageLoader(context: PlatformContext): ImageLoader {
+        val builder =
+            ImageLoader
+                .Builder(context)
+                .components {
+                    // Prepend the VideoFrameDecoder so it's tested before the default image
+                    // decoders. Debug only: prepended, it header-sniffs every image request
+                    // before the real decoder gets a chance to run.
+                    if (BuildConfig.DEBUG) {
+                        add(VideoFrameDecoder.Factory())
+                    }
+                    add(OkHttpNetworkFetcherFactory(callFactory = okHttpClient))
+                }.diskCache(null)
+
+        // Coil's own docs warn that DebugLogger reduces performance, and it defaults to Debug
+        // level, so every memory cache hit/miss and decode event builds a message string.
+        if (BuildConfig.DEBUG) {
+            builder.logger(DebugLogger())
+        }
+
+        return builder.build()
+    }
 }

@@ -15,6 +15,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +29,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
@@ -100,6 +102,11 @@ fun VideoItem(
         )
     val painterState by painter.state.collectAsState()
 
+    // The reveal is load-bearing, not just cosmetic. Compose skips drawing a layer at alpha 0,
+    // so holding the thumbnail invisible until it is both ready and its turn has come keeps its
+    // GPU texture upload out of the frame the grid first composes in. Removing the stagger
+    // (letting every visible thumbnail upload on the same frame) measured ~50% janky frames on a
+    // Chromecast versus ~35% with it, and pushed the 90th percentile frame from 90ms to 300ms.
     LaunchedEffect(painterState, revealDelayMillis) {
         if (painterState is AsyncImagePainter.State.Success) {
             if (revealDelayMillis > 0 && !isFocusedCard) {
@@ -110,24 +117,19 @@ fun VideoItem(
         }
     }
 
-    val revealAlpha by animateFloatAsState(
-        targetValue = if (isRevealed) 1f else 0f,
-        animationSpec = tween(durationMillis = if (isFocusedCard) 0 else THUMBNAIL_CROSSFADE_MILLIS),
-        label = "thumbnailRevealAlpha",
-    )
+    val appearAlpha =
+        animateFloatAsState(
+            targetValue = if (isRevealed) 1f else 0f,
+            animationSpec = tween(durationMillis = if (isFocusedCard) 0 else THUMBNAIL_CROSSFADE_MILLIS),
+            label = "thumbnailAppearAlpha",
+        )
 
-    val grayscaleAmount by animateFloatAsState(
-        targetValue = if (isHidden) 1f else 0f,
-        animationSpec = tween(durationMillis = GRAYSCALE_FADE_MILLIS),
-        label = "grayscaleAmount",
-    )
-
-    val grayscaleFilter =
-        remember(grayscaleAmount) {
-            ColorFilter.colorMatrix(
-                ColorMatrix().apply { setToSaturation(1f - grayscaleAmount) },
-            )
-        }
+    val grayscaleAmount =
+        animateFloatAsState(
+            targetValue = if (isHidden) 1f else 0f,
+            animationSpec = tween(durationMillis = GRAYSCALE_FADE_MILLIS),
+            label = "grayscaleAmount",
+        )
 
     // The Card wraps only the thumbnail, so focus, zoom and the focus border apply to the
     // image; the caption is a sibling that never takes focus.
@@ -165,16 +167,15 @@ fun VideoItem(
             Box(modifier = Modifier.fillMaxSize()) {
                 val assetPath = video.thumbnailAssetPath
                 if (assetPath != null) {
-                    Image(
+                    VideoThumbnail(
                         painter = painter,
                         contentDescription = video.getDisplayTitle(),
-                        contentScale = ContentScale.Crop,
-                        colorFilter = grayscaleFilter.takeIf { grayscaleAmount > 0f },
+                        appearAlpha = appearAlpha,
+                        grayscaleAmount = grayscaleAmount,
                         modifier =
                             Modifier
                                 .fillMaxSize()
-                                .clip(THUMBNAIL_SHAPE)
-                                .graphicsLayer { alpha = revealAlpha },
+                                .clip(THUMBNAIL_SHAPE),
                     )
                 }
             }
@@ -198,6 +199,46 @@ fun VideoItem(
             )
         }
     }
+}
+
+/**
+ * The thumbnail image plus its appear and grayscale effects.
+ *
+ * Both are animated state, but they have to be read at different phases to stay cheap:
+ *
+ *  - [appearAlpha] is read inside [Modifier.graphicsLayer]'s block, which runs at draw time, so
+ *    the fade only repaints.
+ *  - [grayscaleAmount] has to be read in the composable body to reach [Image]'s `colorFilter`
+ *    parameter, so it is confined to this leaf. Reading it in [VideoItem] instead would
+ *    recompose the whole card - image request, both animations, and the tv.material3 `Card`
+ *    subtree - on every frame of the fade, for every visible thumbnail at once.
+ *
+ * The colour filter is deliberately left on [Image] rather than moved to
+ * `graphicsLayer { colorFilter = ... }`: a non-null layer colour filter promotes the layer to an
+ * offscreen compositing buffer, which here would become permanent, since a hidden thumbnail's
+ * grayscale stays at 1f.
+ */
+@Composable
+private fun VideoThumbnail(
+    painter: Painter,
+    contentDescription: String?,
+    appearAlpha: State<Float>,
+    grayscaleAmount: State<Float>,
+    modifier: Modifier = Modifier,
+) {
+    val grayscale by grayscaleAmount
+    Image(
+        painter = painter,
+        contentDescription = contentDescription,
+        contentScale = ContentScale.Crop,
+        colorFilter =
+            grayscale
+                .takeIf { it > 0f }
+                ?.let { saturation ->
+                    ColorFilter.colorMatrix(ColorMatrix().apply { setToSaturation(1f - saturation) })
+                },
+        modifier = modifier.graphicsLayer { alpha = appearAlpha.value },
+    )
 }
 
 @Preview
