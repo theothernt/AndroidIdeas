@@ -58,28 +58,27 @@ fun PlexOnDeckScreen(
         viewModel.loadOnDeck(posterSize.pixels)
     }
 
-    Column(modifier = modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            when (val current = state) {
-                is PlexOnDeckUiState.Loading -> CircularProgressIndicator(
-                    color = MaterialTheme.colorScheme.primary
-                )
+    // One box rather than a column wrapping one: the screen holds a single screenful of state, so
+    // the extra node only cost a measure pass on every recomposition.
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        when (val current = state) {
+            is PlexOnDeckUiState.Loading -> CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary
+            )
 
-                is PlexOnDeckUiState.NotAuthorised -> StatusMessage(
-                    text = stringResource(R.string.plex_on_deck_not_authorised)
-                )
+            is PlexOnDeckUiState.NotAuthorised -> StatusMessage(
+                text = stringResource(R.string.plex_on_deck_not_authorised)
+            )
 
-                is PlexOnDeckUiState.Error -> StatusMessage(text = current.message)
+            is PlexOnDeckUiState.Error -> StatusMessage(text = current.message)
 
-                is PlexOnDeckUiState.Success -> if (current.shelves.isEmpty) {
-                    StatusMessage(text = stringResource(R.string.plex_on_deck_empty))
-                } else {
-                    LatestShelves(current.shelves, posterSize, onPlay, onNavigateToShow, viewModel)
-                }
+            is PlexOnDeckUiState.Success -> if (current.shelves.isEmpty) {
+                StatusMessage(text = stringResource(R.string.plex_on_deck_empty))
+            } else {
+                LatestShelves(current.shelves, posterSize, onPlay, onNavigateToShow, viewModel)
             }
         }
     }

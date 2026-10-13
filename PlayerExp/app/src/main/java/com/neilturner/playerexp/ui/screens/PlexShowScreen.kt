@@ -176,8 +176,18 @@ private fun ShowPage(
     val safeSeasonIndex = seasonIndex.coerceIn(0, show.seasons.lastIndex)
     val season = show.seasons[safeSeasonIndex]
     val episodes = season.episodes
-    val safeEpisodeIndex = episodeIndex.coerceIn(0, (episodes.lastIndex).coerceAtLeast(0))
-    val focusedEpisode = episodes.getOrNull(safeEpisodeIndex)
+    // The episode under focus, as a read rather than a value: the carousel moves it on every D-pad
+    // step, and reading it at this level recomposed the whole page — backdrop, every season chip
+    // and every still on screen — to redraw two lines of text. It is read where it is drawn, in
+    // [FocusedEpisodeDetails], so that is all a focus move costs.
+    val focusedEpisode: () -> PlexShowEpisode? = {
+        episodes.getOrNull(episodeIndex.coerceIn(0, episodes.lastIndex.coerceAtLeast(0)))
+    }
+    // Likewise for the carousel's landing card, which is only needed once per set of episodes: it
+    // is taken inside the carousel's own effect, away from any composition scope.
+    val carouselLandingIndex: () -> Int = {
+        episodeIndex.coerceIn(0, episodes.lastIndex.coerceAtLeast(0))
+    }
 
     Box(modifier = Modifier.fillMaxSize()) {
         ShowBackdrop(show = show, sizes = sizes)
@@ -185,7 +195,9 @@ private fun ShowPage(
         Column(modifier = Modifier.fillMaxSize()) {
             SeasonChips(
                 seasons = show.seasons,
-                selectedIndex = safeSeasonIndex,
+                // Read per chip so only the two chips whose selection actually changed recompose,
+                // rather than every chip on the row with them.
+                isSelected = { index -> index == seasonIndex },
                 onSelect = { index ->
                     // Switching seasons starts the new season on its first episode, so the hero
                     // and the carousel both begin at the top rather than at a clamped position.
@@ -215,7 +227,7 @@ private fun ShowPage(
 
                 EpisodeCarousel(
                     episodes = episodes,
-                    focusedIndex = safeEpisodeIndex,
+                    focusedIndex = carouselLandingIndex,
                     stillSize = sizes.still,
                     onFocused = { episodeIndex = it },
                     onPlay = { episode ->
@@ -264,15 +276,14 @@ private fun ShowBackdrop(show: PlexShow, sizes: PlexShowImageSizes) {
 @Composable
 private fun SeasonChips(
     seasons: List<PlexShowSeason>,
-    selectedIndex: Int,
+    isSelected: (Int) -> Boolean,
     onSelect: (Int) -> Unit
 ) {
     LazyRow(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = SCREEN_HORIZONTAL_PADDING, vertical = CHIP_VERTICAL_PADDING),
-        horizontalArrangement = Arrangement.spacedBy(CHIP_SPACING),
-        contentPadding = PaddingValues(horizontal = 0.dp)
+        horizontalArrangement = Arrangement.spacedBy(CHIP_SPACING)
     ) {
         itemsIndexed(
             seasons,
@@ -282,7 +293,9 @@ private fun SeasonChips(
         ) { index, season ->
             SeasonChip(
                 label = season.title,
-                selected = index == selectedIndex,
+                // Read per chip, so a season change redraws the two chips whose selection moved
+                // rather than the whole row with them.
+                selected = isSelected(index),
                 onClick = { onSelect(index) }
             )
         }
@@ -323,7 +336,7 @@ private fun SeasonChip(label: String, selected: Boolean, onClick: () -> Unit) {
 private fun ShowHero(
     show: PlexShow,
     season: PlexShowSeason,
-    episode: PlexShowEpisode?,
+    episode: () -> PlexShowEpisode?,
     showTitle: String?,
     titleArtSize: IntSize,
     modifier: Modifier = Modifier
@@ -365,20 +378,27 @@ private fun ShowHeading(
     }
 }
 
-/** The episode the carousel is on: its ratings line and its plot, the part that follows focus. */
+/**
+ * The episode the carousel is on: its ratings line and its plot, the part that follows focus.
+ *
+ * The episode is read here rather than handed in as a value, because this is the only part of the
+ * page a focus move changes: a read any higher up drags the backdrop, the chips and every still on
+ * screen through a recomposition to redraw two lines of text.
+ */
 @Composable
 private fun FocusedEpisodeDetails(
-    episode: PlexShowEpisode?,
+    episode: () -> PlexShowEpisode?,
     contentRating: String?
 ) {
+    val current = episode()
     Column(modifier = Modifier.fillMaxWidth()) {
         EpisodeMetaLine(
-            episode = episode,
+            episode = current,
             contentRating = contentRating
         )
 
         Text(
-            text = episode?.summary.orEmpty(),
+            text = current?.summary.orEmpty(),
             style = MaterialTheme.typography.bodyMedium,
             color = Color.White.copy(alpha = 0.92f),
             minLines = EPISODE_SUMMARY_MAX_LINES,
@@ -418,8 +438,9 @@ private fun ShowTitleBlock(show: PlexShow, showTitle: String?, titleArtSize: Int
     }
 
     val density = LocalDensity.current
-    val widthDp = with(density) { titleArtSize.width.toDp() }
-    val heightDp = with(density) { titleArtSize.height.toDp() }
+    val (widthDp, heightDp) = remember(titleArtSize, density) {
+        with(density) { titleArtSize.width.toDp() to titleArtSize.height.toDp() }
+    }
     var logoDrawn by remember { mutableStateOf(false) }
     Box(
         modifier = Modifier.size(width = widthDp, height = heightDp),
@@ -469,32 +490,42 @@ private fun EpisodeMetaLine(
 /**
  * The season's episodes as landscape stills. The focused card takes focus itself, so D-pad left and
  * right move along the row and [onFocused] keeps the hero block in step with it.
+ *
+ * [focusedIndex] is the episode to land on when this set of episodes appears. It is a read rather
+ * than a value, and only taken inside the effect below: read in the body it recorded a composition
+ * read of the hero's focus state in this scope, so every D-pad step recomposed the whole carousel —
+ * every still on screen — even though the landing card had long since settled.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EpisodeCarousel(
     episodes: List<PlexShowEpisode>,
-    focusedIndex: Int,
+    focusedIndex: () -> Int,
     stillSize: IntSize,
     onFocused: (Int) -> Unit,
     onPlay: (PlexShowEpisode) -> Unit
 ) {
     val focusRequester = remember { FocusRequester() }
     val lazyListState = rememberLazyListState()
-    var focusRequested by remember { mutableStateOf(false) }
 
-    // Snapshot the index to land on the first time this set of episodes appears, so the requester
-    // below stays attached to a single card even as focus drifts during browsing.
-    val initialFocusIndex = remember(episodes.firstOrNull()?.ratingKey) {
-        focusedIndex.coerceIn(0, episodes.lastIndex.coerceAtLeast(0))
+    // The card the row lands on, snapshotted per set of episodes and reset to none when the set
+    // changes, so a new season starts on its own first card rather than the one before it.
+    val episodesKey = episodes.firstOrNull()?.ratingKey
+    var landingIndex by remember(episodesKey) { mutableIntStateOf(-1) }
+
+    LaunchedEffect(episodesKey) {
+        if (episodes.isNotEmpty()) {
+            landingIndex = focusedIndex().coerceIn(0, episodes.lastIndex.coerceAtLeast(0))
+        }
     }
-
-    LaunchedEffect(episodes.firstOrNull()?.ratingKey) {
-        if (episodes.isNotEmpty() && !focusRequested) {
-            focusRequested = true
+    // A second effect, keyed on the landing itself, rather than part of the one above: the card
+    // the requester sits on has to be composed before focus is asked of it, and the write above is
+    // what arranges that — the recomposition it asks for attaches the requester first.
+    LaunchedEffect(landingIndex) {
+        if (landingIndex >= 0) {
             // Scroll the card that should hold focus into view first, since a requested episode
             // further down the row is not composed until it is scrolled near.
-            lazyListState.scrollToItem(initialFocusIndex)
+            lazyListState.scrollToItem(landingIndex)
             focusRequester.requestFocus()
         }
     }
@@ -504,9 +535,12 @@ private fun EpisodeCarousel(
     // border adds 3dp on each side. The trailing still is the one that lands flush against the row's
     // right edge when the user scrolls to the end, so that growth needs somewhere to land or Plex clips
     // it off. The inset is sized to the still so it holds on any screen, from a phone up to a 4K TV.
-    val trailingFocusInset = with(LocalDensity.current) {
-        val scaleOverflow = stillSize.width * (FOCUSED_POSTER_SCALE - 1f) / 2f
-        (scaleOverflow + FOCUS_BORDER_WIDTH.toPx() + 4f).toDp()
+    val density = LocalDensity.current
+    val trailingFocusInset = remember(stillSize, density) {
+        with(density) {
+            val scaleOverflow = stillSize.width * (FOCUSED_POSTER_SCALE - 1f) / 2f
+            (scaleOverflow + FOCUS_BORDER_WIDTH.toPx() + 4f).toDp()
+        }
     }
     CompositionLocalProvider(LocalBringIntoViewSpec provides leftEdgeSpec) {
         LazyRow(
@@ -533,7 +567,7 @@ private fun EpisodeCarousel(
                     // moment it appears. It is never asked for again: moving between seasons replaces
                     // the list, and re-claiming focus on every arrival would drag the user back
                     // mid-browse.
-                    modifier = if (index == initialFocusIndex) Modifier.focusRequester(focusRequester) else Modifier,
+                    modifier = if (index == landingIndex) Modifier.focusRequester(focusRequester) else Modifier,
                     onFocused = { onFocused(index) },
                     onPlay = { onPlay(episode) }
                 )
@@ -560,8 +594,11 @@ private fun EpisodeStillCard(
     onPlay: () -> Unit
 ) {
     val density = LocalDensity.current
-    val widthDp = with(density) { size.width.toDp() }
-    val heightDp = with(density) { size.height.toDp() }
+    // The pixel sizes Plex served the card at, converted once per size rather than on every
+    // recomposition of the card.
+    val (widthDp, heightDp) = remember(size, density) {
+        with(density) { size.width.toDp() to size.height.toDp() }
+    }
 
     Card(
         onClick = onPlay,
@@ -662,7 +699,7 @@ private fun EpisodeStillCard(
 
 /** `2026-01-05` reads as "Jan 5, 2026"; anything Plex sends in another shape is left alone. */
 private fun formatAirDate(raw: String): String = runCatching {
-    LocalDate.parse(raw).format(DateTimeFormatter.ofPattern("MMM d, yyyy"))
+    LocalDate.parse(raw).format(AIR_DATE_FORMAT)
 }.getOrDefault(raw)
 
 /** Plex reports runtime in milliseconds. */
@@ -679,6 +716,9 @@ private fun formatRuntime(durationMs: Long): String {
 
 private val STILL_ASPECT_RATIO = 9f / 16f
 private const val STILL_WIDTH_FRACTION = 0.28f
+
+/** Built once: the hero redraws its date line on every D-pad step along the carousel. */
+private val AIR_DATE_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
 private const val SEASON_CHIP_TYPE = "season-chip"
 private const val EPISODE_STILL_TYPE = "episode-still"
 

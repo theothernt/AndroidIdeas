@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -46,30 +45,25 @@ fun PlexLibrariesScreen(
         viewModel.loadLibraries(posterSize.pixels)
     }
 
-    Column(
+    // One box rather than a column handing all its space to a single child box.
+    Box(
         modifier = modifier
             .fillMaxSize()
-            .padding(vertical = 24.dp)
+            .padding(vertical = 24.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .weight(1f),
-            contentAlignment = Alignment.Center
-        ) {
-            when (val current = state) {
-                is PlexLibrariesUiState.Loading -> CircularProgressIndicator(
-                    color = MaterialTheme.colorScheme.primary
-                )
+        when (val current = state) {
+            is PlexLibrariesUiState.Loading -> CircularProgressIndicator(
+                color = MaterialTheme.colorScheme.primary
+            )
 
-                is PlexLibrariesUiState.NotAuthorised -> StatusMessage(
-                    text = stringResource(R.string.plex_on_deck_not_authorised)
-                )
+            is PlexLibrariesUiState.NotAuthorised -> StatusMessage(
+                text = stringResource(R.string.plex_on_deck_not_authorised)
+            )
 
-                is PlexLibrariesUiState.Error -> StatusMessage(text = current.message)
+            is PlexLibrariesUiState.Error -> StatusMessage(text = current.message)
 
-                is PlexLibrariesUiState.Success -> LibrariesShelves(current.shelves, posterSize)
-            }
+            is PlexLibrariesUiState.Success -> LibrariesShelves(current.shelves, posterSize)
         }
     }
 }

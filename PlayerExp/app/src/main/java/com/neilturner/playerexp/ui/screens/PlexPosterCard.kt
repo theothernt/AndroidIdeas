@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -67,8 +68,13 @@ import kotlin.math.roundToInt
  * The card size, kept as both the dp the layout draws at and the pixels that land on screen. Only
  * the pixel figure is meaningful to Plex and to Coil: handing layout a dp value derived from pixels
  * would scale it by the density a second time and draw the card at twice the size it fetched.
+ *
+ * A value class, so it is stable to Compose: it is a parameter of every card and row that draws one
+ * and a LaunchedEffect key on the screens that fetch their posters, and an unannotated one made
+ * all of those unnecessary to skip — and made the key change identity on every recomposition.
  */
-class PosterSize(val height: Dp, val pixels: IntSize)
+@Immutable
+data class PosterSize(val height: Dp, val pixels: IntSize)
 
 @Composable
 fun rememberPosterSize(): PosterSize {
@@ -210,12 +216,19 @@ fun PlexPosterCard(
     )
     val glowTuning = LocalGlowTuning.current
     // Animated rather than switched, so the card lights as it takes focus instead of snapping on,
-    // and zero elevation costs nothing when the card is not focused.
-    val glowElevation by animateDpAsState(
-        targetValue = if (posterFocused && glowTuning.enabled) glowTuning.spread else 0.dp,
-        animationSpec = tween(GLOW_FADE_MILLIS),
-        label = "posterGlow"
-    )
+    // and zero elevation costs nothing when the card is not focused. With the glow off the animation
+    // is not created at all: it would sit on every card in a shelf holding a constant zero
+    // elevation for its whole life.
+    val glowElevation: Dp = if (glowTuning.enabled) {
+        val animated by animateDpAsState(
+            targetValue = if (posterFocused) glowTuning.spread else 0.dp,
+            animationSpec = tween(GLOW_FADE_MILLIS),
+            label = "posterGlow"
+        )
+        animated
+    } else {
+        0.dp
+    }
     val placeholder = MaterialTheme.colorScheme.surfaceVariant
 
     // The card is TV Material 3's own, so the focus treatment is the platform's rather than a
