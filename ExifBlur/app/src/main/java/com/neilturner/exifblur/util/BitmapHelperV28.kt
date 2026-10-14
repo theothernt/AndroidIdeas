@@ -42,7 +42,7 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
                 val headerBytes = readHeaderBytes(finalUri) ?: return@withContext null
 
                 // Step 2: Extract Metadata from header
-                val (metadata, orientation) = extractMetadata(headerBytes)
+                val metadata = extractMetadata(headerBytes)
 
                 // Step 3: Decode with ImageDecoder
                 val decodeStartTime = System.currentTimeMillis()
@@ -66,12 +66,6 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
                     var encodedDimensions: Pair<Int, Int>? = null
 
                     val bitmap = ImageDecoder.decodeBitmap(source) { decoder, imageInfo, _ ->
-                        // ImageInfo reports the *encoded* size, before ImageDecoder applies
-                        // EXIF orientation. That is the space the sample size is calculated
-                        // in, whereas setTargetSize is specified in the *oriented* output
-                        // space. The 512KB header is only consulted if ImageDecoder reports
-                        // no usable size, since it is not guaranteed to contain the bounds
-                        // for every format.
                         val infoSize = imageInfo.size
                         val originalDims = if (infoSize.width > 0 && infoSize.height > 0) {
                             infoSize.width to infoSize.height
@@ -85,15 +79,10 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
                             val (originalWidth, originalHeight) = originalDims
                             val sampleSize = calculateSampleSize(originalWidth, originalHeight, targetWidth, targetHeight)
                             if (sampleSize > 1) {
-                                val scaledWidth = originalWidth / sampleSize
-                                val scaledHeight = originalHeight / sampleSize
-                                // setTargetSize works in oriented output space, so swap
-                                // dimensions for transposing orientations to avoid stretching them.
-                                if (swapsWidthHeight(orientation)) {
-                                    decoder.setTargetSize(scaledHeight, scaledWidth)
-                                } else {
-                                    decoder.setTargetSize(scaledWidth, scaledHeight)
-                                }
+                                // setTargetSampleSize proportionally scales the encoded image
+                                // using the decoder's native sampling without skewing the aspect ratio.
+                                // ImageDecoder then automatically applies any EXIF orientation upright.
+                                decoder.setTargetSampleSize(sampleSize)
                             }
                         }
 
@@ -162,7 +151,7 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
         }
     }
 
-    private fun extractMetadata(headerBytes: ByteArray): Pair<ExifMetadata, Int> {
+    private fun extractMetadata(headerBytes: ByteArray): ExifMetadata {
         val metadataStartTime = System.currentTimeMillis()
         Log.d(TAG, "[Step 2/3] Extracting EXIF metadata...")
         return ByteArrayInputStream(headerBytes).use { stream ->
@@ -179,22 +168,13 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
                 latitude = exifInterface.latLong?.get(0),
                 longitude = exifInterface.latLong?.get(1)
             )
-            val orientation = exifInterface.getAttributeInt(
-                ExifInterface.TAG_ORIENTATION,
-                ExifInterface.ORIENTATION_NORMAL
-            )
             val duration = System.currentTimeMillis() - metadataStartTime
             Log.d(TAG, "[Step 2/3] Complete: Extracted metadata in ${duration}ms")
             if (meta.date != null) Log.d(TAG, "   - Date: ${meta.date}")
             if (meta.offset != null) Log.d(TAG, "   - Offset: ${meta.offset}")
             if (meta.latitude != null && meta.longitude != null) Log.d(TAG, "   - Location: ${meta.latitude}, ${meta.longitude}")
-            meta to orientation
+            meta
         }
-    }
-
-    private fun swapsWidthHeight(orientation: Int): Boolean {
-        return orientation == ExifInterface.ORIENTATION_ROTATE_90 ||
-            orientation == ExifInterface.ORIENTATION_ROTATE_270
     }
 
     private fun ByteArray.decodeDimensions(): Pair<Int, Int>? {

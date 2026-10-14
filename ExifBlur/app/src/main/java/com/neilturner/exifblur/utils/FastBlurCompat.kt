@@ -12,17 +12,18 @@ import android.graphics.Rect
  */
 internal object FastBlurCompat {
     /**
-     * Blurs [bitmap] in-place using a box blur with the given [radius].
-     * This is an approximation of a Gaussian blur and operates on the full
-     * pixel area of the bitmap.
+     * Blurs [bitmap] in-place using a multi-pass box blur with the given [radius].
+     * Multiple passes (default 3) closely approximate a true Gaussian blur (via the Central Limit Theorem)
+     * eliminating the blockiness of a single-pass box blur.
      * 
      * @return A new mutable bitmap with the blur applied (original is unchanged if it was immutable)
      */
     fun applyBlur(
         bitmap: Bitmap,
         radius: Int,
+        passes: Int = 3,
     ): Bitmap {
-        if (radius < 1) return bitmap
+        if (radius < 1 || passes < 1) return bitmap
         val width = bitmap.width
         val height = bitmap.height
         if (width < 2 || height < 2) return bitmap
@@ -37,7 +38,9 @@ internal object FastBlurCompat {
         val scratch = IntArray(width * height)
         val rect = Rect(0, 0, width, height)
 
-        blurPass(pixels, scratch, width * 4, rect, safeRadius)
+        repeat(passes) {
+            blurPass(pixels, scratch, width * 4, rect, safeRadius)
+        }
         mutableBitmap.setPixels(pixels, 0, width, 0, 0, width, height)
         return mutableBitmap
     }
