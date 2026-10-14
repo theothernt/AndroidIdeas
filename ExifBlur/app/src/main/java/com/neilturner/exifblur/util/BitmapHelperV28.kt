@@ -60,11 +60,27 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
 
                     val source = ImageDecoder.createSource(tempFile)
 
-                    val bitmap = ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
-                        // Always compute the sample size from the encoded (pre-rotation)
-                        // dimensions read from the header. ImageInfo.size is the
-                        // encoded size as well, but the header is already in hand.
-                        val originalDims = headerBytes.decodeDimensions()
+                    // Encoded (pre-rotation) dimensions, captured from the header callback so
+                    // the memory-reduction log below reports against the same size the
+                    // sample size was derived from.
+                    var encodedDimensions: Pair<Int, Int>? = null
+
+                    val bitmap = ImageDecoder.decodeBitmap(source) { decoder, imageInfo, _ ->
+                        // ImageInfo reports the *encoded* size, before ImageDecoder applies
+                        // EXIF orientation. That is the space the sample size is calculated
+                        // in, whereas setTargetSize is specified in the *oriented* output
+                        // space. The 512KB header is only consulted if ImageDecoder reports
+                        // no usable size, since it is not guaranteed to contain the bounds
+                        // for every format.
+                        val infoSize = imageInfo.size
+                        val originalDims = if (infoSize.width > 0 && infoSize.height > 0) {
+                            infoSize.width to infoSize.height
+                        } else {
+                            Log.w(TAG, "ImageDecoder reported no usable size, falling back to header bounds")
+                            headerBytes.decodeDimensions()
+                        }
+                        encodedDimensions = originalDims
+
                         if (originalDims != null) {
                             val (originalWidth, originalHeight) = originalDims
                             val sampleSize = calculateSampleSize(originalWidth, originalHeight, targetWidth, targetHeight)
@@ -72,7 +88,7 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
                                 val scaledWidth = originalWidth / sampleSize
                                 val scaledHeight = originalHeight / sampleSize
                                 // setTargetSize works in oriented output space, so swap
-                                // dimensions for 90°/270° images to avoid stretching them.
+                                // dimensions for transposing orientations to avoid stretching them.
                                 if (swapsWidthHeight(orientation)) {
                                     decoder.setTargetSize(scaledHeight, scaledWidth)
                                 } else {
@@ -89,7 +105,7 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
                     Log.d(TAG, "[Step 3/3] Complete: Decoded ${bitmap.width}x${bitmap.height} in ${decodeDuration}ms")
 
                     // Calculate memory savings
-                    val originalPixels = headerBytes.decodeDimensions()?.let {
+                    val originalPixels = encodedDimensions?.let {
                         it.first.toLong() * it.second.toLong()
                     } ?: (bitmap.width.toLong() * bitmap.height.toLong())
 
