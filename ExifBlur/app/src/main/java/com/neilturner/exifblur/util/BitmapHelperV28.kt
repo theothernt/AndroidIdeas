@@ -78,7 +78,7 @@ class BitmapHelperV28(
 
                         if (originalDims != null) {
                             val (originalWidth, originalHeight) = originalDims
-                            val sampleSize = calculateSampleSize(originalWidth, originalHeight, targetWidth, targetHeight)
+                            val sampleSize = calculateTargetSampleSize(originalWidth, originalHeight, targetWidth, targetHeight)
                             if (sampleSize > 1) {
                                 // setTargetSampleSize proportionally scales the encoded image
                                 // using the decoder's native sampling without skewing the aspect ratio.
@@ -237,17 +237,13 @@ class BitmapHelperV28(
         } else null
     }
 
-    private fun calculateSampleSize(originalWidth: Int, originalHeight: Int, targetWidth: Int, targetHeight: Int): Int {
-        var sampleSize = 1
-        if (originalHeight > targetHeight || originalWidth > targetWidth) {
-            val halfHeight = originalHeight / 2
-            val halfWidth = originalWidth / 2
-            while (maxOf(halfHeight, halfWidth) / sampleSize >= maxOf(targetHeight, targetWidth)) {
-                sampleSize *= 2
-            }
-        }
-        return sampleSize
-    }
+    /**
+     * Largest power-of-two sample size that still leaves the bitmap large enough to
+     * fill the target box. Delegates to the shared implementation so this decode
+     * path and [BitmapHelper] stay in agreement.
+     */
+    private fun calculateTargetSampleSize(originalWidth: Int, originalHeight: Int, targetWidth: Int, targetHeight: Int): Int =
+        calculateSampleSize(originalWidth, originalHeight, targetWidth, targetHeight)
 
     private fun readStreamBytes(inputStream: java.io.InputStream, limit: Int): ByteArray {
         val buffer = ByteArray(limit)

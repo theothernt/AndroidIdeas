@@ -224,19 +224,14 @@ class BitmapHelper(private val imageRepository: ImageRepository) : BitmapLoader 
         return bitmap
     }
 
+    /**
+     * Largest power-of-two subsample that still leaves the bitmap large enough to
+     * fill the target box. Delegates to the shared implementation so this decode
+     * path and [BitmapHelperV28] stay in agreement.
+     */
     private fun calculateInSampleSize(options: BitmapFactory.Options, reqWidth: Int, reqHeight: Int): Int {
         val (height: Int, width: Int) = options.run { outHeight to outWidth }
-        var inSampleSize = 1
-
-        if (height > reqHeight || width > reqWidth) {
-            val halfHeight: Int = height / 2
-            val halfWidth: Int = width / 2
-
-            while (maxOf(halfHeight, halfWidth) / inSampleSize >= maxOf(reqHeight, reqWidth)) {
-                inSampleSize *= 2
-            }
-        }
-        return inSampleSize
+        return calculateSampleSize(width, height, reqWidth, reqHeight)
     }
 
     private fun readStreamBytes(inputStream: InputStream, limit: Int): ByteArray {

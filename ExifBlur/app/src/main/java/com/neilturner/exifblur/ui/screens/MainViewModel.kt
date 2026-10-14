@@ -325,7 +325,14 @@ class MainViewModel(
 
     override fun onCleared() {
         super.onCleared()
+
+        // viewModelScope is cancelled by the framework, but cancelling explicitly
+        // keeps every job's teardown in one place and stops a job that is mid-suspend
+        // on a network read from holding its connection open any longer than needed.
+        slideshowJob?.cancel()
+        loadImagesJob?.cancel()
         preloadJob?.cancel()
+        ramMonitoringJob?.cancel()
 
         // Nothing is on screen once the ViewModel is cleared, so every bitmap
         // still held here can be released outright.
