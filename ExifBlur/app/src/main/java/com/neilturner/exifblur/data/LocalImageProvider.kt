@@ -41,6 +41,11 @@ class LocalImageProvider(private val context: Context) : ImageProvider {
     }
 
     override suspend fun openInputStream(uri: Uri): java.io.InputStream? = withContext(Dispatchers.IO) {
-        context.contentResolver.openInputStream(uri)
+        try {
+            context.contentResolver.openInputStream(uri)
+        } catch (e: Exception) {
+            Log.e("LocalImageProvider", "Failed to open input stream for $uri", e)
+            null
+        }
     }
 }

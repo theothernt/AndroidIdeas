@@ -66,7 +66,6 @@ class MainViewModel(
 
         if (!previousGranted) {
             loadImages()
-            startRamMonitoring()
         }
     }
 
@@ -265,16 +264,30 @@ class MainViewModel(
     private fun startRamMonitoring() {
         ramMonitoringJob?.cancel()
         ramMonitoringJob = viewModelScope.launch {
+            // Emit one sample immediately so the overlay has data as soon as it appears
+            _uiState.update { it.copy(ramInfo = ramMonitor.getCurrentRamUsage()) }
             while (isActive) {
-                val ramInfo = ramMonitor.getCurrentRamUsage()
-                _uiState.update { it.copy(ramInfo = ramInfo) }
                 delay(RAM_UPDATE_INTERVAL)
+                _uiState.update { it.copy(ramInfo = ramMonitor.getCurrentRamUsage()) }
             }
         }
     }
 
+    private fun stopRamMonitoring() {
+        ramMonitoringJob?.cancel()
+        ramMonitoringJob = null
+    }
+
     fun toggleOverlays() {
-        _uiState.update { it.copy(areOverlaysVisible = !it.areOverlaysVisible) }
+        val showingOverlays = !_uiState.value.areOverlaysVisible
+        _uiState.update { it.copy(areOverlaysVisible = showingOverlays) }
+
+        // Only poll memory usage while the overlay is visible
+        if (showingOverlays) {
+            startRamMonitoring()
+        } else {
+            stopRamMonitoring()
+        }
     }
 
     override fun onCleared() {
