@@ -31,7 +31,6 @@ class MainViewModelTest {
         every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
         every { Log.e(any<String>(), any<String>()) } returns 0
         
-        every { imageRepository.isExifEnabled() } returns true
         viewModel = MainViewModel(imageRepository, locationHelper, bitmapHelper, ramMonitor)
     }
 

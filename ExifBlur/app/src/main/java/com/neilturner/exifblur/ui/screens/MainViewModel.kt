@@ -76,14 +76,15 @@ class MainViewModel(
             Log.d("MainViewModel", "=========================================")
             Log.d("MainViewModel", "Starting image loading process...")
             val startTime = System.currentTimeMillis()
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.value = _uiState.value.copy(isLoading = true, imageError = null)
 
             val fetchUrisStartTime = System.currentTimeMillis()
-            val uris = imageRepository.getImages()
+            val listing = imageRepository.getImages()
+            val uris = listing.uris
             val fetchUrisDuration = System.currentTimeMillis() - fetchUrisStartTime
             Log.d("MainViewModel", "[Phase 1] Fetched ${uris.size} image URIs in ${fetchUrisDuration}ms")
             if (uris.isEmpty()) {
-                Log.w("MainViewModel", "No images found! Check your source settings.")
+                Log.w("MainViewModel", "No images found! ${listing.error ?: "Check your source settings."}")
             }
             
             // Create LoadedImage objects without pre-loading metadata since BitmapHelper will handle it
@@ -122,10 +123,13 @@ class MainViewModel(
                 imageCount = loadedImages.size,
                 images = loadedImages,
                 isLoading = false,
-                currentImageIndex = 0,
-                currentDisplayImage = initialResult?.let { DisplayImage(it.bitmap, initialMetadataLabel, it.rotation) },
+                // If the first image failed to decode, start at -1 so the slideshow loop
+                // (which skips undecodable images) attempts image 0 instead of image 1
+                currentImageIndex = if (initialResult != null) 0 else -1,
+                currentDisplayImage = initialResult?.let { DisplayImage(it.bitmap, initialMetadataLabel) },
                 areOverlaysVisible = false,
-                imageSource = imageRepository.getSourceName()
+                imageSource = listing.sourceName,
+                imageError = listing.error
             )
             
             if (loadedImages.isNotEmpty()) {
@@ -162,29 +166,48 @@ class MainViewModel(
                         }
                     }
 
-                    // 3. Wait remaining time until image switch
-                    delay(PRELOAD_TRIGGER_TIME)
+                    // 3. Wait the remaining time so the total cycle is exactly DISPLAY_DURATION
+                    //    (preload window + remaining display time + crossfade)
+                    delay(maxOf(0L, PRELOAD_TRIGGER_TIME - TRANSITION_DURATION))
 
-                    // 4. Use preloaded bitmap if available, otherwise load synchronously as fallback
-                    val result = preloadedBitmaps.remove(nextIndex) ?: run {
-                        val syncLoadStartTime = System.currentTimeMillis()
-                        Log.w("MainViewModel", "[Fallback] Preload not ready for index $nextIndex, loading synchronously")
-                        val result = bitmapLoader.loadResizedBitmap(nextImage.uri, DEFAULT_TARGET_WIDTH, DEFAULT_TARGET_HEIGHT)
-                        Log.w("MainViewModel", "[Fallback] Synchronous load took ${System.currentTimeMillis() - syncLoadStartTime}ms")
-                        result
+                    // 4. Use the preloaded bitmap if available, otherwise load synchronously as fallback.
+                    //    Skip undecodable images so one bad file cannot blank the screen.
+                    var index = nextIndex
+                    var attempts = 0
+                    var result: BitmapResult? = null
+                    while (attempts < currentState.images.size) {
+                        val candidate = currentState.images[index]
+                        result = preloadedBitmaps.remove(index) ?: run {
+                            val syncLoadStartTime = System.currentTimeMillis()
+                            Log.w("MainViewModel", "[Fallback] Preload not ready for index $index, loading synchronously")
+                            val result = bitmapLoader.loadResizedBitmap(candidate.uri, DEFAULT_TARGET_WIDTH, DEFAULT_TARGET_HEIGHT)
+                            Log.w("MainViewModel", "[Fallback] Synchronous load took ${System.currentTimeMillis() - syncLoadStartTime}ms")
+                            result
+                        }
+                        if (result != null) {
+                            break
+                        }
+                        Log.w("MainViewModel", "[Skip] Image at index $index failed to decode, trying the next one")
+                        index = (index + 1) % currentState.images.size
+                        attempts++
                     }
 
-                    val resolveStartTime = System.currentTimeMillis()
-                    val metadataLabel = result?.metadata?.let { resolveLocationOrModel(it) }
-                    val resolveDuration = System.currentTimeMillis() - resolveStartTime
-                    Log.d("MainViewModel", "[Metadata] Resolution took ${resolveDuration}ms for index $nextIndex")
+                    val loaded = result
+                    if (loaded != null) {
+                        val resolveStartTime = System.currentTimeMillis()
+                        val metadataLabel = resolveLocationOrModel(loaded.metadata)
+                        val resolveDuration = System.currentTimeMillis() - resolveStartTime
+                        Log.d("MainViewModel", "[Metadata] Resolution took ${resolveDuration}ms for index $index")
 
-                    // 5. Switch image (starts crossfade)
-                    _uiState.update {
-                        it.copy(
-                            currentImageIndex = nextIndex,
-                            currentDisplayImage = result?.let { res -> DisplayImage(res.bitmap, metadataLabel, res.rotation) }
-                        )
+                        // 5. Switch image (starts crossfade)
+                        _uiState.update {
+                            it.copy(
+                                currentImageIndex = index,
+                                currentDisplayImage = DisplayImage(loaded.bitmap, metadataLabel)
+                            )
+                        }
+                    } else {
+                        Log.w("MainViewModel", "[Skip] All images failed to decode, keeping the current image on screen")
                     }
 
                     // 6. Wait for image transition to complete
@@ -268,8 +291,7 @@ data class LoadedImage(
 
 data class DisplayImage(
     val bitmap: Bitmap,
-    val metadataLabel: String?,
-    val rotation: Float
+    val metadataLabel: String?
 )
 
 data class MainUiState(
@@ -284,5 +306,6 @@ data class MainUiState(
     val areOverlaysVisible: Boolean = false,
     val transitionDuration: Int = 1000,
     val ramInfo: RamInfo? = null,
-    val imageSource: String = ""
+    val imageSource: String = "",
+    val imageError: String? = null
 )

@@ -2,7 +2,6 @@ package com.neilturner.exifblur.data
 
 import android.net.Uri
 import android.util.Log
-import androidx.exifinterface.media.ExifInterface
 import com.hierynomus.msdtyp.AccessMask
 import com.hierynomus.mssmb2.SMB2CreateDisposition
 import com.hierynomus.mssmb2.SMB2ShareAccess
@@ -20,10 +19,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class SambaImageProvider : ImageProvider {
-    override suspend fun getImages(): List<Uri> = withContext(Dispatchers.IO) {
+    override suspend fun getImages(): ImageListing = withContext(Dispatchers.IO) {
+        if (BuildConfig.SAMBA_IP.isBlank() || BuildConfig.SAMBA_SHARE.isBlank()) {
+            return@withContext ImageListing(error = "Samba share is not configured")
+        }
+
         val images = mutableListOf<Uri>()
-        val client = SMBClient()
         try {
+            val client = SMBClient()
             val (shareName, rootPath) = parseSambaPath(BuildConfig.SAMBA_SHARE)
             client.connect(BuildConfig.SAMBA_IP).use { connection ->
                 val ac = AuthenticationContext(BuildConfig.SAMBA_USERNAME, BuildConfig.SAMBA_PASSWORD.toCharArray(), "")
@@ -33,10 +36,11 @@ class SambaImageProvider : ImageProvider {
                 }
             }
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e("SambaImageProvider", "Failed to list images from Samba", e)
+            return@withContext ImageListing(error = "Samba unreachable: ${e.message ?: "unknown error"}")
         }
         // Sort deterministically by URI string for consistent ordering across devices
-        images.sortedBy { it.toString() }
+        ImageListing(images.sortedBy { it.toString() })
     }
 
     private fun listImagesRecursive(share: DiskShare, relativePath: String, images: MutableList<Uri>, shareName: String) {
@@ -69,30 +73,6 @@ class SambaImageProvider : ImageProvider {
 
     private fun isDirectory(f: FileIdBothDirectoryInformation): Boolean {
         return (f.fileAttributes and FileAttributes.FILE_ATTRIBUTE_DIRECTORY.value) != 0L
-    }
-
-    override suspend fun getExifMetadata(uri: Uri): ExifMetadata = withContext(Dispatchers.IO) {
-        try {
-            openInputStream(uri)?.use { inputStream ->
-                val exifInterface = ExifInterface(inputStream)
-                val date = exifInterface.getAttribute(ExifInterface.TAG_DATETIME_ORIGINAL)
-                    ?: exifInterface.getAttribute(ExifInterface.TAG_DATETIME)
-                val offset = exifInterface.getAttribute(ExifInterface.TAG_OFFSET_TIME_ORIGINAL)
-                    ?: exifInterface.getAttribute(ExifInterface.TAG_OFFSET_TIME)
-                    ?: exifInterface.getAttribute(ExifInterface.TAG_OFFSET_TIME_DIGITIZED)
-                val latLng = exifInterface.latLong
-
-                ExifMetadata(
-                    date = date,
-                    offset = offset,
-                    latitude = latLng?.get(0),
-                    longitude = latLng?.get(1)
-                )
-            } ?: ExifMetadata()
-        } catch (e: Exception) {
-            e.printStackTrace()
-            ExifMetadata()
-        }
     }
 
     override suspend fun openInputStream(uri: Uri): java.io.InputStream? = withContext(Dispatchers.IO) {

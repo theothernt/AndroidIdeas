@@ -40,6 +40,7 @@ import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
+import com.neilturner.exifblur.ui.components.ErrorOverlay
 import com.neilturner.exifblur.ui.components.ImageCountOverlay
 import com.neilturner.exifblur.ui.components.LoadingContent
 import com.neilturner.exifblur.ui.components.MetadataOverlay
@@ -123,10 +124,7 @@ fun MainScreen(
             if (uiState.currentDisplayImage != null) {
                 val displayImage = uiState.currentDisplayImage!!
                 Slideshow(
-                    currentImage = SlideshowData(
-                        bitmap = displayImage.bitmap,
-                        rotation = displayImage.rotation
-                    ),
+                    currentImage = SlideshowData(bitmap = displayImage.bitmap),
                     transitionDuration = uiState.transitionDuration
                 )
             }
@@ -151,6 +149,14 @@ fun MainScreen(
                     LoadingContent()
                 } else {
                     // Overlays
+                    val imageError = uiState.imageError
+                    if (!imageError.isNullOrBlank()) {
+                        ErrorOverlay(
+                            message = imageError,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
+                    }
+
                     ImageCountOverlay(
                         isVisible = uiState.areOverlaysVisible,
                         currentImageIndex = uiState.currentImageIndex,

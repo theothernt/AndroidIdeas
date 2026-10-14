@@ -2,36 +2,51 @@ package com.neilturner.exifblur.data
 
 import android.net.Uri
 
+data class ImageListing(
+    val uris: List<Uri> = emptyList(),
+    val sourceName: String = "",
+    val error: String? = null,
+)
+
 interface ImageRepository {
-    suspend fun getImages(): List<Uri>
-    suspend fun getExifMetadata(uri: Uri): ExifMetadata
+
+    suspend fun getImages(): ImageListing
+
     suspend fun openInputStream(uri: Uri): java.io.InputStream?
-    fun isExifEnabled(): Boolean
-    fun getSourceName(): String
 }
 
 class ImageRepositoryImpl(
     private val localProvider: LocalImageProvider,
-    private val sambaProvider: SambaImageProvider
+    private val sambaProvider: SambaImageProvider,
 ) : ImageRepository {
-    private var useSamba = true // Default to SMB
-    private var exifEnabled = true // Default to enabled
+    override suspend fun getImages(): ImageListing {
+        val sambaListing = sambaProvider.getImages()
+        if (sambaListing.error == null && sambaListing.uris.isNotEmpty()) {
+            return sambaListing.copy(sourceName = SOURCE_SAMBA)
+        }
 
-    override suspend fun getImages(): List<Uri> {
-        return if (useSamba) sambaProvider.getImages() else localProvider.getImages()
+        // Fall back to local media only when the Samba source failed or is empty
+        val localListing = localProvider.getImages()
+        return if (localListing.error == null && localListing.uris.isNotEmpty()) {
+            localListing.copy(sourceName = SOURCE_LOCAL)
+        } else {
+            localListing.copy(
+                sourceName = SOURCE_LOCAL,
+                error = sambaListing.error ?: localListing.error ?: "No images found",
+            )
+        }
     }
 
-    override suspend fun getExifMetadata(uri: Uri): ExifMetadata {
-        return if (useSamba) sambaProvider.getExifMetadata(uri) else localProvider.getExifMetadata(uri)
-    }
+    override suspend fun openInputStream(uri: Uri): java.io.InputStream? =
+        if (uri.scheme == SAMBA_SCHEME) {
+            sambaProvider.openInputStream(uri)
+        } else {
+            localProvider.openInputStream(uri)
+        }
 
-    override suspend fun openInputStream(uri: Uri): java.io.InputStream? {
-        return if (useSamba) sambaProvider.openInputStream(uri) else localProvider.openInputStream(uri)
-    }
-
-    override fun isExifEnabled(): Boolean = exifEnabled
-
-    override fun getSourceName(): String {
-        return if (useSamba) "Samba" else "Local"
+    companion object {
+        const val SOURCE_SAMBA = "Samba"
+        const val SOURCE_LOCAL = "Local"
+        private const val SAMBA_SCHEME = "smb"
     }
 }

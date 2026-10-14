@@ -90,6 +90,28 @@ fun MetadataOverlay(
 }
 
 @Composable
+fun ErrorOverlay(
+    message: String,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .padding(16.dp)
+            .alpha(0.9F)
+            .background(
+                color = Color.Black,
+                shape = RoundedCornerShape(8.dp)
+            )
+            .padding(12.dp)
+    ) {
+        Text(
+            text = message,
+            color = Color.White
+        )
+    }
+}
+
+@Composable
 fun RamUsageOverlay(
     isVisible: Boolean,
     ramInfo: RamInfo?,

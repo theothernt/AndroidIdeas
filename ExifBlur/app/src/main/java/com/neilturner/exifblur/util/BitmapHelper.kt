@@ -2,6 +2,7 @@ package com.neilturner.exifblur.util
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Matrix
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -17,8 +18,7 @@ import kotlin.math.roundToInt
 
 data class BitmapResult(
     val bitmap: Bitmap,
-    val metadata: ExifMetadata,
-    val rotation: Float
+    val metadata: ExifMetadata
 )
 
 interface BitmapLoader {
@@ -57,34 +57,35 @@ class BitmapHelper(private val imageRepository: ImageRepository) : BitmapLoader 
 
                 // Step 3: Determine Dimensions & Calculate Sample Size
                 val options = decodeDimensions(headerBytes) ?: return@withContext null
+                val rotationDegrees = getRotationDegrees(orientation)
                 options.inSampleSize = calculateInSampleSize(options, targetWidth, targetHeight)
                 options.inJustDecodeBounds = false
                 val originalWidth = options.outWidth
                 val originalHeight = options.outHeight
 
-                // Step 4: Final Decode
-                val rotationDegrees = getRotationDegrees(orientation)
-                val originalBitmap = decodeBitmap(finalUri, options, rotationDegrees) ?: return@withContext null
+                // Step 4: Final Decode (rotation is baked into the bitmap)
+                val decodedBitmap = decodeBitmap(finalUri, options, rotationDegrees) ?: return@withContext null
+                val bitmap = applyRotation(decodedBitmap, rotationDegrees) ?: return@withContext null
 
                 // Calculate memory savings
                 val originalPixels = originalWidth.toLong() * originalHeight.toLong()
-                val finalPixels = originalBitmap.width.toLong() * originalBitmap.height.toLong()
+                val finalPixels = bitmap.width.toLong() * bitmap.height.toLong()
                 val reductionPercent = if (originalPixels > 0) {
                     ((1.0 - finalPixels.toDouble() / originalPixels.toDouble()) * 100).roundToInt()
                 } else 0
 
-                // Step 5: Return result with rotation
+                // Step 5: Return result (already rotated to display orientation)
                 val totalDuration = System.currentTimeMillis() - startTime
                 Log.d(TAG, "=========================================")
                 Log.d(TAG, "LOAD COMPLETE")
                 Log.d(TAG, "  Total duration: ${totalDuration}ms")
                 Log.d(TAG, "  Memory reduction: ${reductionPercent}%")
-                Log.d(TAG, "  Final size: ${originalBitmap.width}x${originalBitmap.height}")
+                Log.d(TAG, "  Final size: ${bitmap.width}x${bitmap.height}")
                 Log.d(TAG, "  Original size: ${originalWidth}x${originalHeight}")
-                Log.d(TAG, "  Rotation: $rotationDegrees°")
+                Log.d(TAG, "  Rotation applied: $rotationDegrees°")
                 Log.d(TAG, "=========================================")
 
-                BitmapResult(originalBitmap, metadata, rotationDegrees)
+                BitmapResult(bitmap, metadata)
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading bitmap", e)
                 null
@@ -173,6 +174,26 @@ class BitmapHelper(private val imageRepository: ImageRepository) : BitmapLoader 
             ExifInterface.ORIENTATION_ROTATE_180 -> 180f
             ExifInterface.ORIENTATION_ROTATE_270 -> 270f
             else -> 0f
+        }
+    }
+
+    /**
+     * Bakes the EXIF rotation into the bitmap so callers always receive an
+     * image in display orientation. BitmapFactory does not apply EXIF
+     * orientation, so this is done manually on this code path.
+     */
+    private fun applyRotation(bitmap: Bitmap, rotationDegrees: Float): Bitmap? {
+        if (rotationDegrees == 0f) return bitmap
+        return try {
+            val matrix = Matrix().apply { postRotate(rotationDegrees) }
+            val rotated = Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
+            if (rotated != bitmap) {
+                bitmap.recycle()
+            }
+            rotated
+        } catch (e: Exception) {
+            Log.e(TAG, "Error rotating bitmap", e)
+            null
         }
     }
 

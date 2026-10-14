@@ -1,7 +1,6 @@
 package com.neilturner.exifblur.ui.components
 
 import android.graphics.Bitmap
-import android.graphics.Matrix
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -9,12 +8,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -22,21 +21,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
-import coil3.size.Size
-import coil3.transform.Transformation
 import com.neilturner.exifblur.utils.FastBlurCompat
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 data class SlideshowData(
-	val bitmap: Bitmap,
-	val rotation: Float
+	val bitmap: Bitmap
 )
+
+private const val BLUR_RADIUS = 25
 
 /**
  * Software-based blur for Android 11 and below.
  * Compose's blur modifier requires Android 12+ for hardware rendering.
  * Uses FastBlurCompat for a high-quality box blur approximation.
  */
-private fun blurBitmap(bitmap: Bitmap, radius: Int = 25): Bitmap {
+private fun blurBitmap(bitmap: Bitmap, radius: Int = BLUR_RADIUS): Bitmap {
 	// FastBlurCompat handles HARDWARE bitmaps by creating a mutable copy
 	return FastBlurCompat.applyBlur(bitmap, radius)
 }
@@ -79,41 +79,37 @@ fun Slideshow(
 								modifier = Modifier
 									.fillMaxSize()
 									.scale(2f)
-									.rotate(image.rotation)
-									.blur(radius = 25.dp)
+									.blur(radius = BLUR_RADIUS.dp)
 									.alpha(0.5f)
 							)
 						} else {
-							// Android 11 and below: Use software stack blur
-							val blurredBitmap = remember { blurBitmap(image.bitmap) }
-							val rotatedBitmap = remember {
-								if (image.rotation != 0f) {
-									val matrix = Matrix().apply { postRotate(image.rotation) }
-									Bitmap.createBitmap(blurredBitmap, 0, 0, blurredBitmap.width, blurredBitmap.height, matrix, true)
-								} else {
-									blurredBitmap
+							// Android 11 and below: Use software stack blur, computed on a
+							// background dispatcher so composition is never blocked
+							val blurredBitmap by produceState<Bitmap?>(initialValue = null, image.bitmap) {
+								value = withContext(Dispatchers.Default) {
+									blurBitmap(image.bitmap)
 								}
 							}
-							AsyncImage(
-								model = rotatedBitmap,
-								contentDescription = "Blurred Background Image",
-								contentScale = ContentScale.Crop,
-								modifier = Modifier
-									.fillMaxSize()
-									.scale(2f)
-									.alpha(0.5f)
-							)
+							blurredBitmap?.let { blurred ->
+								AsyncImage(
+									model = blurred,
+									contentDescription = "Blurred Background Image",
+									contentScale = ContentScale.Crop,
+									modifier = Modifier
+										.fillMaxSize()
+										.scale(2f)
+										.alpha(0.5f)
+								)
+							}
 						}
 					}
 
-					// Foreground Image (fitted)
+					// Foreground Image (fitted; bitmaps arrive already rotated by the loader)
 					AsyncImage(
 						model = image.bitmap,
 						contentDescription = "Foreground Image",
-						contentScale = ContentScale.None,
-						modifier = Modifier
-							.fillMaxSize()
-							.rotate(image.rotation)
+						contentScale = ContentScale.Fit,
+						modifier = Modifier.fillMaxSize()
 					)
 				}
 			} else {

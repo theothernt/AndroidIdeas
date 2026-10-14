@@ -1,6 +1,7 @@
 package com.neilturner.exifblur.util
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
 import android.net.Uri
 import android.os.Build
@@ -41,7 +42,7 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
                 val headerBytes = readHeaderBytes(finalUri) ?: return@withContext null
 
                 // Step 2: Extract Metadata from header
-                val metadata = extractMetadata(headerBytes)
+                val (metadata, orientation) = extractMetadata(headerBytes)
 
                 // Step 3: Decode with ImageDecoder
                 val decodeStartTime = System.currentTimeMillis()
@@ -59,24 +60,29 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
 
                     val source = ImageDecoder.createSource(tempFile)
 
-                    val bitmap = ImageDecoder.decodeBitmap(source) { decoder, imageInfo, _ ->
-                        // Get original dimensions from imageInfo parameter
-                        val originalWidth = imageInfo.size.width
-                        val originalHeight = imageInfo.size.height
-                        
-                        // Calculate sample size
-                        val sampleSize = calculateSampleSize(originalWidth, originalHeight, targetWidth, targetHeight)
-
-                        // Set target size for hardware scaling
-                        if (sampleSize > 1) {
-                            val scaledWidth = originalWidth / sampleSize
-                            val scaledHeight = originalHeight / sampleSize
-                            decoder.setTargetSize(scaledWidth, scaledHeight)
+                    val bitmap = ImageDecoder.decodeBitmap(source) { decoder, _, _ ->
+                        // Always compute the sample size from the encoded (pre-rotation)
+                        // dimensions read from the header. ImageInfo.size is the
+                        // encoded size as well, but the header is already in hand.
+                        val originalDims = headerBytes.decodeDimensions()
+                        if (originalDims != null) {
+                            val (originalWidth, originalHeight) = originalDims
+                            val sampleSize = calculateSampleSize(originalWidth, originalHeight, targetWidth, targetHeight)
+                            if (sampleSize > 1) {
+                                val scaledWidth = originalWidth / sampleSize
+                                val scaledHeight = originalHeight / sampleSize
+                                // setTargetSize works in oriented output space, so swap
+                                // dimensions for 90°/270° images to avoid stretching them.
+                                if (swapsWidthHeight(orientation)) {
+                                    decoder.setTargetSize(scaledHeight, scaledWidth)
+                                } else {
+                                    decoder.setTargetSize(scaledWidth, scaledHeight)
+                                }
+                            }
                         }
 
                         // Use HARDWARE for GPU memory (available API 28+)
-                        // Note: ImageDecoder.HARDWARE = 2
-                        decoder.setAllocator(2)
+                        decoder.setAllocator(ImageDecoder.ALLOCATOR_HARDWARE)
                     }
 
                     val decodeDuration = System.currentTimeMillis() - decodeStartTime
@@ -101,8 +107,8 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
                     Log.d(TAG, "  EXIF orientation: Auto-applied by ImageDecoder")
                     Log.d(TAG, "=========================================")
 
-                    // ImageDecoder auto-rotates, so rotation is 0
-                    BitmapResult(bitmap, metadata, 0f)
+                    // ImageDecoder auto-applies EXIF orientation, so no rotation is needed
+                    BitmapResult(bitmap, metadata)
                 } finally {
                     tempFile.delete()
                 }
@@ -140,7 +146,7 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
         }
     }
 
-    private fun extractMetadata(headerBytes: ByteArray): ExifMetadata {
+    private fun extractMetadata(headerBytes: ByteArray): Pair<ExifMetadata, Int> {
         val metadataStartTime = System.currentTimeMillis()
         Log.d(TAG, "[Step 2/3] Extracting EXIF metadata...")
         return ByteArrayInputStream(headerBytes).use { stream ->
@@ -157,20 +163,29 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
                 latitude = exifInterface.latLong?.get(0),
                 longitude = exifInterface.latLong?.get(1)
             )
+            val orientation = exifInterface.getAttributeInt(
+                ExifInterface.TAG_ORIENTATION,
+                ExifInterface.ORIENTATION_NORMAL
+            )
             val duration = System.currentTimeMillis() - metadataStartTime
             Log.d(TAG, "[Step 2/3] Complete: Extracted metadata in ${duration}ms")
             if (meta.date != null) Log.d(TAG, "   - Date: ${meta.date}")
             if (meta.offset != null) Log.d(TAG, "   - Offset: ${meta.offset}")
             if (meta.latitude != null && meta.longitude != null) Log.d(TAG, "   - Location: ${meta.latitude}, ${meta.longitude}")
-            meta
+            meta to orientation
         }
     }
 
+    private fun swapsWidthHeight(orientation: Int): Boolean {
+        return orientation == ExifInterface.ORIENTATION_ROTATE_90 ||
+            orientation == ExifInterface.ORIENTATION_ROTATE_270
+    }
+
     private fun ByteArray.decodeDimensions(): Pair<Int, Int>? {
-        val options = android.graphics.BitmapFactory.Options().apply {
+        val options = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
         }
-        android.graphics.BitmapFactory.decodeByteArray(this, 0, this.size, options)
+        BitmapFactory.decodeByteArray(this, 0, this.size, options)
         return if (options.outWidth > 0 && options.outHeight > 0) {
             options.outWidth to options.outHeight
         } else null
