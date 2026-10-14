@@ -1,6 +1,7 @@
 package com.neilturner.exifblur.ui.components
 
 import android.graphics.Bitmap
+import android.os.Build
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
@@ -17,6 +18,7 @@ import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -35,10 +37,29 @@ private const val BLUR_RADIUS = 25
  * Software-based blur for Android 11 and below.
  * Compose's blur modifier requires Android 12+ for hardware rendering.
  * Uses FastBlurCompat for a high-quality box blur approximation.
+ *
+ * The bitmap is downscaled to the target dimensions before blurring.
+ * The blurred result is displayed with scale(2f) and ContentScale.Crop,
+ * so blurring at full resolution is wasteful in both CPU and RAM.
  */
-private fun blurBitmap(bitmap: Bitmap, radius: Int = BLUR_RADIUS): Bitmap {
+private fun blurBitmap(bitmap: Bitmap, targetWidth: Int, targetHeight: Int, radius: Int = BLUR_RADIUS): Bitmap {
+	// Downscale to screen resolution before blurring
+	val scaled = if (bitmap.width > targetWidth || bitmap.height > targetHeight) {
+		val scale = minOf(
+			targetWidth.toFloat() / bitmap.width,
+			targetHeight.toFloat() / bitmap.height
+		)
+		Bitmap.createScaledBitmap(
+			bitmap,
+			(bitmap.width * scale).toInt(),
+			(bitmap.height * scale).toInt(),
+			true
+		)
+	} else {
+		bitmap
+	}
 	// FastBlurCompat handles HARDWARE bitmaps by creating a mutable copy
-	return FastBlurCompat.applyBlur(bitmap, radius)
+	return FastBlurCompat.applyBlur(scaled, radius)
 }
 
 @Composable
@@ -48,7 +69,7 @@ fun Slideshow(
 	modifier: Modifier = Modifier
 ) {
 	val context = LocalContext.current
-	val isAndroid12OrHigher = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S
+	val isAndroid12OrHigher = android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 	
 	Box(
 		modifier = modifier
@@ -85,9 +106,14 @@ fun Slideshow(
 						} else {
 							// Android 11 and below: Use software stack blur, computed on a
 							// background dispatcher so composition is never blocked
+							val configuration = LocalConfiguration.current
 							val blurredBitmap by produceState<Bitmap?>(initialValue = null, image.bitmap) {
 								value = withContext(Dispatchers.Default) {
-									blurBitmap(image.bitmap)
+									blurBitmap(
+										image.bitmap,
+										configuration.screenWidthDp / 2,
+										configuration.screenHeightDp / 2
+									)
 								}
 							}
 							blurredBitmap?.let { blurred ->

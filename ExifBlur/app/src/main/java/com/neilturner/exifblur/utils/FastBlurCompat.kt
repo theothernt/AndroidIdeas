@@ -21,7 +21,7 @@ internal object FastBlurCompat {
     fun applyBlur(
         bitmap: Bitmap,
         radius: Int,
-        passes: Int = 3,
+        passes: Int = 2,
     ): Bitmap {
         if (radius < 1 || passes < 1) return bitmap
         val width = bitmap.width

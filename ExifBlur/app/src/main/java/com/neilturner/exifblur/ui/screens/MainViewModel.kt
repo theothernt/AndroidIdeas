@@ -126,13 +126,17 @@ class MainViewModel(
                 // (which skips undecodable images) attempts image 0 instead of image 1
                 currentImageIndex = if (initialResult != null) 0 else -1,
                 currentDisplayImage = initialResult?.let { DisplayImage(it.bitmap, initialMetadataLabel) },
-                areOverlaysVisible = false,
                 imageSource = listing.sourceName,
                 imageError = listing.error
             )
             
             if (loadedImages.isNotEmpty()) {
                 startSlideshow()
+            }
+
+            // Overlays start visible, so begin polling RAM usage right away
+            if (_uiState.value.areOverlaysVisible) {
+                startRamMonitoring()
             }
         }
     }
@@ -316,7 +320,7 @@ data class MainUiState(
     val images: List<LoadedImage> = emptyList(),
     val currentImageIndex: Int = 0,
     val currentDisplayImage: DisplayImage? = null,
-    val areOverlaysVisible: Boolean = false,
+    val areOverlaysVisible: Boolean = true,
     val transitionDuration: Int = 1000,
     val ramInfo: RamInfo? = null,
     val imageSource: String = "",
