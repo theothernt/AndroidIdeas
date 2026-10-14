@@ -1,5 +1,6 @@
 package com.neilturner.exifblur.util
 
+import android.content.ContentResolver
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.ImageDecoder
@@ -18,7 +19,10 @@ import java.io.File
 import kotlin.math.roundToInt
 
 @RequiresApi(Build.VERSION_CODES.P)
-class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoader {
+class BitmapHelperV28(
+    private val imageRepository: ImageRepository,
+    private val contentResolver: ContentResolver
+) : BitmapLoader {
 
     companion object {
         private const val TAG = "BitmapHelperV28"
@@ -48,24 +52,21 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
                 val decodeStartTime = System.currentTimeMillis()
                 Log.d(TAG, "[Step 3/3] Decoding bitmap with ImageDecoder...")
 
-                // Create a temp file to hold the image data for ImageDecoder
-                val tempFile = File.createTempFile("image_decoder_", ".tmp")
-                try {
-                    // Copy the full image to temp file
-                    imageRepository.openInputStream(finalUri)?.use { input ->
-                        tempFile.outputStream().use { output ->
-                            input.copyTo(output)
-                        }
-                    } ?: return@withContext null
+                // Stream the image straight into ImageDecoder instead of staging
+                // the whole file through a temp file and a 20MB heap buffer.
+                //
+                // ImageDecoder.createSource has no InputStream overload, so local
+                // MediaStore images use the ContentResolver overload - the decoder
+                // pulls bytes from the provider on demand and nothing is copied.
+                // SMB has no ContentResolver behind it, so those images are staged
+                // through a temp file, which keeps the bytes off the heap.
+                var encodedDimensions: Pair<Int, Int>? = null
 
-                    val source = ImageDecoder.createSource(tempFile)
+                val stagedSource = createSource(finalUri) ?: return@withContext null
+                val source = stagedSource.source
 
-                    // Encoded (pre-rotation) dimensions, captured from the header callback so
-                    // the memory-reduction log below reports against the same size the
-                    // sample size was derived from.
-                    var encodedDimensions: Pair<Int, Int>? = null
-
-                    val bitmap = ImageDecoder.decodeBitmap(source) { decoder, imageInfo, _ ->
+                val bitmap = try {
+                    ImageDecoder.decodeBitmap(source) { decoder, imageInfo, _ ->
                         val infoSize = imageInfo.size
                         val originalDims = if (infoSize.width > 0 && infoSize.height > 0) {
                             infoSize.width to infoSize.height
@@ -89,34 +90,35 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
                         // Use HARDWARE for GPU memory (available API 28+)
                         decoder.setAllocator(ImageDecoder.ALLOCATOR_HARDWARE)
                     }
-
-                    val decodeDuration = System.currentTimeMillis() - decodeStartTime
-                    Log.d(TAG, "[Step 3/3] Complete: Decoded ${bitmap.width}x${bitmap.height} in ${decodeDuration}ms")
-
-                    // Calculate memory savings
-                    val originalPixels = encodedDimensions?.let {
-                        it.first.toLong() * it.second.toLong()
-                    } ?: (bitmap.width.toLong() * bitmap.height.toLong())
-
-                    val finalPixels = bitmap.width.toLong() * bitmap.height.toLong()
-                    val reductionPercent = if (originalPixels > 0) {
-                        ((1.0 - finalPixels.toDouble() / originalPixels.toDouble()) * 100).roundToInt()
-                    } else 0
-
-                    val totalDuration = System.currentTimeMillis() - startTime
-                    Log.d(TAG, "=========================================")
-                    Log.d(TAG, "LOAD COMPLETE (ImageDecoder)")
-                    Log.d(TAG, "  Total duration: ${totalDuration}ms")
-                    Log.d(TAG, "  Memory reduction: ${reductionPercent}%")
-                    Log.d(TAG, "  Final size: ${bitmap.width}x${bitmap.height}")
-                    Log.d(TAG, "  EXIF orientation: Auto-applied by ImageDecoder")
-                    Log.d(TAG, "=========================================")
-
-                    // ImageDecoder auto-applies EXIF orientation, so no rotation is needed
-                    BitmapResult(bitmap, metadata)
                 } finally {
-                    tempFile.delete()
+                    // Delete the staging file if one was created for this decode
+                    stagedSource.tempFileToDelete?.delete()
                 }
+
+                val decodeDuration = System.currentTimeMillis() - decodeStartTime
+                Log.d(TAG, "[Step 3/3] Complete: Decoded ${bitmap.width}x${bitmap.height} in ${decodeDuration}ms")
+
+                // Calculate memory savings
+                val originalPixels = encodedDimensions?.let {
+                    it.first.toLong() * it.second.toLong()
+                } ?: (bitmap.width.toLong() * bitmap.height.toLong())
+
+                val finalPixels = bitmap.width.toLong() * bitmap.height.toLong()
+                val reductionPercent = if (originalPixels > 0) {
+                    ((1.0 - finalPixels.toDouble() / originalPixels.toDouble()) * 100).roundToInt()
+                } else 0
+
+                val totalDuration = System.currentTimeMillis() - startTime
+                Log.d(TAG, "=========================================")
+                Log.d(TAG, "LOAD COMPLETE (ImageDecoder)")
+                Log.d(TAG, "  Total duration: ${totalDuration}ms")
+                Log.d(TAG, "  Memory reduction: ${reductionPercent}%")
+                Log.d(TAG, "  Final size: ${bitmap.width}x${bitmap.height}")
+                Log.d(TAG, "  EXIF orientation: Auto-applied by ImageDecoder")
+                Log.d(TAG, "=========================================")
+
+                // ImageDecoder auto-applies EXIF orientation, so no rotation is needed
+                BitmapResult(bitmap, metadata)
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading bitmap with ImageDecoder", e)
                 null
@@ -135,6 +137,54 @@ class BitmapHelperV28(private val imageRepository: ImageRepository) : BitmapLoad
             uri
         }
     }
+
+    /**
+     * Builds the best available [ImageDecoder.Source] for [uri].
+     *
+     * ImageDecoder.createSource cannot consume an arbitrary InputStream, so local
+     * MediaStore images go through the ContentResolver overload - the decoder reads
+     * from the provider on demand, so no temp file and no full-file heap buffer.
+     * Remote (SMB) images have no ContentResolver behind them, so they are staged
+     * through a temp file, which keeps the bytes off the heap at the cost of disk I/O.
+     */
+    private suspend fun createSource(uri: Uri): StagedSource? {
+        return if (uri.scheme == ContentResolver.SCHEME_CONTENT) {
+            try {
+                StagedSource(ImageDecoder.createSource(contentResolver, uri))
+            } catch (e: Exception) {
+                Log.w(TAG, "ContentResolver source failed for $uri, falling back to temp file", e)
+                stageToTempFile(uri)
+            }
+        } else {
+            stageToTempFile(uri)
+        }
+    }
+
+    private suspend fun stageToTempFile(uri: Uri): StagedSource? {
+        return try {
+            val tempFile = File.createTempFile("image_decoder_", ".tmp")
+            try {
+                imageRepository.openInputStream(uri)?.use { input ->
+                    tempFile.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                } ?: return null
+                StagedSource(ImageDecoder.createSource(tempFile), tempFile)
+            } catch (e: Exception) {
+                tempFile.delete()
+                throw e
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to stage $uri for ImageDecoder", e)
+            null
+        }
+    }
+
+    /** An [ImageDecoder.Source] plus the temp file that backs it, if one was needed. */
+    private class StagedSource(
+        val source: ImageDecoder.Source,
+        val tempFileToDelete: File? = null
+    )
 
     private suspend fun readHeaderBytes(uri: Uri): ByteArray? {
         val headerStartTime = System.currentTimeMillis()

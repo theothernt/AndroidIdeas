@@ -59,6 +59,8 @@ class MainViewModel(
             loadImagesJob?.cancel()
             slideshowJob?.cancel()
             preloadJob?.cancel()
+            // The slideshow is stopped, so nothing is drawing these any more
+            preloadedBitmaps.values.forEach { recycle(it.bitmap) }
             preloadedBitmaps.clear()
             ramMonitoringJob?.cancel()
             return
@@ -196,6 +198,11 @@ class MainViewModel(
                     }
 
                     val loaded = result
+                    // The bitmap being replaced. It is still on screen for the
+                    // duration of the crossfade, so it cannot be recycled until
+                    // the wait at step 6 completes.
+                    val outgoing = _uiState.value.currentDisplayImage?.bitmap
+
                     if (loaded != null) {
                         val resolveStartTime = System.currentTimeMillis()
                         val metadataLabel = resolveLocationOrModel(loaded.metadata)
@@ -215,6 +222,14 @@ class MainViewModel(
 
                     // 6. Wait for image transition to complete
                     delay(TRANSITION_DURATION.toLong())
+
+                    // 7. The crossfade is done and the outgoing bitmap is no
+                    // longer on screen, so it can be released. Without this a
+                    // slideshow keeps every full-screen bitmap it has shown
+                    // until the GC gets around to collecting it.
+                    if (outgoing != null && outgoing !== loaded?.bitmap) {
+                        recycle(outgoing)
+                    }
                 } else {
                     delay(DISPLAY_DURATION)
                 }
@@ -282,6 +297,20 @@ class MainViewModel(
         ramMonitoringJob = null
     }
 
+    /**
+     * Releases a bitmap that is no longer referenced by any composable.
+     *
+     * Recycling is only safe once the bitmap has left the composition: Compose
+     * keeps no reference to it, and the pixel memory is freed immediately rather
+     * than waiting for a GC pass. Bitmap.recycle() is a no-op on a bitmap that is
+     * already recycled, so double-release is harmless.
+     */
+    private fun recycle(bitmap: Bitmap) {
+        if (!bitmap.isRecycled) {
+            bitmap.recycle()
+        }
+    }
+
     fun toggleOverlays() {
         val showingOverlays = !_uiState.value.areOverlaysVisible
         _uiState.update { it.copy(areOverlaysVisible = showingOverlays) }
@@ -297,7 +326,12 @@ class MainViewModel(
     override fun onCleared() {
         super.onCleared()
         preloadJob?.cancel()
+
+        // Nothing is on screen once the ViewModel is cleared, so every bitmap
+        // still held here can be released outright.
+        preloadedBitmaps.values.forEach { recycle(it.bitmap) }
         preloadedBitmaps.clear()
+        _uiState.value.currentDisplayImage?.bitmap?.let { recycle(it) }
     }
 }
 

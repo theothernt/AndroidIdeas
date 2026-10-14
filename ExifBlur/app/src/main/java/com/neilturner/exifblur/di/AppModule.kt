@@ -25,7 +25,7 @@ val appModule = module {
     // Use ImageDecoder-based helper for API 28+, BitmapFactory for older
     single {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            BitmapHelperV28(get())
+            BitmapHelperV28(get(), androidContext().contentResolver)
         } else {
             BitmapHelper(get())
         }
