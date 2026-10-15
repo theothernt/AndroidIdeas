@@ -94,6 +94,10 @@ dependencies {
 	implementation(libs.androidx.media3.exoplayer)
 	implementation(libs.androidx.media3.exoplayer.hls)
 	implementation(libs.androidx.media3.effect)
+	// Compile-time only, for ByteBufferGlEffect.Processor's ListenableFuture. media3-effect
+	// declares guava as a runtime dependency, so without this the interface cannot be
+	// implemented. See the version note in libs.versions.toml.
+	implementation(libs.google.guava)
 	implementation(libs.androidx.tv.foundation)
 	implementation(libs.androidx.tv.material)
 	implementation(libs.kotlinx.serialization.json)

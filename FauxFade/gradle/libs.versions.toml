@@ -10,6 +10,12 @@ lifecycleRuntimeKtx = "2.11.0"
 lifecycleViewmodelCompose = "2.11.0"
 activityCompose = "1.13.0"
 media3 = "1.11.1"
+# Not a direct dependency of ours. ByteBufferGlEffect.Processor declares
+# com.google.common.util.concurrent.ListenableFuture in its public signature, but media3-effect
+# pulls guava in at runtime scope only, so it is not on the compile classpath and the interface
+# cannot be implemented without asking for it here. Pinned to the version already resolved into
+# the runtime classpath so this changes nothing about what ships.
+guava = "33.3.1-android"
 leakcanary = "3.0-alpha-9"
 spotlessPlugin = "8.10.4"
 
@@ -30,6 +36,7 @@ androidx-activity-compose = { group = "androidx.activity", name = "activity-comp
 androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
 androidx-media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "media3" }
 androidx-media3-effect = { group = "androidx.media3", name = "media3-effect", version.ref = "media3" }
+google-guava = { group = "com.google.guava", name = "guava", version.ref = "guava" }
 kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinSerialization" }
 squareup-leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
 

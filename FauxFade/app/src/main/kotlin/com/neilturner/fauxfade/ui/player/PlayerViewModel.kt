@@ -35,10 +35,11 @@ import kotlin.time.TimeSource
 /**
  * Owns the two players and the handoff between them.
  *
- * One slot plays for [PLAY_DURATION_MS], then the other is brought up in its place. Halfway
- * through the segment the incoming video is loaded and primed so the handoff has something to
- * show immediately. The whole cycle is driven from a single coroutine, which is also what
- * publishes [remainingSeconds], so the countdown cannot drift out of step with the actual switch.
+ * One slot plays for [PLAY_DURATION_MS], then the other is brought up in its place. Part way
+ * through the segment - at [PRELOAD_AFTER_MS] - the incoming video is loaded and primed so the
+ * handoff has something to show immediately and has the rest of the segment to get ahead. The
+ * whole cycle is driven from a single coroutine, which is also what publishes
+ * [remainingSeconds], so the countdown cannot drift out of step with the actual switch.
  *
  * It also owns the startup flow: the app sits in [AppPhase.Picking] until the quality has been
  * chosen and the countdown has run out (or been skipped), and only then are the players built
@@ -108,6 +109,21 @@ class PlayerViewModel(
 	 * the frame the decoder just produced rather than copied back off the surface.
 	 */
 	private val taps = PlayerSlot.entries.associateWith { StillTapEffect() }
+
+	/**
+	 * One per player, for [StillCaptureMode.SCHEDULED_EFFECT].
+	 *
+	 * Built in [beginPlayback] rather than here because each capture needs its player's
+	 * application looper to post its own hand-back on, and that only exists once the players do -
+	 * the same reason [players] is not built at construction.
+	 */
+	private lateinit var scheduled: Map<PlayerSlot, ScheduledFrameCapture>
+
+	/** One per player, for [StillCaptureMode.METADATA_RETRIEVER]. Stateless, so this is free. */
+	private lateinit var retrievers: Map<PlayerSlot, RetrieverFrameCapture>
+
+	/** Which path the run captures its stills with. See [StillCaptureMode]. */
+	private val captureMode = CAPTURE_MODE
 
 	private val _foreground = MutableStateFlow(PlayerSlot.PRIMARY)
 	val foreground: StateFlow<PlayerSlot> = _foreground.asStateFlow()
@@ -220,6 +236,10 @@ class PlayerViewModel(
 				return
 			}
 			players = createPlayerSlots(getApplication(), quality)
+			// After the players, because both need one: the scheduled capture reads the player's
+			// application looper when it is built.
+			scheduled = PlayerSlot.entries.associateWith { ScheduledFrameCapture(players.getValue(it)) }
+			retrievers = PlayerSlot.entries.associateWith { RetrieverFrameCapture() }
 			_playingQuality.value = quality
 			Log.i(TAG, "startup: $quality, ${order.size} clips")
 			_phase.value = AppPhase.PLAYING
@@ -239,12 +259,16 @@ class PlayerViewModel(
 		// pass-through, so what reaches the display is unchanged, but it has to be installed
 		// before playback starts rather than rebuilt underneath a running player.
 		//
-		// Skipped while the tap is off, and that is the point of the switch: leaving it out
-		// takes the whole effect pipeline out of the per-frame path rather than only skipping
-		// the readback, and the player goes back to rendering straight to the surface.
-		if (CAPTURE_STILLS) {
+		// Only the always-on mode does it here. The scheduled path installs its own effect a lead
+		// time before each capture, and the retriever path never installs one at all, so for both
+		// of those the render path is left completely alone for the whole segment.
+		if (CAPTURE_STILLS && captureMode == StillCaptureMode.ALWAYS_ON_TAP) {
 			taps.forEach { (slot, tap) -> players.getValue(slot).setVideoEffects(listOf(tap)) }
 		}
+		// Logged so a run's numbers can be attributed to the path that produced them. The three
+		// modes are only comparable next to each other, and this is the only line that says which
+		// one a given set of timings came from.
+		Log.i(TAG, "capture: mode=$captureMode stills=$CAPTURE_STILLS")
 		loopJob = viewModelScope.launch { runPlaylistLoop() }
 		startMemoryWatch()
 	}
@@ -311,31 +335,33 @@ class PlayerViewModel(
 		while (coroutineContext.isActive) {
 			val incoming = onScreen.opposite()
 			val nextIndex = (currentIndex + 1) % order.size
+
+			// Armed here rather than at the handoff below, and only for the modes that need to run
+			// ahead. The scheduled capture installs its effect a fixed lead time *before* its
+			// target, so it has to be asked for while this segment is still playing: asking at the
+			// handoff would be asking for a position the player has already passed, the message
+			// would land at once, and the pipeline would have no time to finish building before
+			// the pause. The other two do not want this - the always-on tap answers on the very
+			// next frame, so arming it early would capture the start of the segment instead of the
+			// end - hence the null.
+			val armedStill = armScheduledStill(onScreen)
+
 			tickSegment { players.getValue(incoming).preload(order[nextIndex]) }
 
 			val outgoing = players.getValue(onScreen)
 
-			// Arm the tap, let it catch a frame, and only pause once the capture has landed.
+			// Take the still, then pause. The order matters and is not negotiable: a paused player
+			// produces no frames, so anything that needs a frame has to get it first. Pausing after
+			// the capture is also what keeps the still in step with the video - the frame taken is
+			// the frame the player then stops on, rather than one taken a lead earlier while the
+			// clip carried on underneath it.
 			//
-			// The arm has to come before the pause because the readback can only happen inside a
-			// frame callback and a paused player produces no frames. But pausing a fixed lead
-			// *after* the arm - as this used to - is what put the still out of step with the video:
-			// the tap takes the first frame to arrive, so a 150ms lead left the still on a frame
-			// from 150ms before the freeze while the player carried on and stopped several frames
-			// later. On a slowly panning clip that reads as the still drifting when the video comes
-			// back. Pausing after the capture instead means the player stops on the frame that was
-			// actually taken.
+			// How the frame is obtained depends on [captureMode]: the always-on tap is already
+			// installed and answers immediately, the scheduled path has been building its pipeline
+			// since before the target and should already have the frame, and the retriever path
+			// pauses here and then seeks the file.
 			val t0 = TimeSource.Monotonic.markNow()
-			// Not armed when the tap is off. Arming and then waiting would be the wrong shape:
-			// the signal can never complete, so every handoff would sit out the full tap
-			// timeout before giving up and cutting - a stall that has nothing to do with what
-			// the effect pipeline costs, which is exactly what this switch is here to measure.
-			val still =
-				if (CAPTURE_STILLS) {
-					grabStill(onScreen, taps.getValue(onScreen).arm())
-				} else {
-					null
-				}
+			val still = captureStill(onScreen, order[currentIndex], armedStill)
 			val afterCaptureMs = t0.elapsedNow().inWholeMilliseconds
 
 			outgoing.pause()
@@ -423,6 +449,71 @@ class PlayerViewModel(
 	}
 
 	/**
+	 * The still for this handoff, or null if the configured path could not produce one.
+	 *
+	 * Null is the same failure for all three and is handled the same way by the caller - the
+	 * handoff degrades to a cut - so no path has to reach for a second attempt on another's
+	 * behalf. What differs is the budget each one is given, because they have wildly different
+	 * costs: the always-on tap is already installed and answers on the next frame, the scheduled
+	 * capture has had a lead time to build its pipeline, and the retriever has to open and seek a
+	 * network file, which is the only one that might genuinely need seconds.
+	 *
+	 * [armedStill] is the deferred handed out by [armScheduledStill] earlier in this segment, and
+	 * is null for the modes that do not run ahead.
+	 */
+	private suspend fun captureStill(
+		slot: PlayerSlot,
+		item: VideoItem,
+		armedStill: CompletableDeferred<Bitmap?>?,
+	): Bitmap? {
+		if (!CAPTURE_STILLS) return null
+		return when (captureMode) {
+			StillCaptureMode.ALWAYS_ON_TAP -> {
+				grabStill(slot, taps.getValue(slot).arm())
+			}
+
+			StillCaptureMode.SCHEDULED_EFFECT -> {
+				val capture = scheduled.getValue(slot)
+				try {
+					// Collects what the processor took part way through this segment, so it should
+					// already be done. The timeout exists only so a pipeline that never came up
+					// cannot stall the loop.
+					withTimeoutOrNull(_playingQuality.value.tapTimeoutMs) { armedStill?.await() }
+				} finally {
+					// On every way out of here the capture is finished with, including a timeout,
+					// and a half-built pipeline must not be left installed on a player the loop has
+					// already stopped using.
+					capture.cancelPending()
+				}
+			}
+
+			StillCaptureMode.METADATA_RETRIEVER -> {
+				withTimeoutOrNull(RETRIEVER_TIMEOUT_MS) {
+					// Aimed at the position the player has already reached, so the pause message
+					// lands at once. The frame comes back from the file rather than from the player,
+					// so where the player is stopped does not affect which frame is returned.
+					retrievers.getValue(slot).captureAt(players.getValue(slot), item.uri, PLAY_DURATION_MS)
+				}
+			}
+		}
+	}
+
+	/**
+	 * Starts the scheduled capture for this segment, if that is the mode in use.
+	 *
+	 * Only the scheduled path needs this: its effect has to be installed and built before its
+	 * target frame, and the only moment that can happen is while the segment is still playing.
+	 * The always-on tap is the opposite - it captures the next frame it sees, so arming it early
+	 * would take the still from the start of the clip instead of the end - and the retriever path
+	 * does its work in one go at the handoff. Both get null and are handled there.
+	 */
+	private fun armScheduledStill(slot: PlayerSlot): CompletableDeferred<Bitmap?>? {
+		if (!CAPTURE_STILLS) return null
+		if (captureMode != StillCaptureMode.SCHEDULED_EFFECT) return null
+		return scheduled.getValue(slot).captureAt(STILL_TARGET_MS)
+	}
+
+	/**
 	 * The still, read back out of the tap.
 	 *
 	 * Null when the tap did not catch a frame, which the caller treats as "cut rather than
@@ -503,6 +594,10 @@ class PlayerViewModel(
 		loopJob?.cancel()
 		memoryJob?.cancel()
 		countdownJob?.cancel()
+		// Before the players: a capture in flight holds a pending PlayerMessage and possibly an
+		// installed effect, and both have to be dropped while the player they belong to still
+		// exists to drop them from.
+		if (::scheduled.isInitialized) scheduled.values.forEach { it.release() }
 		// Uninitialised when the app is cleared from the picker, where no player was ever built.
 		if (::players.isInitialized) players.values.forEach { it.release() }
 	}
@@ -533,8 +628,12 @@ private fun ExoPlayer.preload(item: VideoItem) {
 
 /**
  * How long each video plays before the handoff to the other slot.
+ *
+ * Fifteen seconds rather than ten. The opening of any of these clips is a codec spin-up and a
+ * fade up from black, and at ten seconds that was a sizeable fraction of everything you actually
+ * watched; fifteen gives the shot room to establish itself before it is taken away.
  */
-private const val PLAY_DURATION_MS = 10_000L
+private const val PLAY_DURATION_MS = 15_000L
 
 /** Seconds in a segment: what the countdown reads from, and the resolution it is published at. */
 private const val SECONDS_PER_SEGMENT = (PLAY_DURATION_MS / 1000).toInt()
@@ -554,7 +653,7 @@ private fun secondsLeft(remainingMs: Long): Int = ceil(remainingMs / 1000.0).toI
  * Whether the still is captured from the decoder's frame pipeline.
  *
  * Off for now, to measure. The tap is installed as a video effect, which puts an extra GL pass
- * in front of every frame for the whole run in order to capture one frame every ten seconds -
+ * in front of every frame for the whole run in order to capture one frame per segment -
  * the one cost in the app that scales with frame count rather than with handoffs. Leaving it
  * off takes the effect pipeline out entirely and the player renders straight to the surface.
  *
@@ -566,7 +665,47 @@ private fun secondsLeft(remainingMs: Long): Int = ceil(remainingMs / 1000.0).toI
  *
  * Flip it back to true for the dissolve; nothing else changes.
  */
-private const val CAPTURE_STILLS = false
+private const val CAPTURE_STILLS = true
+
+/**
+ * Which path the run takes its stills through.
+ *
+ * The always-on tap is still the default, because on this device the other two are not better
+ * once you count what each actually costs. Measured, 1080p SDR, same build:
+ *
+ * - [StillCaptureMode.ALWAYS_ON_TAP] - capture 96-119ms, still correct, but the pipeline is in
+ *   front of every frame for the whole run.
+ * - [StillCaptureMode.SCHEDULED_EFFECT] - does not produce a still at all: installing the effect
+ *   stops the player rather than hitching it, so the target is never reached. See the mode.
+ * - [StillCaptureMode.METADATA_RETRIEVER] - capture 2.1-3.1s, still correct, no pipeline at all,
+ *   but the outgoing clip is frozen for those 2-3s at every handoff.
+ *
+ * So the retriever trades per-frame overhead for a visible multi-second freeze at every handoff,
+ * which is a bad deal for something meant to be looked at from across a room. Flip this to
+ * [StillCaptureMode.METADATA_RETRIEVER] to try it anyway - it is the only one of the three that
+ * both works and keeps the pipeline out of the render path.
+ */
+private val CAPTURE_MODE = StillCaptureMode.ALWAYS_ON_TAP
+
+/**
+ * How far before the segment ends the scheduled capture aims.
+ *
+ * Just short of the end, so the still is of the last thing the clip was showing, but short enough
+ * that the frame has landed by the time the loop asks for it - the loop reaches the handoff at
+ * [PLAY_DURATION_MS], and aiming the capture at exactly that point would race the frame that is
+ * about to be presented.
+ */
+private const val STILL_TARGET_SLACK_MS = 250L
+
+private const val STILL_TARGET_MS = PLAY_DURATION_MS - STILL_TARGET_SLACK_MS
+
+/**
+ * How long the retriever path is given before the handoff gives up on it.
+ *
+ * Generous, because unlike the other two it has to open the file and seek it, and the catalogue
+ * is network-hosted. Only used by [StillCaptureMode.METADATA_RETRIEVER].
+ */
+private const val RETRIEVER_TIMEOUT_MS = 5_000L
 
 /**
  * Whether the app starts playback by itself.
@@ -597,8 +736,21 @@ private const val START_COUNTDOWN_TICK_MS = 1_000L
 /** How often the memory readout is refreshed. PSS is a binder call, so it is not free. */
 private const val MEMORY_POLL_MS = 2_000L
 
-/** How long before the end of a segment the next video is loaded and primed. */
-private const val PRELOAD_AFTER_MS = 5_000L
+/**
+ * How long after a segment starts the next clip is loaded and primed.
+ *
+ * What this buys is headroom: whatever is loaded here then has until the segment ends to buffer,
+ * and the handoff cannot begin until the incoming player has actually rendered a frame. At ten
+ * seconds into a fifteen second segment that is five seconds of headroom - the same as the ten
+ * and five it replaced, which is deliberate. Once the preload has had that long there is nothing
+ * for the handoff to wait for at 1080p, and headroom is what absorbs a slow network rather than
+ * anything that makes the cut happen sooner.
+ *
+ * "Halfway through" used to be the rule of thumb, and it stops being a useful one now that the
+ * two numbers are independent: as a fraction it would drift earlier with every lengthening of the
+ * segment, which costs nothing but says nothing about whether there is room left to buffer in.
+ */
+private const val PRELOAD_AFTER_MS = 10_000L
 
 /**
  * Pause between sealing the still and swapping the surfaces, so the still is composited at

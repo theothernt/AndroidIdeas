@@ -52,7 +52,7 @@ private fun bufferLimit(quality: Quality) =
 
 /**
  * Load control limits. The defaults buffer up to 50s of a 2K clip per player and ignore the
- * byte target, which is far more than a loop that plays 10s at a time needs.
+ * byte target, which is far more than a loop that plays a handful of seconds at a time needs.
  *
  * The durations stay generous on purpose: the next video is primed mid-segment so the handoff
  * has something to show immediately, and starving it would show up as a stall at the swap.
