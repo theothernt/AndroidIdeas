@@ -65,8 +65,11 @@ class PlayerViewModel(
 	private val _quality = MutableStateFlow(Quality.FHD_SDR)
 	val quality: StateFlow<Quality> = _quality.asStateFlow()
 
-	/** Seconds left on the startup countdown. Reaches 0 just before playback starts. */
-	private val _countdown = MutableStateFlow(START_COUNTDOWN_SECONDS)
+	/**
+	 * Seconds left on the startup countdown. Zero when there is no countdown running, which is
+	 * what makes the button read plain "Start playback" rather than showing a number.
+	 */
+	private val _countdown = MutableStateFlow(if (AUTO_START) START_COUNTDOWN_SECONDS else 0)
 	val countdown: StateFlow<Int> = _countdown.asStateFlow()
 
 	/**
@@ -170,6 +173,7 @@ class PlayerViewModel(
 	}
 
 	private fun startCountdown() {
+		if (!AUTO_START) return
 		if (countdownJob != null) return
 		countdownJob =
 			viewModelScope.launch {
@@ -514,6 +518,16 @@ private const val PLAY_DURATION_MS = 10_000L
 // unchanged: the still is sealed and fully opaque for the whole wait, so nothing is visible
 // during it, and the deadlines only stop a player that never renders - a stalled stream, say -
 // from freezing the handoff indefinitely.
+
+/**
+ * Whether the app starts playback by itself.
+ *
+ * Off for now so the quality picker can be worked on without playback cutting in mid-tweak. With
+ * it off the countdown never starts, the button reads plain "Start playback", and the only way
+ * into playback is pressing it - which is also the honest behaviour for a user who has not
+ * chosen anything yet. Flip it back to true to get the countdown; nothing else changes.
+ */
+private const val AUTO_START = false
 
 /**
  * How long the startup countdown runs before playback begins on its own.

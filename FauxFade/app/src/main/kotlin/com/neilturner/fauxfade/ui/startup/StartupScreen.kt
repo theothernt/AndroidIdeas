@@ -125,7 +125,12 @@ fun StartupScreen(
 						Modifier
 							.widthIn(max = PANEL_WIDTH)
 							.background(MaterialTheme.colorScheme.surface, RoundedCornerShape(CORNER))
-							.padding(vertical = PANEL_PADDING)
+							// The horizontal gap is headroom, not styling. A focused row is scaled
+							// up about 5%, which at this width measures out at roughly 12dp out
+							// either side, and without the gap the row pushes out through the panel
+							// edge and hangs in the scrim. Padding the panel inward keeps the scale
+							// inside the box and lets the animation do its job.
+							.padding(horizontal = ROW_ROOM, vertical = PANEL_PADDING)
 							// Traps the arrow keys inside the panel. Without it, up from the first
 							// row escapes to the start button behind the scrim, which is still
 							// focusable and still reacts to the click.
@@ -139,18 +144,23 @@ fun StartupScreen(
 									viewModel.select(option)
 									expanded = false
 								},
-								// Stated rather than defaulted. The theme carries no colour scheme,
-								// and the inherited content colour lands too close to the panel
-								// behind it to read on the three rows that are not selected.
+								// Focus tints, selection does not. The row under the D-pad needs
+								// somewhere to be. The quality already chosen says itself with its
+								// filled radio, so tinting that row as well marked the answer twice
+								// and made it look highlighted rather than answered.
+								//
+								// Note there is no focusedSelectedContainerColor to override: a row
+								// that is both takes this tint. The panel opens with focus already on
+								// the chosen quality, so it is tinted until the D-pad moves off it.
 								colors =
 									ListItemDefaults.colors(
 										containerColor = Color.Transparent,
+										focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+										selectedContainerColor = Color.Transparent,
 										contentColor = MaterialTheme.colorScheme.onSurface,
-										focusedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-										focusedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-										selectedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-										selectedContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-										focusedSelectedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+										focusedContentColor = MaterialTheme.colorScheme.onSurface,
+										selectedContentColor = MaterialTheme.colorScheme.onSurface,
+										focusedSelectedContentColor = MaterialTheme.colorScheme.onSurface,
 									),
 								headlineContent = {
 									Text(option.label, style = MaterialTheme.typography.titleMedium)
@@ -180,6 +190,12 @@ private const val SCRIM_ALPHA = 0.65f
 private val PANEL_WIDTH = 520.dp
 
 private val PANEL_PADDING = 8.dp
+
+/**
+ * Clear space inside the panel either side of the rows, so a focused row's scale stays within
+ * the panel. Sized from the measured 5% focus scale at [PANEL_WIDTH], plus a little slack.
+ */
+private val ROW_ROOM = 18.dp
 
 private val GAP = 24.dp
 
