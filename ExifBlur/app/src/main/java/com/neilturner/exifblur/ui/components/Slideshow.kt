@@ -5,24 +5,24 @@ import android.os.Build
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
-import coil3.request.ImageRequest
 import com.neilturner.exifblur.utils.FastBlurCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -68,7 +68,6 @@ fun Slideshow(
 	transitionDuration: Int,
 	modifier: Modifier = Modifier
 ) {
-	val context = LocalContext.current
 	val isAndroid12OrHigher = android.os.Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 	
 	Box(
@@ -89,54 +88,55 @@ fun Slideshow(
 							.fillMaxSize()
 							.clipToBounds()
 					) {
-						if (isAndroid12OrHigher) {
-							// Android 12+: Use Compose blur modifier (hardware accelerated)
-							AsyncImage(
-								model = ImageRequest.Builder(context)
-									.data(image.bitmap)
-									.build(),
+					if (isAndroid12OrHigher) {
+						// Android 12+: Use Compose blur modifier (hardware accelerated)
+						val backgroundImage = remember(image.bitmap) { image.bitmap.asImageBitmap() }
+						Image(
+							bitmap = backgroundImage,
+							contentDescription = "Blurred Background Image",
+							contentScale = ContentScale.Crop,
+							modifier = Modifier
+								.fillMaxSize()
+								.scale(2f)
+								.blur(radius = BLUR_RADIUS.dp)
+								.alpha(0.5f)
+						)
+					} else {
+						// Android 11 and below: Use software stack blur, computed on a
+						// background dispatcher so composition is never blocked
+						val configuration = LocalConfiguration.current
+						val blurredBitmap by produceState<Bitmap?>(initialValue = null, image.bitmap) {
+							value = withContext(Dispatchers.Default) {
+								blurBitmap(
+									image.bitmap,
+									configuration.screenWidthDp / 2,
+									configuration.screenHeightDp / 2
+								)
+							}
+						}
+						blurredBitmap?.let { blurred ->
+							val backgroundImage = remember(blurred) { blurred.asImageBitmap() }
+							Image(
+								bitmap = backgroundImage,
 								contentDescription = "Blurred Background Image",
 								contentScale = ContentScale.Crop,
 								modifier = Modifier
 									.fillMaxSize()
 									.scale(2f)
-									.blur(radius = BLUR_RADIUS.dp)
 									.alpha(0.5f)
 							)
-						} else {
-							// Android 11 and below: Use software stack blur, computed on a
-							// background dispatcher so composition is never blocked
-							val configuration = LocalConfiguration.current
-							val blurredBitmap by produceState<Bitmap?>(initialValue = null, image.bitmap) {
-								value = withContext(Dispatchers.Default) {
-									blurBitmap(
-										image.bitmap,
-										configuration.screenWidthDp / 2,
-										configuration.screenHeightDp / 2
-									)
-								}
-							}
-							blurredBitmap?.let { blurred ->
-								AsyncImage(
-									model = blurred,
-									contentDescription = "Blurred Background Image",
-									contentScale = ContentScale.Crop,
-									modifier = Modifier
-										.fillMaxSize()
-										.scale(2f)
-										.alpha(0.5f)
-								)
-							}
 						}
 					}
+				}
 
-					// Foreground Image (fitted; bitmaps arrive already rotated by the loader)
-					AsyncImage(
-						model = image.bitmap,
-						contentDescription = "Foreground Image",
-						contentScale = ContentScale.Fit,
-						modifier = Modifier.fillMaxSize()
-					)
+				// Foreground Image (fitted; bitmaps arrive already rotated by the loader)
+				val foregroundImage = remember(image.bitmap) { image.bitmap.asImageBitmap() }
+				Image(
+					bitmap = foregroundImage,
+					contentDescription = "Foreground Image",
+					contentScale = ContentScale.Fit,
+					modifier = Modifier.fillMaxSize()
+				)
 				}
 			} else {
 				Box(modifier = Modifier
