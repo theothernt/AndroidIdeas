@@ -13,7 +13,9 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.neilturner.fauxfade.BuildConfig
 import com.neilturner.fauxfade.TAG
-import com.neilturner.fauxfade.media.Playlist
+import com.neilturner.fauxfade.media.AerialAsset
+import com.neilturner.fauxfade.media.Quality
+import com.neilturner.fauxfade.media.VideoCatalog
 import com.neilturner.fauxfade.media.VideoItem
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -36,21 +38,62 @@ import kotlin.time.TimeSource
  * through the segment the incoming video is loaded and primed so the handoff has something to
  * show immediately. The whole cycle is driven from a single coroutine, which is also what
  * publishes [remainingMs], so the countdown cannot drift out of step with the actual switch.
+ *
+ * It also owns the startup flow: the app sits in [AppPhase.Picking] until the quality has been
+ * chosen and the countdown has run out (or been skipped), and only then are the players built
+ * and the loop started. Nothing about playback is torn down or rebuilt to change quality - the
+ * picker is gone by the time playback exists.
  */
 @OptIn(UnstableApi::class)
 class PlayerViewModel(
 	application: Application,
 ) : AndroidViewModel(application) {
-	private val players = createPlayerSlots(application)
+	/**
+	 * Built when playback begins rather than here.
+	 *
+	 * Lateinit on purpose: the buffer cap depends on the chosen quality, so they cannot exist
+	 * before the picker has been answered. Touching this before then throws
+	 * UninitializedPropertyAccessException, which is a much easier failure to trace than a
+	 * silently empty map.
+	 */
+	private lateinit var players: Map<PlayerSlot, ExoPlayer>
+
+	private val _phase = MutableStateFlow(AppPhase.PICKING)
+	val phase: StateFlow<AppPhase> = _phase.asStateFlow()
+
+	/** The quality on offer to play at. Defaults to 1080p SDR. */
+	private val _quality = MutableStateFlow(Quality.FHD_SDR)
+	val quality: StateFlow<Quality> = _quality.asStateFlow()
+
+	/** Seconds left on the startup countdown. Reaches 0 just before playback starts. */
+	private val _countdown = MutableStateFlow(START_COUNTDOWN_SECONDS)
+	val countdown: StateFlow<Int> = _countdown.asStateFlow()
 
 	/**
-	 * The clips in the order this run will play them, shuffled once so the app does not always
-	 * open on the same clip.
+	 * The catalogue, parsed once.
 	 *
-	 * Held as a field rather than shuffled at each use: the loop walks this list for the whole
-	 * run, so re-rolling it partway through would swap the clip under the player mid-handoff.
+	 * Held behind a deferred rather than a plain field because playback can begin before the
+	 * parse has finished - the button skips the whole countdown, and nothing stops a skip landing
+	 * in the first few milliseconds.
 	 */
-	private val order = Playlist.shuffled()
+	private val assetsLoaded = CompletableDeferred<List<AerialAsset>>()
+
+	/**
+	 * The clips in the order this run will play them, chosen from the catalogue at the selected
+	 * quality and held as a field rather than re-rolled at each use: the loop walks this list for
+	 * the whole run, so re-rolling it partway through would swap the clip under the player
+	 * mid-handoff.
+	 */
+	private lateinit var order: List<VideoItem>
+
+	/**
+	 * The quality playback actually started at.
+	 *
+	 * Distinct from [_quality], which the picker is still free to change right up until the
+	 * countdown runs out. The handoff has to read a stable value, because a timeout that changed
+	 * mid-loop would be a different timeout on either side of a swap.
+	 */
+	private lateinit var chosen: Quality
 
 	/**
 	 * One tap per slot, installed into the player's effect chain so the still can be taken from
@@ -89,8 +132,87 @@ class PlayerViewModel(
 
 	private var loopJob: Job? = null
 	private var memoryJob: Job? = null
+	private var countdownJob: Job? = null
+
+	/** True while [beginPlayback] is building the players, so a second caller cannot join in. */
+	private var starting = false
+
+	// Parse the catalogue, then run the countdown down to playback.
+	//
+	// The countdown is deliberately not waiting on the picker: the app is a screensaver, so the
+	// whole point is that it starts on its own. Changing the quality while it runs is fine - the
+	// ten clips are only drawn once playback begins, so a late change is picked up for free.
+	init {
+		viewModelScope.launch {
+			assetsLoaded.complete(VideoCatalog.load(application))
+			startCountdown()
+		}
+	}
 
 	fun playerFor(slot: PlayerSlot): ExoPlayer = players.getValue(slot)
+
+	/** Records the quality to play at. Takes effect when playback starts. */
+	fun select(quality: Quality) {
+		_quality.value = quality
+		Log.i(TAG, "picked: $quality")
+	}
+
+	/**
+	 * Called from the startup button. Launches rather than doing the work inline because
+	 * [beginPlayback] has to wait for the catalogue, and an onClick is not a coroutine.
+	 */
+	fun skipCountdown() {
+		viewModelScope.launch { beginPlayback() }
+	}
+
+	private fun startCountdown() {
+		if (countdownJob != null) return
+		countdownJob =
+			viewModelScope.launch {
+				for (n in START_COUNTDOWN_SECONDS downTo 1) {
+					_countdown.value = n
+					delay(START_COUNTDOWN_TICK_MS)
+				}
+				_countdown.value = 0
+				beginPlayback()
+			}
+	}
+
+	/**
+	 * Locks the choice in: draws the ten clips, builds the players sized for them, and moves to
+	 * the playing phase.
+	 *
+	 * The phase flips last and is the only thing the composables key off, so the players and the
+	 * order are always in place before anything can ask for them.
+	 */
+	private suspend fun beginPlayback() {
+		// Reachable from two places at once - the button, and the countdown running out - which
+		// collide exactly when a tap lands on the same second the timer expires. Both callers
+		// run on the main dispatcher, so a plain flag is enough to keep them apart.
+		if (starting || _phase.value == AppPhase.PLAYING) return
+		starting = true
+		try {
+			val quality = _quality.value
+			order = VideoCatalog.pick(assetsLoaded.await(), quality)
+			if (order.isEmpty()) {
+				// Nothing to play. Staying on the picker is the least bad outcome - the
+				// alternative is a player screen that sits on a spinner forever.
+				Log.e(TAG, "startup: no clips available for $quality, staying on the picker")
+				return
+			}
+			players = createPlayerSlots(getApplication(), quality)
+			chosen = quality
+			Log.i(TAG, "startup: $quality, ${order.size} clips")
+			_phase.value = AppPhase.PLAYING
+		} finally {
+			starting = false
+			// Cancelled here rather than on entry: this is usually called *from* the countdown
+			// job, and cancelling that job before the work is done would abort this function
+			// along with it.
+			countdownJob?.cancel()
+			countdownJob = null
+		}
+	}
 
 	fun start() {
 		if (loopJob != null) return
@@ -135,7 +257,7 @@ class PlayerViewModel(
 		loopJob = null
 		memoryJob?.cancel()
 		memoryJob = null
-		players.values.forEach { it.pause() }
+		if (::players.isInitialized) players.values.forEach { it.pause() }
 	}
 
 	private suspend fun runPlaylistLoop() {
@@ -220,9 +342,9 @@ class PlayerViewModel(
 			incomingPlayer.play()
 			_swapping.value = true
 
-			val rendered = withTimeoutOrNull(FIRST_FRAME_TIMEOUT_MS) { firstFrame.await() }
+			val rendered = withTimeoutOrNull(chosen.swapTimeoutMs) { firstFrame.await() }
 			if (rendered == null) {
-				Log.w(TAG, "swap: $incoming had no rendered frame in ${FIRST_FRAME_TIMEOUT_MS}ms")
+				Log.w(TAG, "swap: $incoming had no rendered frame in ${chosen.swapTimeoutMs}ms")
 			}
 			val afterSwapMs = t0.elapsedNow().inWholeMilliseconds
 
@@ -278,7 +400,7 @@ class PlayerViewModel(
 	): Bitmap? {
 		val tap = taps.getValue(slot)
 		val started = TimeSource.Monotonic.markNow()
-		withTimeoutOrNull(TAP_CAPTURE_TIMEOUT_MS) { signal.await() }
+		withTimeoutOrNull(chosen.tapTimeoutMs) { signal.await() }
 
 		val tapped = tap.latest()
 		val waitedMs = started.elapsedNow().inWholeMilliseconds
@@ -347,8 +469,19 @@ class PlayerViewModel(
 	override fun onCleared() {
 		loopJob?.cancel()
 		memoryJob?.cancel()
-		players.values.forEach { it.release() }
+		countdownJob?.cancel()
+		// Uninitialised when the app is cleared from the picker, where no player was ever built.
+		if (::players.isInitialized) players.values.forEach { it.release() }
 	}
+}
+
+/** Which of the two top-level screens is up. */
+enum class AppPhase {
+	/** The quality picker and the countdown. No player exists yet. */
+	PICKING,
+
+	/** The video loop. */
+	PLAYING,
 }
 
 @OptIn(UnstableApi::class)
@@ -365,8 +498,34 @@ private fun ExoPlayer.preload(item: VideoItem) {
 	prepare()
 }
 
-/** How long each video plays before the handoff to the other slot. */
+/**
+ * How long each video plays before the handoff to the other slot.
+ */
 private const val PLAY_DURATION_MS = 10_000L
+
+// The two handoff deadlines - how long to wait for the incoming player to render a frame, and
+// how long to wait for the armed readback to land - are not constants any more. They moved onto
+// [Quality] as swapTimeoutMs and tapTimeoutMs, because a 4K decode on a weak device routinely
+// overruns the 1080p figures and the handoff degrades to a cut. What they protect against is
+// unchanged: the still is sealed and fully opaque for the whole wait, so nothing is visible
+// during it, and the deadlines only stop a player that never renders - a stalled stream, say -
+// from freezing the handoff indefinitely.
+
+/**
+ * How long the startup countdown runs before playback begins on its own.
+ *
+ * Ten seconds rather than five: the picker is the only interaction the app offers, and five was
+ * not long enough to open the quality list and read it before the screen went away underneath.
+ */
+private const val START_COUNTDOWN_SECONDS = 10
+
+/**
+ * One tick of the startup countdown.
+ *
+ * A whole second because it is what the button label shows. Distinct from [COUNTDOWN_TICK_MS],
+ * which is the in-segment tick and has to be far finer than this.
+ */
+private const val START_COUNTDOWN_TICK_MS = 1_000L
 
 /** How often the memory readout is refreshed. PSS is a binder call, so it is not free. */
 private const val MEMORY_POLL_MS = 2_000L
@@ -375,25 +534,10 @@ private const val MEMORY_POLL_MS = 2_000L
 private const val PRELOAD_AFTER_MS = 5_000L
 
 /**
- * How long to wait for an armed readback to land before falling back to a surface copy. The
- * player is still playing during this, so a normal capture arrives within a frame or two.
- */
-private const val TAP_CAPTURE_TIMEOUT_MS = 500L
-
-/**
  * Pause between sealing the still and swapping the surfaces, so the still is composited at
  * full opacity before anything behind it changes. One or two frames is enough.
  */
 private const val STILL_LEAD_IN_MS = 150L
-
-/**
- * How long to wait for the incoming player to render its first frame before swapping anyway.
- *
- * The still is sealed and fully opaque for the whole wait, so nothing is visible here except
- * the pause itself. The timeout only stops a player that never renders - a stalled stream, say
- * - from freezing the handoff indefinitely.
- */
-private const val FIRST_FRAME_TIMEOUT_MS = 1_000L
 
 /**
  * How long to wait for the opening clip to render its first frame before clearing the loader

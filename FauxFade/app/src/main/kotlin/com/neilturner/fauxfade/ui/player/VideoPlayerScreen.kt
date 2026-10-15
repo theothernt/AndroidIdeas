@@ -60,6 +60,9 @@ fun VideoPlayerScreen(
 		modifier =
 			modifier
 				.fillMaxSize()
+				// Not a theme colour on purpose. This is the letterbox around the picture, which
+				// has to be true black or it reads as a glowing edge on a dark television; the
+				// app's own background is a shade off black for the screens that sit against it.
 				.background(Color.Black),
 	) {
 		PlayerSlot.entries.forEach { slot ->
@@ -127,11 +130,38 @@ private fun StartupLoader(
 			contentAlignment = Alignment.Center,
 		) {
 			CircularProgressIndicator(
-				color = Color.White,
+				color = MaterialTheme.colorScheme.onSurface,
 				strokeWidth = LOADER_STROKE_DP.dp,
 				modifier = Modifier.size(LOADER_SIZE_DP.dp),
 			)
 		}
+	}
+}
+
+/**
+ * The small translucent chip the debug readouts sit in.
+ *
+ * One composable for both of them: they are the same shape, the same tint and the same padding,
+ * and having them written out twice is how the two drift apart.
+ */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun ReadoutChip(
+	text: String,
+	modifier: Modifier = Modifier,
+) {
+	Box(
+		modifier =
+			modifier
+				.padding(12.dp)
+				.background(MaterialTheme.colorScheme.scrim.copy(alpha = CHIP_ALPHA), RoundedCornerShape(6.dp))
+				.padding(horizontal = 9.dp, vertical = 4.dp),
+	) {
+		Text(
+			text = text,
+			style = MaterialTheme.typography.titleMedium,
+			color = MaterialTheme.colorScheme.onSurface,
+		)
 	}
 }
 
@@ -141,27 +171,13 @@ private fun StartupLoader(
  *
  * Only ever composed in a debug build - see the call site in [VideoPlayerScreen].
  */
-@OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 private fun MemoryReadout(
 	viewModel: PlayerViewModel,
 	modifier: Modifier = Modifier,
 ) {
 	val memoryMb by viewModel.memoryMb.collectAsStateWithLifecycle()
-
-	Box(
-		modifier =
-			modifier
-				.padding(12.dp)
-				.background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
-				.padding(horizontal = 9.dp, vertical = 4.dp),
-	) {
-		Text(
-			text = "$memoryMb MB",
-			style = MaterialTheme.typography.titleMedium,
-			color = Color.White,
-		)
-	}
+	ReadoutChip(text = "$memoryMb MB", modifier = modifier)
 }
 
 /**
@@ -268,9 +284,15 @@ private const val STILL_FADE_MS = 1_500
 /** How long the startup spinner takes to fade out once there is a frame to show. */
 private const val LOADER_FADE_MS = 400
 
-/** Spinner size and stroke, sized up for a ten-foot screen. */
-private const val LOADER_SIZE_DP = 88
-private const val LOADER_STROKE_DP = 6
+/**
+ * Spinner size and stroke.
+ *
+ * Sized for a ten-foot screen, but no bigger: a spinner this large and this alone on a black
+ * screen reads as a splash screen the app has stalled on rather than a wait that is about to
+ * end.
+ */
+private const val LOADER_SIZE_DP = 44
+private const val LOADER_STROKE_DP = 3
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -283,18 +305,8 @@ private fun TransitionCountdown(
 	// often, and each recomposition re-applies the video surface.
 	val remainingMs by viewModel.remainingMs.collectAsStateWithLifecycle()
 	val seconds = ceil(remainingMs / 1000.0).toInt().coerceAtLeast(0)
-
-	Box(
-		modifier =
-			modifier
-				.padding(12.dp)
-				.background(Color.Black.copy(alpha = 0.45f), RoundedCornerShape(6.dp))
-				.padding(horizontal = 9.dp, vertical = 4.dp),
-	) {
-		Text(
-			text = seconds.toString(),
-			style = MaterialTheme.typography.titleMedium,
-			color = Color.White,
-		)
-	}
+	ReadoutChip(text = seconds.toString(), modifier = modifier)
 }
+
+/** How opaque the readout chips are over the video. */
+private const val CHIP_ALPHA = 0.45f

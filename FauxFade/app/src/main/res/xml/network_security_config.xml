@@ -1,7 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
-    <base-config cleartextTrafficPermitted="false" />
-    <domain-config cleartextTrafficPermitted="true">
-        <domain includeSubdomains="true">sylvan.apple.com</domain>
-    </domain-config>
+    <!--
+      Cleartext is permitted, so the app can play both http:// and https:// clips.
+
+      It is needed rather than merely convenient: the catalogue lists every clip as https, but
+      sylvan.apple.com serves a certificate issued by "Apple Server Authentication CA", an
+      internal CA that is not in the public trust store. Connecting to it over TLS fails with
+      "Trust anchor for certification path not found" on a stock device, leaving the player
+      stuck at position 0. The plain http endpoint is still served, so those clips are fetched
+      over http and this has to be allowed for them to play at all.
+
+      A domain-scoped exception for that one host would be tighter, but every URL in the
+      catalogue is on it, so the scoping would not actually exclude anything today.
+    -->
+    <base-config cleartextTrafficPermitted="true" />
 </network-security-config>

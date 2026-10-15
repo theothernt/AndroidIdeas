@@ -5,17 +5,23 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import com.neilturner.fauxfade.media.Quality
 
 /**
  * Builds one player per [PlayerSlot], both configured the same way.
  *
- * Kept out of the view model because how a player is built is not view state: it happens once,
- * up front, and nothing about it changes while the loop runs.
+ * Taken at [beginPlayback] rather than at construction because the buffer cap depends on the
+ * quality, and the quality is not known until the picker has been answered. Nothing about the
+ * player changes after this, so building them here rather than in the view model's initialiser
+ * keeps "how a player is built" out of the object's construction path.
  */
 @OptIn(UnstableApi::class)
-internal fun createPlayerSlots(context: Context): Map<PlayerSlot, ExoPlayer> =
+internal fun createPlayerSlots(
+	context: Context,
+	quality: Quality,
+): Map<PlayerSlot, ExoPlayer> =
 	PlayerSlot.entries.associateWith {
-		ExoPlayer.Builder(context).setLoadControl(bufferLimit()).build()
+		ExoPlayer.Builder(context).setLoadControl(bufferLimit(quality)).build()
 	}
 
 /**
@@ -26,12 +32,13 @@ internal fun createPlayerSlots(context: Context): Map<PlayerSlot, ExoPlayer> =
  * [DefaultLoadControl.Builder.setPrioritizeTimeOverSizeThresholds] is turned off, which is the
  * part that actually makes it bite.
  *
- * The byte cap is what limits memory; the durations are kept generous enough that the preloaded
- * next video still starts instantly, because the handoff depends on it being ready the moment
- * the still comes down.
+ * The byte cap comes from the quality because a 4K stream blows through a 1080p-sized budget in
+ * a couple of seconds, and the preload that the handoff depends on is the first casualty. The
+ * durations are kept generous enough that the preloaded next video still starts instantly,
+ * because the handoff needs it ready the moment the still comes down.
  */
 @OptIn(UnstableApi::class)
-private fun bufferLimit() =
+private fun bufferLimit(quality: Quality) =
 	DefaultLoadControl
 		.Builder()
 		.setBufferDurationsMs(
@@ -39,7 +46,7 @@ private fun bufferLimit() =
 			MAX_BUFFER_MS,
 			BUFFER_FOR_PLAYBACK_MS,
 			BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS,
-		).setTargetBufferBytes(TARGET_BUFFER_BYTES)
+		).setTargetBufferBytes(quality.bufferBytes)
 		.setPrioritizeTimeOverSizeThresholds(false)
 		.build()
 
@@ -54,6 +61,3 @@ private const val MIN_BUFFER_MS = 3_000
 private const val MAX_BUFFER_MS = 10_000
 private const val BUFFER_FOR_PLAYBACK_MS = 2_500
 private const val BUFFER_FOR_PLAYBACK_AFTER_REBUFFER_MS = 2_000
-
-/** Cap on buffered compressed media, per player. */
-private const val TARGET_BUFFER_BYTES = 24 * 1024 * 1024

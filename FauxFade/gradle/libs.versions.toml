@@ -1,7 +1,8 @@
 [versions]
 agp = "9.4.1"
 coreKtx = "1.19.1"
-kotlin = "2.4.20"
+kotlin = "2.4.21"
+kotlinSerialization = "1.11.0"
 composeBom = "2026.09.00"
 tvFoundation = "1.0.0"
 tvMaterial = "1.1.0"
@@ -10,7 +11,7 @@ lifecycleViewmodelCompose = "2.11.0"
 activityCompose = "1.13.0"
 media3 = "1.11.1"
 leakcanary = "3.0-alpha-9"
-spotlessPlugin = "8.10.3"
+spotlessPlugin = "8.10.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -29,10 +30,12 @@ androidx-activity-compose = { group = "androidx.activity", name = "activity-comp
 androidx-media3-exoplayer = { group = "androidx.media3", name = "media3-exoplayer", version.ref = "media3" }
 androidx-media3-exoplayer-hls = { group = "androidx.media3", name = "media3-exoplayer-hls", version.ref = "media3" }
 androidx-media3-effect = { group = "androidx.media3", name = "media3-effect", version.ref = "media3" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlinSerialization" }
 squareup-leakcanary-android = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 spotless = { id = "com.diffplug.spotless", version.ref = "spotlessPlugin" }
 

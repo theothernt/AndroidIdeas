@@ -1,6 +1,7 @@
 plugins {
 	alias(libs.plugins.android.application)
 	alias(libs.plugins.kotlin.compose)
+	alias(libs.plugins.kotlin.serialization)
 	alias(libs.plugins.spotless)
 }
 
@@ -89,6 +90,7 @@ dependencies {
 	implementation(libs.androidx.media3.effect)
 	implementation(libs.androidx.tv.foundation)
 	implementation(libs.androidx.tv.material)
+	implementation(libs.kotlinx.serialization.json)
 	debugImplementation(libs.androidx.compose.ui.tooling)
 	// Leak detection for the debug build only. It installs itself through a ContentProvider, so
 	// there is no initialisation call to wire up. The alpha's in-app leak list is an Activity, so
