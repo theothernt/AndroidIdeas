@@ -41,6 +41,12 @@ android {
 	}
 }
 
+composeCompiler {
+	// Stability and skippability reports, for reviewing what actually recomposes.
+	reportsDestination = layout.buildDirectory.dir("compose_reports")
+	metricsDestination = layout.buildDirectory.dir("compose_metrics")
+}
+
 spotless {
 	// Spotless runs ktlint over all the Kotlin, sources and build scripts alike.
 	//

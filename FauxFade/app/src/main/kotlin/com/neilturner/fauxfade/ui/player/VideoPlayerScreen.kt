@@ -19,14 +19,15 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -38,7 +39,6 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.fauxfade.BuildConfig
 import com.neilturner.fauxfade.TAG
-import kotlin.math.ceil
 import kotlin.time.TimeSource
 
 @OptIn(UnstableApi::class)
@@ -214,27 +214,27 @@ private fun StillOverlay(
 ) {
 	val stillFrame by viewModel.stillFrame.collectAsStateWithLifecycle()
 	val stillPhase by viewModel.stillPhase.collectAsStateWithLifecycle()
-	val alpha = remember { Animatable(0f) }
+	val fade = remember { Animatable(0f) }
 
 	// Keyed on the phase rather than the bitmap: the outgoing video alternates, so the same
 	// still can come round again and has to be sealed and faded from scratch each time.
 	LaunchedEffect(stillPhase, stillFrame) {
 		when (stillPhase) {
 			StillPhase.HIDDEN -> {
-				alpha.snapTo(0f)
+				fade.snapTo(0f)
 			}
 
 			// Snapped, not ramped. The still goes up over the outgoing video still paused on the
 			// same frame, so it has to be fully opaque the instant it appears - there is nothing
 			// behind it to dissolve against until the surfaces swap.
 			StillPhase.SEALED -> {
-				alpha.snapTo(1f)
+				fade.snapTo(1f)
 			}
 
 			StillPhase.FADING -> {
 				val started = TimeSource.Monotonic.markNow()
-				alpha.snapTo(1f)
-				alpha.animateTo(0f, tween(STILL_FADE_MS))
+				fade.snapTo(1f)
+				fade.animateTo(0f, tween(STILL_FADE_MS))
 				// Logged next to the view model's timing line, which covers everything up to
 				// the point this fade starts.
 				Log.i(TAG, "timing: fadeMs=${started.elapsedNow().inWholeMilliseconds}")
@@ -242,13 +242,25 @@ private fun StillOverlay(
 		}
 	}
 
+	// Derived so the fade value is not read in the composition scope. Read directly - as this
+	// used to be, both here and as the Image's own alpha argument - every one of the ~90 frames
+	// of a 1.5s fade recomposed this composable and rebuilt its modifier chain. A derived state
+	// only invalidates its readers when the answer flips, so this costs one recomposition when
+	// the still arrives and one when it has gone, and nothing in between.
+	val fadedOut = remember { derivedStateOf { fade.value <= FADE_DONE_AT } }
+
 	val bitmap = stillFrame
-	if (bitmap == null || alpha.value <= 0.001f) return
+	if (bitmap == null || fadedOut.value) return
 
 	Image(
-		bitmap = bitmap.asImageBitmap(),
+		// Wrapped once per captured frame, not once per animation frame. Image keys its painter
+		// on the ImageBitmap instance, so a fresh wrapper every frame is a fresh painter every
+		// frame, and a fresh painter is a fresh draw node to configure.
+		bitmap = remember(bitmap) { bitmap.asImageBitmap() },
 		contentDescription = null,
-		modifier = modifier.alpha(alpha.value),
+		// graphicsLayer rather than Modifier.alpha: reading the value inside the lambda defers
+		// it to the draw pass, so a frame of the fade invalidates drawing and nothing else.
+		modifier = modifier.graphicsLayer { alpha = fade.value },
 		contentScale = ContentScale.Crop,
 	)
 }
@@ -320,13 +332,24 @@ private fun TransitionCountdown(
 	viewModel: PlayerViewModel,
 	modifier: Modifier = Modifier,
 ) {
-	// Collected here rather than in VideoPlayerScreen so the 10Hz countdown only recomposes
-	// this composable. Reading it in the parent would recompose the player surfaces just as
-	// often, and each recomposition re-applies the video surface.
-	val remainingMs by viewModel.remainingMs.collectAsStateWithLifecycle()
-	val seconds = ceil(remainingMs / 1000.0).toInt().coerceAtLeast(0)
+	// Collected here rather than in VideoPlayerScreen so the countdown only recomposes this
+	// composable. Reading it in the parent would recompose the player surfaces as the timer
+	// ran, and each recomposition re-applies the video surface.
+	//
+	// The view model publishes whole seconds rather than milliseconds. The underlying tick is
+	// ten a second, and the label only changes once a second, so collecting milliseconds here
+	// would recompose ten times for every digit that moves. A StateFlow only emits on a real
+	// change, so publishing the second turns the same tick into one recomposition a second and
+	// the tick rate is left alone.
+	val seconds by viewModel.remainingSeconds.collectAsStateWithLifecycle()
 	ReadoutChip(text = seconds.toString(), modifier = modifier)
 }
 
 /** How opaque the readout chips are over the video. */
 private const val CHIP_ALPHA = 0.45f
+
+/**
+ * Below this the still counts as gone. Used as a derived condition rather than read directly, so
+ * the fade crossing it is what takes the image out of the tree and the frames in between are not.
+ */
+private const val FADE_DONE_AT = 0.001f

@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.coroutineContext
+import kotlin.math.ceil
 import kotlin.time.TimeSource
 
 /**
@@ -37,7 +38,7 @@ import kotlin.time.TimeSource
  * One slot plays for [PLAY_DURATION_MS], then the other is brought up in its place. Halfway
  * through the segment the incoming video is loaded and primed so the handoff has something to
  * show immediately. The whole cycle is driven from a single coroutine, which is also what
- * publishes [remainingMs], so the countdown cannot drift out of step with the actual switch.
+ * publishes [remainingSeconds], so the countdown cannot drift out of step with the actual switch.
  *
  * It also owns the startup flow: the app sits in [AppPhase.Picking] until the quality has been
  * chosen and the countdown has run out (or been skipped), and only then are the players built
@@ -124,8 +125,18 @@ class PlayerViewModel(
 	private val _stillPhase = MutableStateFlow(StillPhase.HIDDEN)
 	val stillPhase: StateFlow<StillPhase> = _stillPhase.asStateFlow()
 
-	private val _remainingMs = MutableStateFlow(PLAY_DURATION_MS)
-	val remainingMs: StateFlow<Long> = _remainingMs.asStateFlow()
+	private val _remainingSeconds = MutableStateFlow(SECONDS_PER_SEGMENT)
+
+	/**
+	 * Seconds left in the current segment, for the readout.
+	 *
+	 * Whole seconds rather than milliseconds because that is the only resolution the readout has.
+	 * The tick that drives the loop runs ten times a second so the preload point can be hit
+	 * accurately, and a state flow only emits when its value actually changes, so publishing the
+	 * second keeps that finer tick from turning into ten recompositions a second to move one
+	 * digit. The display rounds up, so each number is held for its whole second.
+	 */
+	val remainingSeconds: StateFlow<Int> = _remainingSeconds.asStateFlow()
 
 	/**
 	 * True until the opening clip has a frame on screen. Both surfaces are empty before that and
@@ -227,7 +238,13 @@ class PlayerViewModel(
 		// setVideoEffects puts a frame processor in the render path. The effect is a
 		// pass-through, so what reaches the display is unchanged, but it has to be installed
 		// before playback starts rather than rebuilt underneath a running player.
-		taps.forEach { (slot, tap) -> players.getValue(slot).setVideoEffects(listOf(tap)) }
+		//
+		// Skipped while the tap is off, and that is the point of the switch: leaving it out
+		// takes the whole effect pipeline out of the per-frame path rather than only skipping
+		// the readback, and the player goes back to rendering straight to the surface.
+		if (CAPTURE_STILLS) {
+			taps.forEach { (slot, tap) -> players.getValue(slot).setVideoEffects(listOf(tap)) }
+		}
 		loopJob = viewModelScope.launch { runPlaylistLoop() }
 		startMemoryWatch()
 	}
@@ -309,8 +326,16 @@ class PlayerViewModel(
 			// back. Pausing after the capture instead means the player stops on the frame that was
 			// actually taken.
 			val t0 = TimeSource.Monotonic.markNow()
-			val signal = taps.getValue(onScreen).arm()
-			val still = grabStill(onScreen, signal)
+			// Not armed when the tap is off. Arming and then waiting would be the wrong shape:
+			// the signal can never complete, so every handoff would sit out the full tap
+			// timeout before giving up and cutting - a stall that has nothing to do with what
+			// the effect pipeline costs, which is exactly what this switch is here to measure.
+			val still =
+				if (CAPTURE_STILLS) {
+					grabStill(onScreen, taps.getValue(onScreen).arm())
+				} else {
+					null
+				}
 			val afterCaptureMs = t0.elapsedNow().inWholeMilliseconds
 
 			outgoing.pause()
@@ -468,10 +493,10 @@ class PlayerViewModel(
 				preloaded = true
 				onPreloadPoint()
 			}
-			_remainingMs.value = PLAY_DURATION_MS - elapsed
+			_remainingSeconds.value = secondsLeft(PLAY_DURATION_MS - elapsed)
 			delay(COUNTDOWN_TICK_MS)
 		}
-		_remainingMs.value = 0L
+		_remainingSeconds.value = 0
 	}
 
 	override fun onCleared() {
@@ -511,6 +536,12 @@ private fun ExoPlayer.preload(item: VideoItem) {
  */
 private const val PLAY_DURATION_MS = 10_000L
 
+/** Seconds in a segment: what the countdown reads from, and the resolution it is published at. */
+private const val SECONDS_PER_SEGMENT = (PLAY_DURATION_MS / 1000).toInt()
+
+/** Rounds a countdown up, so the readout holds each number for its whole second. */
+private fun secondsLeft(remainingMs: Long): Int = ceil(remainingMs / 1000.0).toInt().coerceAtLeast(0)
+
 // The two handoff deadlines - how long to wait for the incoming player to render a frame, and
 // how long to wait for the armed readback to land - are not constants any more. They moved onto
 // [Quality] as swapTimeoutMs and tapTimeoutMs, because a 4K decode on a weak device routinely
@@ -518,6 +549,24 @@ private const val PLAY_DURATION_MS = 10_000L
 // unchanged: the still is sealed and fully opaque for the whole wait, so nothing is visible
 // during it, and the deadlines only stop a player that never renders - a stalled stream, say -
 // from freezing the handoff indefinitely.
+
+/**
+ * Whether the still is captured from the decoder's frame pipeline.
+ *
+ * Off for now, to measure. The tap is installed as a video effect, which puts an extra GL pass
+ * in front of every frame for the whole run in order to capture one frame every ten seconds -
+ * the one cost in the app that scales with frame count rather than with handoffs. Leaving it
+ * off takes the effect pipeline out entirely and the player renders straight to the surface.
+ *
+ * Everything downstream copes: with no still to seal, the handoff degrades to the plain cut it
+ * already falls back to whenever a tap comes up empty. The outgoing player is paused on its
+ * last frame before the swap, so that frame holds the screen and the surfaces change under it
+ * rather than over a frozen image. The timing line reads captureMs=0 and the fade never runs,
+ * which is what a run with no stills should look like.
+ *
+ * Flip it back to true for the dissolve; nothing else changes.
+ */
+private const val CAPTURE_STILLS = false
 
 /**
  * Whether the app starts playback by itself.
