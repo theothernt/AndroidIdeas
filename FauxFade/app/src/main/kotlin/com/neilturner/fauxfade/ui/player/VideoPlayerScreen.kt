@@ -96,6 +96,11 @@ fun VideoPlayerScreen(
 			modifier = Modifier.align(Alignment.TopEnd),
 		)
 
+		PlayingQualityLabel(
+			viewModel = viewModel,
+			modifier = Modifier.align(Alignment.BottomEnd),
+		)
+
 		// Last, so it covers both surfaces and the readouts. Like the still it is drawn in the
 		// window, which composites above a SurfaceView.
 		StartupLoader(
@@ -103,6 +108,21 @@ fun VideoPlayerScreen(
 			modifier = Modifier.fillMaxSize(),
 		)
 	}
+}
+
+/**
+ * The quality actually playing, bottom right.
+ *
+ * Reads [PlayerViewModel.playingQuality] rather than the picker selection, so it shows what the
+ * stream really is - a run is locked to one quality, and this is the record of which.
+ */
+@Composable
+private fun PlayingQualityLabel(
+	viewModel: PlayerViewModel,
+	modifier: Modifier = Modifier,
+) {
+	val quality by viewModel.playingQuality.collectAsStateWithLifecycle()
+	ReadoutChip(text = quality.label, modifier = modifier)
 }
 
 /**

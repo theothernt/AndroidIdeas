@@ -2,7 +2,6 @@ package com.neilturner.fauxfade.ui.player
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Canvas
 import android.opengl.GLES20
 import android.opengl.GLES30
 import android.util.Log
@@ -205,23 +204,50 @@ private class TapShaderProgram : GlShaderProgram {
 		// limit alone, which is what a buffer GL has just filled actually needs.
 		pixels.rewind()
 
+		// GL reads from the bottom-left of the framebuffer and a Bitmap addresses rows from the
+		// top, so the rows come back the wrong way up. Corrected in the buffer rather than by
+		// drawing into a second bitmap: at 4K a readback is 33MB, and allocating another one to
+		// flip it doubled that per handoff and put the large-object heap under enough pressure to
+		// be collecting tens of megabytes every few seconds.
+		flipRows(pixels, width, height)
+
 		raw.copyPixelsFromBuffer(pixels)
-		// GL reads bottom-up, the bitmap is top-down.
-		return flipVertically(raw)
+		return raw
 	}
 
 	/**
-	 * GL reads from the bottom-left of the framebuffer, a [Bitmap] addresses rows from the top,
-	 * so the readback comes out mirrored vertically.
+	 * Reverses the row order of [pixels] in place.
+	 *
+	 * Only two row buffers are needed however large the frame is, which is the whole point: the
+	 * alternative - copying through a Canvas into a second full-size bitmap - costs another
+	 * copy of the picture on every handoff.
 	 */
-	private fun flipVertically(source: Bitmap): Bitmap {
-		val flipped = createBitmap(source.width, source.height)
-		Canvas(flipped).apply {
-			// Scale by -1 about the vertical midpoint to turn the readback the right way up.
-			scale(1f, -1f, 0f, source.height / 2f)
-			drawBitmap(source, 0f, 0f, null)
+	private fun flipRows(
+		pixels: ByteBuffer,
+		width: Int,
+		height: Int,
+	) {
+		val rowBytes = width * BYTES_PER_PIXEL
+		val lower = ByteArray(rowBytes)
+		val upper = ByteArray(rowBytes)
+		var lo = 0
+		var hi = (height - 1) * rowBytes
+		while (lo < hi) {
+			pixels.position(lo)
+			pixels.get(lower)
+			pixels.position(hi)
+			pixels.get(upper)
+			pixels.position(lo)
+			pixels.put(upper)
+			pixels.position(hi)
+			pixels.put(lower)
+			lo += rowBytes
+			hi -= rowBytes
 		}
-		source.recycle()
-		return flipped
+		// copyPixelsFromBuffer reads from position to limit, so it has to be back at the start.
+		pixels.rewind()
 	}
 }
+
+/** RGBA8, which is what glReadPixels is asked for above. */
+private const val BYTES_PER_PIXEL = 4

@@ -92,8 +92,12 @@ class PlayerViewModel(
 	 * Distinct from [_quality], which the picker is still free to change right up until the
 	 * countdown runs out. The handoff has to read a stable value, because a timeout that changed
 	 * mid-loop would be a different timeout on either side of a swap.
+	 *
+	 * Seeded with the default so it has a value before playback begins, though nothing reads it
+	 * that early - the player screen is only composed once the phase has flipped.
 	 */
-	private lateinit var chosen: Quality
+	private val _playingQuality = MutableStateFlow(Quality.FHD_SDR)
+	val playingQuality: StateFlow<Quality> = _playingQuality.asStateFlow()
 
 	/**
 	 * One tap per slot, installed into the player's effect chain so the still can be taken from
@@ -201,7 +205,7 @@ class PlayerViewModel(
 				return
 			}
 			players = createPlayerSlots(getApplication(), quality)
-			chosen = quality
+			_playingQuality.value = quality
 			Log.i(TAG, "startup: $quality, ${order.size} clips")
 			_phase.value = AppPhase.PLAYING
 		} finally {
@@ -342,9 +346,10 @@ class PlayerViewModel(
 			incomingPlayer.play()
 			_swapping.value = true
 
-			val rendered = withTimeoutOrNull(chosen.swapTimeoutMs) { firstFrame.await() }
+			val swapBudget = _playingQuality.value.swapTimeoutMs
+			val rendered = withTimeoutOrNull(swapBudget) { firstFrame.await() }
 			if (rendered == null) {
-				Log.w(TAG, "swap: $incoming had no rendered frame in ${chosen.swapTimeoutMs}ms")
+				Log.w(TAG, "swap: $incoming had no rendered frame in ${swapBudget}ms")
 			}
 			val afterSwapMs = t0.elapsedNow().inWholeMilliseconds
 
@@ -400,8 +405,7 @@ class PlayerViewModel(
 	): Bitmap? {
 		val tap = taps.getValue(slot)
 		val started = TimeSource.Monotonic.markNow()
-		withTimeoutOrNull(chosen.tapTimeoutMs) { signal.await() }
-
+		withTimeoutOrNull(_playingQuality.value.tapTimeoutMs) { signal.await() }
 		val tapped = tap.latest()
 		val waitedMs = started.elapsedNow().inWholeMilliseconds
 		if (tapped == null) {
