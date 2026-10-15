@@ -27,8 +27,8 @@ data class AerialResponse(
 /**
  * One aerial clip.
  *
- * The four [Quality] variants are declared individually rather than kept in a map, so that a
- * typo in a key is a compile error rather than a silently empty variant at runtime.
+ * The [Quality] variants are declared individually rather than kept in a map, so that a typo in
+ * a key is a compile error rather than a silently empty variant at runtime.
  */
 @Serializable
 data class AerialAsset(
@@ -40,6 +40,8 @@ data class AerialAsset(
 	val url1080H264: String? = null,
 	@SerialName("url-1080-SDR")
 	val url1080SDR: String? = null,
+	@SerialName("url-1080-HDR")
+	val url1080HDR: String? = null,
 	@SerialName("url-4K-SDR")
 	val url4KSDR: String? = null,
 	@SerialName("url-4K-HDR")
