@@ -65,7 +65,7 @@ fun VideoPlayerScreen(
 				// app's own background is a shade off black for the screens that sit against it.
 				.background(Color.Black),
 	) {
-		PlayerSlot.entries.forEach { slot ->
+		viewModel.slots.forEach { slot ->
 			SlotPlayerSurface(
 				viewModel = viewModel,
 				slot = slot,

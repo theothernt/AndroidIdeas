@@ -122,8 +122,26 @@ class PlayerViewModel(
 	/** One per player, for [StillCaptureMode.METADATA_RETRIEVER]. Stateless, so this is free. */
 	private lateinit var retrievers: Map<PlayerSlot, RetrieverFrameCapture>
 
+	/**
+	 * One per player, reporting what the video renderer had to drop each segment.
+	 *
+	 * Measurement only - nothing here changes behaviour. It exists to answer whether having the
+	 * tap installed costs frame rate, which is the whole argument for removing it, and that is not
+	 * something to guess at on a device this size.
+	 */
+	private val frameStats = PlayerSlot.entries.associateWith { FrameStats(it) }
+
 	/** Which path the run captures its stills with. See [StillCaptureMode]. */
 	private val captureMode = CAPTURE_MODE
+
+	/**
+	 * The slots actually in use, which is normally both and is one in single-player mode.
+	 *
+	 * Exposed so the player screen draws surfaces for the players that exist. Iterating
+	 * `PlayerSlot.entries` there and asking for a player that was never built would throw.
+	 */
+	lateinit var slots: List<PlayerSlot>
+		private set
 
 	private val _foreground = MutableStateFlow(PlayerSlot.PRIMARY)
 	val foreground: StateFlow<PlayerSlot> = _foreground.asStateFlow()
@@ -235,11 +253,14 @@ class PlayerViewModel(
 				Log.e(TAG, "startup: no clips available for $quality, staying on the picker")
 				return
 			}
-			players = createPlayerSlots(getApplication(), quality)
+			slots = if (SINGLE_PLAYER) listOf(PlayerSlot.PRIMARY) else PlayerSlot.entries.toList()
+			players = createPlayerSlots(getApplication(), quality, slots)
 			// After the players, because both need one: the scheduled capture reads the player's
-			// application looper when it is built.
-			scheduled = PlayerSlot.entries.associateWith { ScheduledFrameCapture(players.getValue(it)) }
-			retrievers = PlayerSlot.entries.associateWith { RetrieverFrameCapture() }
+			// application looper when it is built. Keyed off what was actually built, not off the
+			// enum, so single-player mode does not ask for a player that does not exist.
+			scheduled = players.keys.associateWith { ScheduledFrameCapture(players.getValue(it)) }
+			retrievers = players.keys.associateWith { RetrieverFrameCapture() }
+			players.forEach { (slot, player) -> player.addAnalyticsListener(frameStats.getValue(slot)) }
 			_playingQuality.value = quality
 			Log.i(TAG, "startup: $quality, ${order.size} clips")
 			_phase.value = AppPhase.PLAYING
@@ -262,8 +283,10 @@ class PlayerViewModel(
 		// Only the always-on mode does it here. The scheduled path installs its own effect a lead
 		// time before each capture, and the retriever path never installs one at all, so for both
 		// of those the render path is left completely alone for the whole segment.
+		// Safe get rather than getValue: taps is keyed off the enum, but single-player mode only
+		// builds one player, so asking for the other would throw.
 		if (CAPTURE_STILLS && captureMode == StillCaptureMode.ALWAYS_ON_TAP) {
-			taps.forEach { (slot, tap) -> players.getValue(slot).setVideoEffects(listOf(tap)) }
+			taps.forEach { (slot, tap) -> players[slot]?.setVideoEffects(listOf(tap)) }
 		}
 		// Logged so a run's numbers can be attributed to the path that produced them. The three
 		// modes are only comparable next to each other, and this is the only line that says which
@@ -309,7 +332,73 @@ class PlayerViewModel(
 		if (::players.isInitialized) players.values.forEach { it.pause() }
 	}
 
+	/**
+	 * Runs the loop appropriate to [SINGLE_PLAYER].
+	 *
+	 * The split is deliberate and temporary: the single-player path exists to answer whether two
+	 * concurrent players are what breaks 4K on this device, and it can only answer that if the
+	 * two-player path is left exactly as it was underneath.
+	 */
 	private suspend fun runPlaylistLoop() {
+		if (SINGLE_PLAYER) runSinglePlayerLoop() else runDoublePlayerLoop()
+	}
+
+	/**
+	 * One player, cutting from clip to clip.
+	 *
+	 * No second player, so no second decoder. No still, because a still needs a capture that needs
+	 * a pause, and the whole point of this mode is to remove as much as possible from around the
+	 * decode. What is left is the smallest thing that still decodes video continuously: play a
+	 * clip, hold it for the segment, move to the next.
+	 *
+	 * Deliberately kept as dull as it can be. Anything clever here would make the comparison
+	 * against the two-player run meaningless.
+	 */
+	private suspend fun runSinglePlayerLoop() {
+		val player = players.getValue(PlayerSlot.PRIMARY)
+		var currentIndex = 0
+		_loading.value = true
+		Log.i(TAG, "playlist: ${order.map { it.uri.substringAfterLast('/') }}")
+		Log.i(TAG, "single: one player, cutting, no still")
+
+		val opened = player.firstRenderSignal()
+		val startedAt = TimeSource.Monotonic.markNow()
+		player.playFromStart(order[currentIndex])
+		if (withTimeoutOrNull(STARTUP_FRAME_TIMEOUT_MS) { opened.await() } == null) {
+			Log.w(TAG, "startup: $currentIndex had no first frame in ${STARTUP_FRAME_TIMEOUT_MS}ms")
+		}
+		Log.i(TAG, "startup: first frame after ${startedAt.elapsedNow().inWholeMilliseconds}ms")
+		_loading.value = false
+
+		while (coroutineContext.isActive) {
+			val nextIndex = (currentIndex + 1) % order.size
+			// No preload: priming the next clip is the other player's job, and there isn't one.
+			tickSegment { }
+
+			val t0 = TimeSource.Monotonic.markNow()
+			player.playFromStart(order[nextIndex])
+			Log.i(TAG, "cut: ${order[currentIndex].uri.substringAfterLast('/')} -> ${order[nextIndex].uri.substringAfterLast('/')}")
+			Log.i(
+				TAG,
+				"frames: " +
+					frameStats
+						.getValue(PlayerSlot.PRIMARY)
+						.segment(player, PLAY_DURATION_MS) { taps.getValue(PlayerSlot.PRIMARY).framesSeen() },
+			)
+			Log.i(TAG, "timing: cutMs=${t0.elapsedNow().inWholeMilliseconds}")
+
+			currentIndex = nextIndex
+		}
+	}
+
+	/**
+	 * Two players, cross-fading through a captured still.
+	 *
+	 * The original design: one slot plays, the other is primed part way through, and at the end the
+	 * outgoing player is paused, a frame is captured from it, the surfaces swap under that frame
+	 * and it is faded out.
+	 */
+	private suspend fun runDoublePlayerLoop() {
 		var onScreen = PlayerSlot.PRIMARY
 		var currentIndex = 0
 		_loading.value = true
@@ -424,6 +513,16 @@ class PlayerViewModel(
 				TAG,
 				"timing: captureMs=$afterCaptureMs " +
 					"sealedMs=${afterSwapMs - afterCaptureMs} handoffMs=$afterSwapMs",
+			)
+			// Sampled against the outgoing player, because that is the one that just played the whole
+			// segment. The first segment of a run is not comparable with the rest - the codec is
+			// still warming up while it is being measured.
+			Log.i(
+				TAG,
+				"frames: " +
+					frameStats
+						.getValue(onScreen)
+						.segment(players.getValue(onScreen), PLAY_DURATION_MS) { taps.getValue(onScreen).framesSeen() },
 			)
 
 			onScreen = incoming
@@ -686,6 +785,19 @@ private const val CAPTURE_STILLS = true
  * both works and keeps the pipeline out of the render path.
  */
 private val CAPTURE_MODE = StillCaptureMode.ALWAYS_ON_TAP
+
+/**
+ * Whether to run one player cutting between clips instead of two cross-fading.
+ *
+ * A diagnostic, not a feature. At 4K on this device the second player's decoder takes over twenty
+ * seconds to initialise and the picture collapses, which points at two concurrent decoders being
+ * more than the device will give. The only way to tell that from "this decoder cannot do 4K at
+ * all" is to run 4K with one decoder and see.
+ *
+ * Turning it on costs everything the app is for - no still, no dissolve, a hard cut every segment -
+ * so it is a measurement setting and should go back to false once the question is answered.
+ */
+private const val SINGLE_PLAYER = true
 
 /**
  * How far before the segment ends the scheduled capture aims.

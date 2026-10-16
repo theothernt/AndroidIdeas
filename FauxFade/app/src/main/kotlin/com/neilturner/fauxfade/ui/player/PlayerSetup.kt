@@ -8,19 +8,24 @@ import androidx.media3.exoplayer.ExoPlayer
 import com.neilturner.fauxfade.media.Quality
 
 /**
- * Builds one player per [PlayerSlot], both configured the same way.
+ * Builds one player per slot in [slots], all configured the same way.
  *
  * Taken at [beginPlayback] rather than at construction because the buffer cap depends on the
  * quality, and the quality is not known until the picker has been answered. Nothing about the
  * player changes after this, so building them here rather than in the view model's initialiser
  * keeps "how a player is built" out of the object's construction path.
+ *
+ * [slots] rather than "all of them" so the single-player mode can ask for one and get one. A second
+ * player is not free: it initialises its own decoder, and at 4K on a weak device that is the
+ * difference between a picture and a black screen.
  */
 @OptIn(UnstableApi::class)
 internal fun createPlayerSlots(
 	context: Context,
 	quality: Quality,
+	slots: List<PlayerSlot>,
 ): Map<PlayerSlot, ExoPlayer> =
-	PlayerSlot.entries.associateWith {
+	slots.associateWith {
 		ExoPlayer.Builder(context).setLoadControl(bufferLimit(quality)).build()
 	}
 

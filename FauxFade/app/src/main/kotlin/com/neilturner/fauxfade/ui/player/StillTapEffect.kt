@@ -18,6 +18,7 @@ import kotlinx.coroutines.CompletableDeferred
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.concurrent.Executor
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Taps the frames the player is already decoding, so the still can be taken from the decoder
@@ -37,6 +38,16 @@ import java.util.concurrent.Executor
 @UnstableApi
 internal class StillTapEffect : GlEffect {
 	private val shaderProgram = TapShaderProgram()
+
+	/**
+	 * How many frames have gone through the pipeline since this player was created.
+	 *
+	 * The only honest count of frames that were actually carried, and therefore the only way to
+	 * tell a full frame rate from an assumed one. The renderer's dropped-frame counter says nothing
+	 * useful here: it is zero when the pipeline is never reached, and it resets at each codec
+	 * re-initialisation. This one just counts arrivals.
+	 */
+	fun framesSeen(): Long = shaderProgram.framesSeen()
 
 	/** The most recent frame read back, or null if none has landed. */
 	fun latest(): Bitmap? = shaderProgram.latest()
@@ -65,6 +76,11 @@ internal class StillTapEffect : GlEffect {
 @UnstableApi
 private class TapShaderProgram : GlShaderProgram {
 	private val delegate = PassthroughShaderProgram()
+
+	/** Frames that have actually arrived, counted rather than inferred. See [StillTapEffect]. */
+	private val framesSeen = AtomicLong()
+
+	fun framesSeen(): Long = framesSeen.get()
 
 	@Volatile
 	private var armed = false
@@ -114,6 +130,7 @@ private class TapShaderProgram : GlShaderProgram {
 		inputTexture: GlTextureInfo,
 		presentationTimeNs: Long,
 	) {
+		framesSeen.incrementAndGet()
 		if (armed) {
 			armed = false
 			readBack(inputTexture)
