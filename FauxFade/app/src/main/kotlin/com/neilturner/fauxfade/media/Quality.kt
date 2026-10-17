@@ -31,6 +31,21 @@ enum class Quality(
 	;
 
 	/**
+	 * Whether this variant carries high dynamic range.
+	 *
+	 * Both of the HDR variants are Dolby Vision profiles rather than plain HDR10 - which is worth
+	 * knowing, because the device picks a completely different decoder for them
+	 * (`c2.amlogic.dolby-vision.dvhe.decoder`) and that one turns out to be the sturdier of the two
+	 * at 4K.
+	 *
+	 * This is what decides the shape of a captured still: see [PixelCopyCapture.CopyTarget]. Copying
+	 * high dynamic range into an 8-bit destination does not tone-map, it just reads the values as
+	 * sRGB, and what comes out has a magenta cast and is too dark - so the still has to be kept in
+	 * a shape that can carry the range and let the framework convert it at draw time.
+	 */
+	val isHdr: Boolean get() = this == FHD_HDR || this == UHD_HDR
+
+	/**
 	 * The stream for this quality, or null if the asset does not carry it.
 	 *
 	 * Nullable rather than throwing: a missing variant is a property of the data, and the caller

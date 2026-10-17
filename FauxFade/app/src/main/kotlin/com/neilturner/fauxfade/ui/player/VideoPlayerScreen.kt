@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -21,13 +22,21 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -51,10 +60,39 @@ fun VideoPlayerScreen(
 	val swapping by viewModel.swapping.collectAsStateWithLifecycle()
 	val loading by viewModel.loading.collectAsStateWithLifecycle()
 
-	DisposableEffect(Unit) {
+	// The surfaces, which this screen owns and the loop cannot. Lensed to the view model as a
+	// function - see [SurfaceGrabber] - so no View is ever held by the view model.
+	val surfaces = remember { mutableStateMapOf<PlayerSlot, SurfaceView>() }
+	val grabber =
+		remember {
+			val capture = PixelCopyCapture()
+			SurfaceGrabber { slot, target ->
+				val view = surfaces[slot] ?: return@SurfaceGrabber null
+				// Not succeeded, not a black frame: a still of nothing is worse than a cut.
+				val result = capture.capture(view, target)
+				Log.i(
+					TAG,
+					"copy: slot=$slot target=$target status=${result.status} ok=${result.succeeded} " +
+						"size=${result.bitmap?.width}x${result.bitmap?.height} " +
+						"scaled=${result.scaled} copyMs=${result.elapsedMs}",
+				)
+				if (result.succeeded) result.bitmap else null
+			}
+		}
+
+	DisposableEffect(grabber) {
+		// Attached before start: the loop may ask for a surface on its first handoff.
+		viewModel.attachGrabber(grabber)
 		viewModel.start()
 		onDispose { viewModel.stop() }
 	}
+
+	// TEMPORARY - Phase 0 spike keys. A, B and C were the spike's controls; the surfaces it used
+	// are now [surfaces] above and belong to the app rather than to the spike.
+	val spikeFocus = remember { FocusRequester() }
+	// Key events only reach a component that holds focus, and nothing else on this screen is
+	// focusable, so the spike has to take it.
+	LaunchedEffect(Unit) { if (SPIKE_ENABLED) spikeFocus.requestFocus() }
 
 	Box(
 		modifier =
@@ -63,7 +101,34 @@ fun VideoPlayerScreen(
 				// Not a theme colour on purpose. This is the letterbox around the picture, which
 				// has to be true black or it reads as a glowing edge on a dark television; the
 				// app's own background is a shade off black for the screens that sit against it.
-				.background(Color.Black),
+				.background(Color.Black)
+				.then(
+					if (SPIKE_ENABLED) {
+						Modifier
+							.focusRequester(spikeFocus)
+							.focusable()
+							.onPreviewKeyEvent { event ->
+								if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+								val slot = viewModel.slots.firstOrNull() ?: return@onPreviewKeyEvent false
+								val surface = surfaces[slot] ?: return@onPreviewKeyEvent false
+								when (event.key) {
+									// A: copy while still playing.
+									Key.A -> viewModel.spikeCapture(slot, surface, pauseFirst = false)
+
+									// B: pause first, then copy. The question the whole approach rests on.
+									Key.B -> viewModel.spikeCapture(slot, surface, pauseFirst = true)
+
+									// C: take the spike bitmap back off the screen.
+									Key.C -> viewModel.spikeClear()
+
+									else -> return@onPreviewKeyEvent false
+								}
+								true
+							}
+					} else {
+						Modifier
+					},
+				),
 	) {
 		viewModel.slots.forEach { slot ->
 			SlotPlayerSurface(
@@ -73,6 +138,7 @@ fun VideoPlayerScreen(
 				// surface attached to render into before it can be brought to the front. The
 				// sealed still is drawn in the window and covers both while that happens.
 				visible = swapping || foreground == slot,
+				onSurface = { surfaces[slot] = it },
 				modifier = Modifier.fillMaxSize(),
 			)
 		}
@@ -287,6 +353,8 @@ private fun SlotPlayerSurface(
 	viewModel: PlayerViewModel,
 	slot: PlayerSlot,
 	visible: Boolean,
+	// TEMPORARY - Phase 0 spike. Hands the built view out so the screen can copy from it.
+	onSurface: (SurfaceView) -> Unit = {},
 	modifier: Modifier = Modifier,
 ) {
 	val player = viewModel.playerFor(slot)
@@ -299,7 +367,7 @@ private fun SlotPlayerSurface(
 
 	AndroidView(
 		modifier = modifier,
-		factory = { context -> SurfaceView(context) },
+		factory = { context -> SurfaceView(context).also(onSurface) },
 		update = { view ->
 			if (attached.value !== view) {
 				player.setVideoSurfaceView(view)
@@ -347,6 +415,13 @@ private fun TransitionCountdown(
 
 /** How opaque the readout chips are over the video. */
 private const val CHIP_ALPHA = 0.45f
+
+/**
+ * TEMPORARY - Phase 0 spike. Kept on in release deliberately: the latency of a PixelCopy is a
+ * release-build figure or it is not a figure, and a debug build's copy time would flatter it.
+ * Removed with the spike.
+ */
+private const val SPIKE_ENABLED = true
 
 /**
  * Below this the still counts as gone. Used as a derived condition rather than read directly, so

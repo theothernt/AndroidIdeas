@@ -35,16 +35,21 @@ import androidx.tv.material3.RadioButton
 import androidx.tv.material3.Text
 import com.neilturner.fauxfade.media.Quality
 import com.neilturner.fauxfade.ui.player.PlayerViewModel
+import com.neilturner.fauxfade.ui.player.StillCaptureMode
 
 /**
- * The screen the app opens on: pick a quality, then let the countdown run out.
+ * The screen the app opens on: pick a quality, pick how the still should be taken, then let the
+ * countdown run out.
  *
  * There is no backdrop and nothing to look at but the controls - the point of the screen is to
  * be gone in ten seconds, and a poster or a preview would only invite the viewer to wait for
  * something that is not coming.
  *
  * Nothing here touches the players. They do not exist until the countdown ends, which is what
- * keeps a quality change from having to rebuild a running decode.
+ * keeps a change from having to rebuild a running decode.
+ *
+ * Both pickers are the same shape because they are the same decision: two values that change what
+ * a segment costs, chosen before any of it is paid for. Only one panel is ever open.
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
@@ -53,26 +58,31 @@ fun StartupScreen(
 	modifier: Modifier = Modifier,
 ) {
 	val quality by viewModel.quality.collectAsStateWithLifecycle()
+	val captureMode by viewModel.captureMode.collectAsStateWithLifecycle()
 	val countdown by viewModel.countdown.collectAsStateWithLifecycle()
 
-	var expanded by remember { mutableStateOf(false) }
+	var open by remember { mutableStateOf<OpenPanel?>(null) }
 
 	// Built for every entry up front rather than on demand: a FocusRequester has to be the same
 	// instance the row's modifier was built with, and a lazily created one would not be.
-	// Deliberately absent: any requestFocus() on the quality trigger. TV Material manages focus
+	// Deliberately absent: any requestFocus() on the trigger buttons. TV Material manages focus
 	// for its own surfaces and hands it straight back - the request succeeds, and focus still
-	// ends up on the button below. The trigger is the first focusable in the column, so D-pad
-	// navigation reaches it in one press from wherever focus lands.
+	// ends up elsewhere. The triggers are the first focusable in the column, so D-pad navigation
+	// reaches them in one press from wherever focus lands.
+	val qualityFocus = remember { Quality.entries.associateWith { FocusRequester() } }
+	val captureFocus = remember { StillCaptureMode.entries.associateWith { FocusRequester() } }
 
-	val rowFocus = remember { Quality.entries.associateWith { FocusRequester() } }
-
-	// Focus the selected row while the panel is open, and hand it back to the trigger when it
+	// Focus the selected row while a panel is open, and hand it back to the trigger when it
 	// closes - including on the first composition, so the screen never arrives with nowhere to
 	// go. Keyed on the selection as well, so choosing an option lands on the trigger rather than
 	// re-requesting the row that was just clicked.
-	LaunchedEffect(expanded, quality) {
+	LaunchedEffect(open, quality, captureMode) {
 		withFrameNanos { }
-		if (expanded) rowFocus.getValue(quality).requestFocus()
+		when (open) {
+			OpenPanel.QUALITY -> qualityFocus.getValue(quality).requestFocus()
+			OpenPanel.CAPTURE -> captureFocus.getValue(captureMode).requestFocus()
+			null -> Unit
+		}
 	}
 
 	Box(
@@ -90,8 +100,16 @@ fun StartupScreen(
 				color = MaterialTheme.colorScheme.onBackground,
 			)
 
-			Button(onClick = { expanded = true }) {
+			Button(onClick = { open = OpenPanel.QUALITY }) {
 				Text(quality.label, style = MaterialTheme.typography.titleMedium)
+			}
+
+			// The other half of the same choice, so it reads as a peer of the quality rather than as
+			// a setting. The mode names are too short to be meaningful on their own - "Tap" and
+			// "PixelCopy" say what they are called, not what they cost - which is why the panel rows
+			// carry the explanation.
+			Button(onClick = { open = OpenPanel.CAPTURE }) {
+				Text("Still: ${captureMode.label}", style = MaterialTheme.typography.titleMedium)
 			}
 
 			Button(onClick = viewModel::skipCountdown) {
@@ -101,7 +119,7 @@ fun StartupScreen(
 
 		// Sibling of the controls rather than a child of them: a popup has to cover the whole
 		// screen, and a fillMaxSize inside the centred column would be bounded by it.
-		if (expanded) {
+		if (open != null) {
 			Box(
 				modifier =
 					Modifier
@@ -112,7 +130,7 @@ fun StartupScreen(
 							// is already closed and setting the flag again does nothing, and
 							// swallowing it keeps Back from reaching anything behind the scrim.
 							if (event.key == Key.Back) {
-								expanded = false
+								open = null
 								true
 							} else {
 								false
@@ -132,46 +150,46 @@ fun StartupScreen(
 							// inside the box and lets the animation do its job.
 							.padding(horizontal = ROW_ROOM, vertical = PANEL_PADDING)
 							// Traps the arrow keys inside the panel. Without it, up from the first
-							// row escapes to the start button behind the scrim, which is still
-							// focusable and still reacts to the click.
+							// row escapes to the button behind the scrim, which is still focusable and
+							// still reacts to the click.
 							.focusGroup(),
 				) {
 					Column {
-						Quality.entries.forEach { option ->
-							ListItem(
-								selected = option == quality,
-								onClick = {
-									viewModel.select(option)
-									expanded = false
-								},
-								// Focus tints, selection does not. The row under the D-pad needs
-								// somewhere to be. The quality already chosen says itself with its
-								// filled radio, so tinting that row as well marked the answer twice
-								// and made it look highlighted rather than answered.
-								//
-								// Note there is no focusedSelectedContainerColor to override: a row
-								// that is both takes this tint. The panel opens with focus already on
-								// the chosen quality, so it is tinted until the D-pad moves off it.
-								colors =
-									ListItemDefaults.colors(
-										containerColor = Color.Transparent,
-										focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-										selectedContainerColor = Color.Transparent,
-										contentColor = MaterialTheme.colorScheme.onSurface,
-										focusedContentColor = MaterialTheme.colorScheme.onSurface,
-										selectedContentColor = MaterialTheme.colorScheme.onSurface,
-										focusedSelectedContentColor = MaterialTheme.colorScheme.onSurface,
-									),
-								headlineContent = {
-									Text(option.label, style = MaterialTheme.typography.titleMedium)
-								},
-								leadingContent = {
-									// Null onClick: the row is the click target, and a second one here
-									// would put an extra stop in the D-pad's way.
-									RadioButton(selected = option == quality, onClick = null)
-								},
-								modifier = Modifier.focusRequester(rowFocus.getValue(option)),
-							)
+						when (open) {
+							OpenPanel.QUALITY -> {
+								Quality.entries.forEach { option ->
+									OptionRow(
+										selected = option == quality,
+										headline = option.label,
+										supporting = null,
+										focusRequester = qualityFocus.getValue(option),
+										onClick = {
+											viewModel.select(option)
+											open = null
+										},
+									)
+								}
+							}
+
+							OpenPanel.CAPTURE -> {
+								StillCaptureMode.entries.forEach { option ->
+									OptionRow(
+										selected = option == captureMode,
+										headline = option.label,
+										// Carried here rather than in the button: "Tap" and "PixelCopy"
+										// are names, and the difference between them is what the panel
+										// is for.
+										supporting = option.supporting,
+										focusRequester = captureFocus.getValue(option),
+										onClick = {
+											viewModel.selectCapture(option)
+											open = null
+										},
+									)
+								}
+							}
+
+							null -> {}
 						}
 					}
 				}
@@ -180,10 +198,68 @@ fun StartupScreen(
 	}
 }
 
+/** Which picker, if any, is showing. One at a time - two would be two panels over one scrim. */
+private enum class OpenPanel {
+	QUALITY,
+	CAPTURE,
+}
+
+/**
+ * One selectable row in a picker panel.
+ *
+ * Pulled out because the two panels differ only in what they say, and writing the focus tint and
+ * the row height twice is how the two drift apart and a panel ends up looking like it came from
+ * somewhere else.
+ */
+@OptIn(ExperimentalTvMaterial3Api::class)
+@Composable
+private fun OptionRow(
+	selected: Boolean,
+	headline: String,
+	supporting: String?,
+	focusRequester: FocusRequester,
+	onClick: () -> Unit,
+) {
+	ListItem(
+		selected = selected,
+		onClick = onClick,
+		// Focus tints, selection does not. The row under the D-pad needs somewhere to be. The
+		// quality already chosen says itself with its filled radio, so tinting that row as well
+		// marked the answer twice and made it look highlighted rather than answered.
+		//
+		// Note there is no focusedSelectedContainerColor to override: a row that is both takes this
+		// tint. The panel opens with focus already on the chosen row, so it is tinted until the
+		// D-pad moves off it.
+		colors =
+			ListItemDefaults.colors(
+				containerColor = Color.Transparent,
+				focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
+				selectedContainerColor = Color.Transparent,
+				contentColor = MaterialTheme.colorScheme.onSurface,
+				focusedContentColor = MaterialTheme.colorScheme.onSurface,
+				selectedContentColor = MaterialTheme.colorScheme.onSurface,
+				focusedSelectedContentColor = MaterialTheme.colorScheme.onSurface,
+			),
+		headlineContent = {
+			Text(headline, style = MaterialTheme.typography.titleMedium)
+		},
+		supportingContent = {
+			// Absent for the quality panel, which is four short labels that say what they are.
+			if (supporting != null) Text(supporting, style = MaterialTheme.typography.bodyMedium)
+		},
+		leadingContent = {
+			// Null onClick: the row is the click target, and a second one here would put an extra
+			// stop in the D-pad's way.
+			RadioButton(selected = selected, onClick = null)
+		},
+		modifier = Modifier.focusRequester(focusRequester),
+	)
+}
+
 /** "Start playback (4)" while there is time left, plain "Start playback" once there is not. */
 private fun startLabel(countdown: Int): String = if (countdown > 0) "Start playback ($countdown)" else "Start playback"
 
-/** How opaque the dim over the controls is while the panel is open. */
+/** How opaque the dim over the controls is while a panel is open. */
 private const val SCRIM_ALPHA = 0.65f
 
 /** Wide enough for the longest label on a ten-foot screen without stretching across it. */
