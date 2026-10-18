@@ -22,9 +22,9 @@ import kotlin.time.TimeSource
  * ending; [extractAt] does not go near a player at all, because the frame it wants is from a clip
  * that has not started yet.
  *
- * This exists as the other half of [StillCaptureMode] because the two approaches fail in
- * opposite ways. The scheduled effect puts a pipeline in front of the frame it wants, which costs
- * a reinitialisation of the render path; this puts nothing in front of anything, but reopens the
+ * This exists as the other half of the capture modes because the two approaches fail in opposite
+ * ways. The scheduled effect puts a pipeline in front of the frame it wants, which costs a
+ * reinitialisation of the render path; this puts nothing in front of anything, but reopens the
  * file and seeks it, which on a network source can cost more than the pipeline did.
  *
  * **Known risk on this app's content.** The retriever runs in the media stack rather than in the
@@ -35,7 +35,8 @@ import kotlin.time.TimeSource
  * **Measured, and the bigger of the two risks: it cannot read the 4K clips at all on this device.**
  * 2K sources come back in ~2.4s; every 4K source - SDR and HDR alike, so it is not Dolby Vision -
  * returns null after 2.7-3.5s. Both qualities are read the same way, so what differs is the
- * source. See [StillCaptureMode.PRELOADED_FRAME] for what that costs whichever loop is running it.
+ * source. See [com.neilturner.fauxfade.feature.menu.Feature.PRELOADED_FRAME] for what that costs
+ * whichever loop is running it.
  *
  * **Colour.** Unlike the GL path, the retriever does not tone-map, so a 10-bit HDR clip comes back
  * as it is encoded rather than as it looks on the screen. Expect it to look wrong on the HDR
@@ -137,7 +138,7 @@ internal class RetrieverFrameCapture {
 	 * hands back roughly 33 MB of bitmap for an image that is about to be drawn at 1920 wide and
 	 * then thrown away at the end of the segment.
 	 *
-	 * Aspect preserved and only ever shrinking, for the same reason [PixelCopyCapture] only ever
+	 * Aspect preserved and only ever shrinking, for the same reason the pixel copy only ever
 	 * shrinks: a still larger than the screen it is shown on cannot be justified by anything.
 	 */
 	private fun fitToDisplay(frame: Bitmap): Bitmap {
@@ -165,3 +166,18 @@ internal class RetrieverFrameCapture {
 		return Bitmap.createBitmap(frame, 0, 0, frame.width, frame.height, Matrix().apply { postRotate(degrees.toFloat()) }, true)
 	}
 }
+
+/**
+ * Widest still worth keeping, in pixels.
+ *
+ * 1080p because that is what the set can show: a still is drawn over the screen and then faded
+ * out, so anything above the display's own resolution is pixels that get allocated, copied and
+ * uploaded only for the drawing to scale them back down.
+ *
+ * Private rather than shared. It was one constant between this and the pixel copy, and it is now
+ * a constant in each, because sharing it would mean the two capture paths importing from each
+ * other and neither being readable on its own. **The two copies have to stay equal**: a still only
+ * ever has to cover the screen, and two paths that disagree about how wide that is would produce
+ * stills of different sizes depending only on which one was picked.
+ */
+private const val MAX_STILL_WIDTH = 1920

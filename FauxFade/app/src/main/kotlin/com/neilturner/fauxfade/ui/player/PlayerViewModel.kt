@@ -37,18 +37,31 @@ import kotlin.math.ceil
 import kotlin.time.TimeSource
 
 /**
- * Owns the two players and the handoff between them.
+ * Owns the players and the handoff between them, for every approach still living in the shared
+ * path.
  *
- * One slot plays for [PLAY_DURATION_MS], then the other is brought up in its place. Part way
- * through the segment - at [PRELOAD_AFTER_MS] - the incoming video is loaded and primed so the
- * handoff has something to show immediately and has the rest of the segment to get ahead. The
- * whole cycle is driven from a single coroutine, which is also what publishes
+ * Four of them, in two shapes. Three capture a frame of the clip that is *leaving* - the always-on
+ * tap, the scheduled effect and the retriever - and all three hand off between two players: one slot
+ * plays for [PLAY_DURATION_MS], the other is primed part way through at [PRELOAD_AFTER_MS], and at
+ * the end the outgoing player is paused, a frame is taken from it, and the surfaces swap under that
+ * frame. The fourth, [StillCaptureMode.PRELOADED_FRAME], reads the clip that is *arriving* instead
+ * and needs only one player of its own. [captureStill] is the only place that asks which; the rest
+ * of this class is shared structure rather than a choice between them.
+ *
+ * The whole cycle is driven from a single coroutine, which is also what publishes
  * [remainingSeconds], so the countdown cannot drift out of step with the actual switch.
  *
- * It also owns the startup flow: the app sits in [AppPhase.Picking] until the quality has been
- * chosen and the countdown has run out (or been skipped), and only then are the players built
- * and the loop started. Nothing about playback is torn down or rebuilt to change quality - the
- * picker is gone by the time playback exists.
+ * The fifth method, [StillCaptureMode.PIXEL_COPY], is offered on the same picker but is not run
+ * here. It reads the surface rather than the player, so it has a view model, a loop and a capture
+ * class of its own under `feature/pixelcopy`, and the startup screen's Go button routes it there
+ * rather than starting a run - see `MainActivity`. That is also why this class no longer has to
+ * decide, mid-handoff, which of two orders to pause and capture in: the one method that needed the
+ * other order is the one that left.
+ *
+ * It also owns the startup flow: the app sits in [AppPhase] until the quality has been chosen and
+ * the countdown has run out (or been skipped), and only then are the players built and the loop
+ * started. Nothing about playback is torn down or rebuilt to change quality - the picker is gone by
+ * the time playback exists.
  */
 @OptIn(UnstableApi::class)
 class PlayerViewModel(
@@ -138,54 +151,28 @@ class PlayerViewModel(
 	/**
 	 * How the run takes its stills, chosen on the startup screen and locked when playback starts.
 	 *
-	 * Seeded from [CAPTURE_MODE] so the app has a sensible answer before anyone picks, though
-	 * nothing reads it that early - the player screen is only composed once the phase has flipped.
+	 * Seeded from [StillCaptureMode.PIXEL_COPY], which is also the only entry that can never reach
+	 * the loop on this view model: the startup screen's Go button routes that one to its own screen
+	 * under `feature/pixelcopy`. It stays the default because it is the approach that has been
+	 * measured working at both 1080p and 4K.
+	 *
 	 * Read at handoff time rather than captured at construction, and the loop branches on it once
-	 * when it starts, so picking a mode that needs the single-player loop cannot leave half of one
+	 * when it starts, so picking a mode that needs a different sequence cannot leave half of one
 	 * behind.
 	 */
-	private val _captureMode = MutableStateFlow(CAPTURE_MODE)
+	private val _captureMode = MutableStateFlow(StillCaptureMode.PIXEL_COPY)
 	val captureMode: StateFlow<StillCaptureMode> = _captureMode.asStateFlow()
 
 	/**
-	 * The shape a still is captured in, which follows the quality rather than being configured.
+	 * The slots actually in use: both for the three modes that hand off between two players, and
+	 * one for [StillCaptureMode.PRELOADED_FRAME], which stops its player before preparing the next
+	 * clip and so has never needed a second.
 	 *
-	 * Reading high dynamic range into an 8-bit bitmap does not tone-map it - it reads the values as
-	 * sRGB - so the still comes out with a magenta cast and underexposed, which under a crossfade is
-	 * a flash of the wrong colour every segment. Keeping the range in a half-float and letting the
-	 * framework convert at draw time is the fix. It follows the quality because the SDR qualities
-	 * gain nothing from it and would pay for the float destination.
-	 */
-	private val stillTarget: PixelCopyCapture.CopyTarget
-		get() = if (_playingQuality.value.isHdr) PixelCopyCapture.CopyTarget.HDR else PixelCopyCapture.CopyTarget.SDR
-
-	/**
-	 * How the loop reaches a slot's surface. Lent by the player screen before [start].
-	 *
-	 * Null means no view has attached, in which case the surface-reading modes cannot capture and
-	 * the handoff cuts. Held as a function rather than as the views themselves - a view model that
-	 * keeps a `View` keeps it alive past its own view.
-	 */
-	private var grabber: SurfaceGrabber? = null
-
-	/** Lends the loop a way to reach the surfaces. Called by the player screen on composition. */
-	internal fun attachGrabber(grabber: SurfaceGrabber) {
-		this.grabber = grabber
-	}
-
-	/**
-	 * Whether the player has to be paused *before* its still is taken rather than after.
-	 *
-	 * True only for [StillCaptureMode.PIXEL_COPY]. Every other mode reads frames out of the player,
-	 * and a paused player produces none, so they all capture first and pause second - an ordering so
-	 * load-bearing that it is spelled out where the loop does it. PixelCopy reads the surface
-	 * instead, and a surface keeps its last buffer after its producer stops, so it goes the natural
-	 * way round: pause, then copy what is on screen.
-	 */
-	private val pauseBeforeCapture: Boolean get() = _captureMode.value == StillCaptureMode.PIXEL_COPY
-
-	/**
-	 * The slots actually in use, which is normally both and is one in single-player mode.
+	 * Chosen from the mode rather than from a flag. It used to be a `SINGLE_PLAYER` switch, set to
+	 * answer whether two concurrent decoders were what broke 4K on this device - and it did, which
+	 * is why there is now a PixelCopy feature with one player of its own. What is left here is
+	 * topology: a property of the technique rather than of a measurement, so it belongs on the
+	 * branch that decides the technique instead of on a switch above all of them.
 	 *
 	 * Exposed so the player screen draws surfaces for the players that exist. Iterating
 	 * `PlayerSlot.entries` there and asking for a player that was never built would throw.
@@ -238,6 +225,16 @@ class PlayerViewModel(
 
 	/** True while [beginPlayback] is building the players, so a second caller cannot join in. */
 	private var starting = false
+
+	/**
+	 * True once [onCleared] has released the players.
+	 *
+	 * Only there to make [stop] safe. Leaving a feature clears its view model store, and whether
+	 * that happens before or after the screen's own disposal is a detail of how Compose tears a
+	 * subtree down rather than something this class can assume - so instead of depending on it, a
+	 * view model that has already released its players has nothing left to pause.
+	 */
+	private var released = false
 
 	// Parse the catalogue, then run the countdown down to playback.
 	//
@@ -314,11 +311,20 @@ class PlayerViewModel(
 				Log.e(TAG, "startup: no clips available for $quality, staying on the picker")
 				return
 			}
-			slots = if (SINGLE_PLAYER) listOf(PlayerSlot.PRIMARY) else PlayerSlot.entries.toList()
+			// Read here rather than once at the top: this is the moment the choice is locked in,
+			// and the three two-player modes need both players built while the preloaded one needs
+			// only the first. Everything downstream keys off what was actually built.
+			val mode = captureMode.value
+			slots =
+				if (mode == StillCaptureMode.PRELOADED_FRAME) {
+					listOf(PlayerSlot.PRIMARY)
+				} else {
+					PlayerSlot.entries.toList()
+				}
 			players = createPlayerSlots(getApplication(), quality, slots)
-			// After the players, because both need one: the scheduled capture reads the player's
-			// application looper when it is built. Keyed off what was actually built, not off the
-			// enum, so single-player mode does not ask for a player that does not exist.
+			// After the players: the scheduled capture reads the player's application looper when it
+			// is built. Keyed off what was actually built rather than off the enum, so the preloaded
+			// run does not ask for a player that was never created.
 			scheduled = players.keys.associateWith { ScheduledFrameCapture(players.getValue(it)) }
 			retrievers = players.keys.associateWith { RetrieverFrameCapture() }
 			players.forEach { (slot, player) -> player.addAnalyticsListener(frameStats.getValue(slot)) }
@@ -342,18 +348,19 @@ class PlayerViewModel(
 		// before playback starts rather than rebuilt underneath a running player.
 		//
 		// Only the always-on mode does it here. The scheduled path installs its own effect a lead
-		// time before each capture; the retriever, the surface copy and the preloaded frame never
-		// install one at all, so for all of those the render path is left completely alone for the
-		// whole segment - which is the entire argument for picking any of them.
-		// Safe get rather than getValue: taps is keyed off the enum, but single-player mode only
-		// builds one player, so asking for the other would throw.
-		if (CAPTURE_STILLS && _captureMode.value == StillCaptureMode.ALWAYS_ON_TAP) {
+		// time before each capture; the retriever and the preloaded frame never install one at all,
+		// so for both of those the render path is left completely alone for the whole segment - which
+		// is the argument for picking either of them.
+		//
+		// Safe get rather than getValue: taps is keyed off the whole enum, but a preloaded run only
+		// builds one player, so asking for the second would throw.
+		if (CAPTURE_STILLS && captureMode.value == StillCaptureMode.ALWAYS_ON_TAP) {
 			taps.forEach { (slot, tap) -> players[slot]?.setVideoEffects(listOf(tap)) }
 		}
 		// Logged so a run's numbers can be attributed to the path that produced them. The modes
 		// are only comparable next to each other, and this is the only line that says which one a
 		// given set of timings came from.
-		Log.i(TAG, "capture: mode=${_captureMode.value} stills=$CAPTURE_STILLS")
+		Log.i(TAG, "capture: mode=${captureMode.value} stills=$CAPTURE_STILLS")
 		loopJob = viewModelScope.launch { runPlaylistLoop() }
 		startMemoryWatch()
 	}
@@ -386,7 +393,16 @@ class PlayerViewModel(
 			}
 	}
 
+	/**
+	 * Stops the loop and leaves the players holding their frame, without releasing them.
+	 *
+	 * The counterpart to [onCleared], and deliberately the lighter of the two: nothing is built
+	 * here, so nothing has to be built again if the same view model is used again.
+	 *
+	 * Guarded - see [released].
+	 */
 	fun stop() {
+		if (released) return
 		loopJob?.cancel()
 		loopJob = null
 		memoryJob?.cancel()
@@ -397,112 +413,22 @@ class PlayerViewModel(
 	/**
 	 * Runs the loop for whatever the picked mode actually needs.
 	 *
-	 * Not a choice about player count, but three sequences with genuinely different shapes. The
-	 * split is deliberate and temporary: the single-player path exists to answer whether two
-	 * concurrent players are what breaks 4K on this device, and it can only answer that if the
-	 * two-player path is left exactly as it was underneath.
+	 * Two shapes, not three. The single-player loop that used to sit here has left with the
+	 * PixelCopy feature - it was only ever reachable by the one method that reads a surface instead
+	 * of reading the player, and now that method has a view model of its own, it has its own copy of
+	 * the loop rather than a branch into this one. What remains is the two-player handoff, plus the
+	 * preloaded frame, which is genuinely a different sequence rather than a variant: it reads the
+	 * clip that is arriving rather than the one that is leaving, and it never pauses anything.
+	 *
+	 * [StillCaptureMode.PIXEL_COPY] lands in the two-player loop if it ever reaches here, which it
+	 * should not - it has its own screen. It would produce cuts rather than throw, and the run's
+	 * first log line would name the method that produced them.
 	 */
 	private suspend fun runPlaylistLoop() {
-		when {
-			// First, because it is not a variant of either of the others. It is one player by
-			// construction - it stops the outgoing clip before it prepares the incoming one - so
-			// it does not consult [SINGLE_PLAYER] at all, and works at 4K whatever that flag says.
-			_captureMode.value == StillCaptureMode.PRELOADED_FRAME -> runPreloadedFrameLoop()
-
-			SINGLE_PLAYER -> runSinglePlayerLoop()
-
-			else -> runDoublePlayerLoop()
-		}
-	}
-
-	/**
-	 * One player, with the still hiding the re-open rather than a surface swap.
-	 *
-	 * The reason this exists: at 4K the device will not give a second decoder, so the two-player
-	 * crossfade is simply unavailable there. But a still does not strictly need two surfaces to
-	 * hide something - it needs to cover the moment the picture stops being continuous, and with
-	 * one player that moment is the clip changing rather than the surfaces swapping.
-	 *
-	 * So the sequence is the same shape with one surface instead of two. Clip N plays, is paused on
-	 * its last frame, and that frame is copied out of the surface. The next clip is then started on
-	 * the same player, and once it has a frame the still is faded off it. The viewer sees the last
-	 * frame of one clip dissolve into the first of the next - which is the same thing the
-	 * two-player version produces, with one decoder instead of two.
-	 *
-	 * Only [StillCaptureMode.PIXEL_COPY] can do this. Every other mode reads frames out of the
-	 * player, and the player here is paused and has to re-open on a new item before it will produce
-	 * anything; a surface can be copied in that state, a decoder cannot.
-	 */
-	private suspend fun runSinglePlayerLoop() {
-		val slot = slots.first()
-		val player = players.getValue(slot)
-		val crossfades = _captureMode.value == StillCaptureMode.PIXEL_COPY
-		var currentIndex = 0
-		_loading.value = true
-		Log.i(TAG, "playlist: ${order.map { it.uri.substringAfterLast('/') }}")
-		Log.i(TAG, "single: one player, ${if (crossfades) "crossfading via PixelCopy" else "cutting, no still"}")
-
-		val opened = player.firstRenderSignal()
-		val startedAt = TimeSource.Monotonic.markNow()
-		player.playFromStart(order[currentIndex])
-		if (withTimeoutOrNull(STARTUP_FRAME_TIMEOUT_MS) { opened.await() } == null) {
-			Log.w(TAG, "startup: $currentIndex had no first frame in ${STARTUP_FRAME_TIMEOUT_MS}ms")
-		}
-		Log.i(TAG, "startup: first frame after ${startedAt.elapsedNow().inWholeMilliseconds}ms")
-		_loading.value = false
-
-		while (coroutineContext.isActive) {
-			val nextIndex = (currentIndex + 1) % order.size
-			// No preload: priming the next clip is the other player's job, and there isn't one.
-			tickSegment { }
-
-			val t0 = TimeSource.Monotonic.markNow()
-			// Pause first, then copy, which is only possible because the still comes off the surface
-			// rather than off the player. The surface keeps this frame and stays visible throughout,
-			// so nothing on screen changes during the copy.
-			player.pause()
-			val still =
-				if (crossfades) {
-					withTimeoutOrNull(PIXEL_COPY_TIMEOUT_MS) { grabber?.grab(slot, stillTarget) }
-				} else {
-					null
-				}
-			val afterCaptureMs = t0.elapsedNow().inWholeMilliseconds
-
-			if (still != null) {
-				_stillFrame.value = still
-				_stillPhase.value = StillPhase.SEALED
-				// Same beat as the two-player handoff: the still has to be composited at full
-				// opacity before the player drops the frame it is standing in for.
-				delay(STILL_LEAD_IN_MS)
-			} else {
-				_stillFrame.value = null
-				_stillPhase.value = StillPhase.HIDDEN
-			}
-
-			// Now re-open on the next clip. This is the moment the still is covering: the codec
-			// re-initialises and the surface has nothing to show until the new clip's first frame.
-			val firstFrame = player.firstRenderSignal()
-			player.playFromStart(order[nextIndex])
-			val rendered = withTimeoutOrNull(_playingQuality.value.swapTimeoutMs) { firstFrame.await() }
-			if (rendered == null) {
-				Log.w(TAG, "single: ${order[nextIndex].uri.substringAfterLast('/')} had no first frame")
-			}
-
-			if (still != null) _stillPhase.value = StillPhase.FADING
-
-			Log.i(
-				TAG,
-				"frames: " +
-					frameStats.getValue(slot).segment(player, PLAY_DURATION_MS) { taps.getValue(slot).framesSeen() },
-			)
-			Log.i(
-				TAG,
-				"timing: captureMs=$afterCaptureMs " +
-					"handoffMs=${t0.elapsedNow().inWholeMilliseconds} firstFrame=${rendered == true}",
-			)
-
-			currentIndex = nextIndex
+		if (captureMode.value == StillCaptureMode.PRELOADED_FRAME) {
+			runPreloadedFrameLoop()
+		} else {
+			runDoublePlayerLoop()
 		}
 	}
 
@@ -691,22 +617,21 @@ class PlayerViewModel(
 
 			val outgoing = players.getValue(onScreen)
 
-			// Pause, then capture - or capture, then pause, depending on the mode. See
-			// [pauseBeforeCapture] for why the two orders are not interchangeable.
+			// Capture first, then pause - and never the other way round, because every remaining
+			// mode reads its frame out of the player, and a paused player produces no frames at all.
+			// Pausing after the capture is also what keeps the still in step with the video: the
+			// frame taken is the frame the player then stops on, rather than one taken a lead
+			// earlier while the clip carried on underneath it.
 			//
-			// Where it is capture-first, the ordering is not negotiable: a paused player produces no
-			// frames, so anything reading the player has to get its frame before the pause. Pausing
-			// after the capture is also what keeps the still in step with the video - the frame taken
-			// is the frame the player then stops on, rather than one taken a lead earlier while the
-			// clip carried on underneath it.
-			//
-			// Where it is pause-first, the outgoing surface is already holding its last frame and
-			// stays visible, so nothing on screen changes during the copy.
-			if (pauseBeforeCapture) outgoing.pause()
+			// This used to branch on the mode. The one approach that could pause first was the one
+			// that copies the surface rather than reading the player - a surface holds its last
+			// buffer after its producer stops, a decoder does not - and it has left with the
+			// PixelCopy feature, which runs that order in a loop of its own. What is left has one
+			// order and nothing that could disagree about it.
 			val t0 = TimeSource.Monotonic.markNow()
 			val still = captureStill(onScreen, order[currentIndex], armedStill)
 			val afterCaptureMs = t0.elapsedNow().inWholeMilliseconds
-			if (!pauseBeforeCapture) outgoing.pause()
+			outgoing.pause()
 			Log.i(
 				TAG,
 				"pause: outgoing=$onScreen index=$currentIndex positionMs=${outgoing.currentPosition}",
@@ -819,7 +744,7 @@ class PlayerViewModel(
 		armedStill: CompletableDeferred<Bitmap?>?,
 	): Bitmap? {
 		if (!CAPTURE_STILLS) return null
-		return when (_captureMode.value) {
+		return when (captureMode.value) {
 			StillCaptureMode.ALWAYS_ON_TAP -> {
 				grabStill(slot, taps.getValue(slot).arm())
 			}
@@ -848,11 +773,17 @@ class PlayerViewModel(
 				}
 			}
 
-			// Reads the surface, not the player, so there is nothing to arm and nothing to wait for
-			// but the copy itself. The player has already been paused by the loop before this runs -
-			// that is the whole point of the mode, and see [pauseBeforeCapture].
+			// Picked here, run somewhere else. This screen's Go button answers [PIXEL_COPY] by
+			// leaving for its own view model rather than by starting a run, so this view model never
+			// gets to this function in that mode - and the branch is here only so the `when` stays
+			// exhaustive over the enum, which is the same reason the one below it is.
+			//
+			// Returning null rather than throwing is deliberate for the same reason: if a route ever
+			// let this through, the run degrades to plain cuts and the log line at the top of it says
+			// which mode produced them. A crash at a transition with nothing on screen would be a
+			// worse answer than a dull picture.
 			StillCaptureMode.PIXEL_COPY -> {
-				withTimeoutOrNull(PIXEL_COPY_TIMEOUT_MS) { grabber?.grab(slot, stillTarget) }
+				null
 			}
 
 			// Not a handoff-time capture at all, so it has nothing to give here. Its loop reads the
@@ -876,7 +807,7 @@ class PlayerViewModel(
 	 */
 	private fun armScheduledStill(slot: PlayerSlot): CompletableDeferred<Bitmap?>? {
 		if (!CAPTURE_STILLS) return null
-		if (_captureMode.value != StillCaptureMode.SCHEDULED_EFFECT) return null
+		if (captureMode.value != StillCaptureMode.SCHEDULED_EFFECT) return null
 		return scheduled.getValue(slot).captureAt(STILL_TARGET_MS)
 	}
 
@@ -958,6 +889,7 @@ class PlayerViewModel(
 	}
 
 	override fun onCleared() {
+		released = true
 		loopJob?.cancel()
 		memoryJob?.cancel()
 		countdownJob?.cancel()
@@ -1035,32 +967,6 @@ private fun secondsLeft(remainingMs: Long): Int = ceil(remainingMs / 1000.0).toI
 private const val CAPTURE_STILLS = true
 
 /**
- * Which path the run takes its stills through.
- *
- * Only a seed - the startup screen offers every mode, and this is what is on offer before anyone
- * picks. See [StillCaptureMode] for what each one costs.
- *
- * [StillCaptureMode.PIXEL_COPY] stays the default because it is the one that has been measured
- * working at both 1080p and 4K, in both player configurations. [StillCaptureMode.PRELOADED_FRAME]
- * is the newer alternative and the only one that never pauses anything; [StillCaptureMode
- * .SCHEDULED_EFFECT] does not work at all, for the reason given on the mode.
- */
-private val CAPTURE_MODE = StillCaptureMode.PIXEL_COPY
-
-/**
- * Whether to run one player cutting between clips instead of two cross-fading.
- *
- * A diagnostic, not a feature. At 4K on this device the second player's decoder takes over twenty
- * seconds to initialise and the picture collapses, which points at two concurrent decoders being
- * more than the device will give. The only way to tell that from "this decoder cannot do 4K at
- * all" is to run 4K with one decoder and see.
- *
- * Turning it on costs everything the app is for - no still, no dissolve, a hard cut every segment -
- * so it is a measurement setting and should go back to false once the question is answered.
- */
-private const val SINGLE_PLAYER = true
-
-/**
  * How far before the segment ends the scheduled capture aims.
  *
  * Just short of the end, so the still is of the last thing the clip was showing, but short enough
@@ -1079,20 +985,6 @@ private const val STILL_TARGET_MS = PLAY_DURATION_MS - STILL_TARGET_SLACK_MS
  * is network-hosted. Only used by [StillCaptureMode.METADATA_RETRIEVER].
  */
 private const val RETRIEVER_TIMEOUT_MS = 5_000L
-
-/**
- * How long a surface copy is given before the handoff gives up on it.
- *
- * Much longer than it looks like it should be, because the cost is not the copy. A 1080p copy on
- * this device measures ~100ms inside a two-player handoff and ~400ms with one, but the same copy
- * at 4K measures ~1.1s - while the destination is 1920x1080 in every one of those cases. So what
- * is being waited on is the display pipeline finding a moment to snapshot a layer that is being
- * written at 3840x2160, not the transfer.
- *
- * The first budget tried here was 500ms, which silently turned every 4K handoff into a cut: the
- * copy was still in flight when the budget ran out, so the still was null and nothing said so.
- */
-private const val PIXEL_COPY_TIMEOUT_MS = 2_000L
 
 /**
  * How long the preloaded frame takes to rise from invisible to fully opaque.

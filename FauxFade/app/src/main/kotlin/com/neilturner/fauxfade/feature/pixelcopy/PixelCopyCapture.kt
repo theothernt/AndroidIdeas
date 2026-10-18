@@ -1,4 +1,4 @@
-package com.neilturner.fauxfade.ui.player
+package com.neilturner.fauxfade.feature.pixelcopy
 
 import android.graphics.Bitmap
 import android.graphics.ColorSpace
@@ -17,12 +17,10 @@ import kotlin.math.roundToInt
  * involved, and the question that made it the default capture path: **can this copy from a paused
  * player?**
  *
- * That matters more than anything else about the approach. Every other capture mechanism here has
- * been forced to read a frame *before* pausing, because a paused player produces no frames:
- * - the tap has to be armed before the pause, which is why [PlayerViewModel.runDoublePlayerLoop]
- *   arms first and pauses second;
- * - the scheduled effect has to run ahead, and installing it mid-playback stops the player;
- * - the retriever has to pause and then wait two to three seconds for the file.
+ * That matters more than anything else about the approach. Every other still mechanism in this app
+ * has been forced to read a frame *before* pausing, because a paused player produces no frames:
+ * the tap has to be armed before the pause, the scheduled effect has to run ahead, and the
+ * retriever has to pause and then wait two to three seconds for the file.
  *
  * PixelCopy is not reading the player at all - it is reading the surface, and a surface keeps its
  * last latched buffer after the producer stops. It does hold: the handoff can pause first and copy
@@ -153,9 +151,10 @@ internal class PixelCopyCapture {
  * the copy is the size of the surface rather than the size of the video, so a 4K clip on a 1080p
  * set already produces a 1080p bitmap.
  *
- * Internal rather than file-private because the limit is not a property of copying: anything else
- * that produces a still - [RetrieverFrameCapture] reading a frame straight out of the file - has
- * to arrive at the same answer, or the two paths would differ in size depending only on which
- * one was picked.
+ * Private rather than shared. It was one constant between this and the retriever, and it is now a
+ * constant in each, because sharing it would mean the two capture paths importing from each other
+ * and neither being readable on its own. **The two copies have to stay equal**: a still only ever
+ * has to cover the screen, and two paths that disagree about how wide that is would produce
+ * stills of different sizes depending only on which one was picked.
  */
-internal const val MAX_STILL_WIDTH = 1920
+private const val MAX_STILL_WIDTH = 1920

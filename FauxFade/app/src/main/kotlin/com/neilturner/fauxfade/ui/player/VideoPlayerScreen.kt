@@ -21,7 +21,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -42,6 +41,22 @@ import com.neilturner.fauxfade.BuildConfig
 import com.neilturner.fauxfade.TAG
 import kotlin.time.TimeSource
 
+/**
+ * The shared path's playback half: two surfaces, the still that covers a handoff, and the readouts.
+ *
+ * Entered from the startup screen, so it never has to ask how the still is being taken - that was
+ * settled on the menu and only changes what the log line at the top of a run says. Which surfaces
+ * are drawn is read from the view model rather than assumed, because a preloaded run builds one
+ * player and asking for the second would throw.
+ *
+ * The two-player juggling is the shape of the screen: during a handoff both surfaces have to be up
+ * at once so the incoming player can render a frame into one before it is brought to the front, and
+ * the sealed still is drawn in the window above both while that happens.
+ *
+ * No capture machinery lives here any more. The one approach that copied pixels off a surface has
+ * left with the PixelCopy feature, which builds its own surface and its own grabber; nothing below
+ * reads a `View`.
+ */
 @OptIn(UnstableApi::class)
 @Composable
 fun VideoPlayerScreen(
@@ -52,29 +67,7 @@ fun VideoPlayerScreen(
 	val swapping by viewModel.swapping.collectAsStateWithLifecycle()
 	val loading by viewModel.loading.collectAsStateWithLifecycle()
 
-	// The surfaces, which this screen owns and the loop cannot. Lensed to the view model as a
-	// function - see [SurfaceGrabber] - so no View is ever held by the view model.
-	val surfaces = remember { mutableStateMapOf<PlayerSlot, SurfaceView>() }
-	val grabber =
-		remember {
-			val capture = PixelCopyCapture()
-			SurfaceGrabber { slot, target ->
-				val view = surfaces[slot] ?: return@SurfaceGrabber null
-				// Not succeeded, not a black frame: a still of nothing is worse than a cut.
-				val result = capture.capture(view, target)
-				Log.i(
-					TAG,
-					"copy: slot=$slot target=$target status=${result.status} ok=${result.succeeded} " +
-						"size=${result.bitmap?.width}x${result.bitmap?.height} " +
-						"scaled=${result.scaled} copyMs=${result.elapsedMs}",
-				)
-				if (result.succeeded) result.bitmap else null
-			}
-		}
-
-	DisposableEffect(grabber) {
-		// Attached before start: the loop may ask for a surface on its first handoff.
-		viewModel.attachGrabber(grabber)
+	DisposableEffect(viewModel) {
 		viewModel.start()
 		onDispose { viewModel.stop() }
 	}
@@ -96,7 +89,6 @@ fun VideoPlayerScreen(
 				// surface attached to render into before it can be brought to the front. The
 				// sealed still is drawn in the window and covers both while that happens.
 				visible = swapping || foreground == slot,
-				onSurface = { surfaces[slot] = it },
 				modifier = Modifier.fillMaxSize(),
 			)
 		}
@@ -324,9 +316,6 @@ private fun SlotPlayerSurface(
 	viewModel: PlayerViewModel,
 	slot: PlayerSlot,
 	visible: Boolean,
-	// The built view is handed back so the screen can copy from it - it has to live in
-	// composition for a PixelCopy to reach it, so no View is ever held by the view model.
-	onSurface: (SurfaceView) -> Unit = {},
 	modifier: Modifier = Modifier,
 ) {
 	val player = viewModel.playerFor(slot)
@@ -339,7 +328,7 @@ private fun SlotPlayerSurface(
 
 	AndroidView(
 		modifier = modifier,
-		factory = { context -> SurfaceView(context).also(onSurface) },
+		factory = { context -> SurfaceView(context) },
 		update = { view ->
 			if (attached.value !== view) {
 				player.setVideoSurfaceView(view)

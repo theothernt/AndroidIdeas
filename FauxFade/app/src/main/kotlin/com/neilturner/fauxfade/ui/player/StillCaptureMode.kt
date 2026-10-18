@@ -1,7 +1,5 @@
 package com.neilturner.fauxfade.ui.player
 
-import android.graphics.Bitmap
-
 /**
  * How the still is obtained for a handoff - and for one mode, when.
  *
@@ -18,7 +16,14 @@ import android.graphics.Bitmap
  * [label] and [supporting] exist because the names alone do not say enough to pick from: two of
  * these read pixels out of the player's render path or off its surface at the moment of the
  * handoff, and one reads ahead from a clip that has not started yet. On a slow device that is
- * the difference that matters.
+ * the difference that matters - so each one says what it costs, including the two that have been
+ * measured and do not work.
+ *
+ * [PIXEL_COPY] is listed here because the picker is the one place all five are offered, but it is
+ * not run by this path. It has its own screen, view model and capture code in `feature/pixelcopy`,
+ * and the startup screen's Go button routes it there instead of starting a run - see
+ * `MainActivity`. It is the one entry whose loop is not in this file, and the one entry below whose
+ * branch in [PlayerViewModel.captureStill] returns nothing.
  */
 enum class StillCaptureMode(
 	val label: String,
@@ -33,7 +38,7 @@ enum class StillCaptureMode(
 	 */
 	ALWAYS_ON_TAP(
 		"Tap",
-		"Reads from the video pipeline, left installed for the whole run.",
+		"Reads from the video pipeline, left installed for the whole run. Two players.",
 	),
 
 	/**
@@ -72,36 +77,49 @@ enum class StillCaptureMode(
 	 * exactly what makes this the more promising of the two alternatives, since the failure above
 	 * is the pipeline itself rather than anything to do with scheduling. What it costs instead is
 	 * reopening and seeking the file, which for a network source means fetching from the start of
-	 * it. Also unverified on this catalogue: the retriever runs in the media stack, where the
-	 * app's cleartext policy may not apply.
+	 * it.
+	 *
+	 * It cannot read the 4K clips at all on this device: 2K sources come back in ~2.4s; every 4K
+	 * source - SDR and HDR alike - returns null after 2.7-3.5s. Both qualities are read the same
+	 * way, so what differs is the source. Also unverified on this catalogue in the other direction:
+	 * the retriever runs in the media stack, where the app's cleartext policy may not apply, and
+	 * if it refuses the url it fails with null and the handoff degrades to a cut.
+	 *
+	 * Unlike the GL path it does not tone-map either, so a 10-bit HDR clip comes back as it is
+	 * encoded rather than as it looks on the screen. Expect it to look wrong on the high dynamic
+	 * range qualities rather than subtly wrong.
 	 */
 	METADATA_RETRIEVER(
 		"Retriever",
-		"No pipeline. Reopens the file and seeks, which takes seconds.",
+		"No pipeline. Reopens the file and seeks, which takes seconds. Can't read 4K.",
 	),
 
 	/**
 	 * PixelCopy: no pipeline at all, and nothing reads the player. The player is paused and the
 	 * surface is copied out of band, so the still is whatever was on screen when it stopped.
 	 *
-	 * The only mode that reads a surface rather than the player, and the only one that changes the
-	 * *order* of the handoff - it can copy after the pause, where every other mode has to copy
+	 * The only approach that reads a surface rather than the player, and the only one that changes
+	 * the *order* of the handoff - it can copy after the pause, where every other mode has to copy
 	 * before it, because a surface keeps its last latched buffer while a paused player emits no
 	 * frames at all. That property is the reason it is here: it is what lets the handoff read
 	 * pause, copy, swap, fade instead of arming something in advance and hoping.
 	 *
-	 * Measured in the handoff at ~100ms with two players and ~400ms with one, against 96-149ms for
-	 * the tap - so on latency it is a wash. What it wins on is having no pipeline at all, which is
-	 * why it is also the only mode that works with a single player, and so the only way to crossfade
-	 * at 4K on a device that will not give a second decoder.
+	 * Measured at ~400ms in the handoff with its one player, against 96-149ms for the tap - so on
+	 * latency it is a wash. What it wins on is having no pipeline at all, which is why it is the
+	 * only approach here built around a single player, and so the only way to crossfade at 4K on a
+	 * device that will not give a second decoder.
 	 *
 	 * The still is the size of the surface, so it is bounded by the display rather than by the
 	 * clip. High dynamic range stills are copied into a half-float and tagged BT.2020 PQ, because
 	 * copying HDR into 8-bit does not tone-map it and comes out magenta and half as bright.
+	 *
+	 * None of that is written here. It has a screen, a view model and a capture class of its own
+	 * under `feature/pixelcopy`, forked from this one; this entry exists so the picker can offer it
+	 * alongside the other four, and the Go button sends it there rather than starting a run here.
 	 */
 	PIXEL_COPY(
 		"PixelCopy",
-		"No pipeline. Copies the screen, and survives the pause.",
+		"No pipeline. Copies the screen, and survives the pause. Works at 4K.",
 	),
 
 	/**
@@ -128,7 +146,8 @@ enum class StillCaptureMode(
 	 *
 	 * Step 3 is worth having on its own: one player, stopped and re-prepared, so there is never a
 	 * second decoder. The concurrent-decoder problem the other single-player work exists to route
-	 * around is not routed around here - it simply does not arise.
+	 * around is not routed around here - it simply does not arise. It is the reason this one, and
+	 * not the two-player modes, is built on a single slot.
 	 *
 	 * Two things it gives up. The still is not a frame of anything you have seen - it is a frame
 	 * that has not been shown yet - so it is only right if the read agrees with what the decoder
@@ -142,51 +161,25 @@ enum class StillCaptureMode(
 	 *
 	 * **Measured, release build, Chromecast outputting 1080p.**
 	 *
-	 * - **1080p SDR: works.** The read took 2360ms and came back 1920x1080, comfortably inside
-	 *   the segment, so it was already finished by the time the loop asked for it and the wait at
-	 *   the transition was 0ms. Four transitions, four first frames rendered, `dropped=0` on every
-	 *   one and no stall logged. So a second decoder running alongside the first did not visibly
-	 *   cost the running clip anything - though note this mode never installs the tap, so `carried`
-	 *   is zero by design and the `dropped` figure is the one already flagged elsewhere as
-	 *   unreliable. Nothing here shows contention; nothing here could fully rule it out either.
+	 * - **1080p SDR: works.** The read took 2360ms and came back 1920x1080, comfortably inside the
+	 *   segment, so it was already finished by the time the loop asked for it and the wait at the
+	 *   transition was 0ms. Four transitions, four first frames rendered, `dropped=0` on every one
+	 *   and no stall logged. So a second decoder running alongside the first did not visibly cost
+	 *   the running clip anything - though note this mode never installs the tap, so `carried` is
+	 *   zero by design and the `dropped` figure is the one already flagged elsewhere as unreliable.
+	 *   Nothing here shows contention; nothing here could fully rule it out either.
 	 * - **4K SDR and 4K HDR: does not work.** `getFrameAtTime` returns null for every clip, after
 	 *   2.7-3.5s, so the mode produces no still at all and every segment is a plain cut.
 	 *
 	 * The split is source size, not colour: 4K SDR fails exactly as 4K HDR does, so this is not
-	 * Dolby Vision and not the tone-mapping problem [PixelCopyCapture.CopyTarget] exists for. What
-	 * it is has not been pinned down between the retriever failing to get a second decoder while
-	 * the running clip holds the device's only 4K one, and it being unable to decode 4K at all -
-	 * the read fails quickly rather than timing out, which points at the second. Until that is
-	 * settled, pick this mode with one of the 1080p qualities and expect nothing from it at 4K.
+	 * Dolby Vision and not the tone-mapping problem the still's copy target exists for. What it is
+	 * has not been pinned down between the retriever failing to get a second decoder while the
+	 * running clip holds the device's only 4K one, and it being unable to decode 4K at all - the
+	 * read fails quickly rather than timing out, which points at the second. Until that is settled,
+	 * pick this mode with one of the 1080p qualities and expect nothing from it at 4K.
 	 */
 	PRELOADED_FRAME(
 		"Preloaded frame",
-		"Reads the next clip's first frame early, while this one keeps playing.",
+		"Reads the next clip's first frame early, while this one keeps playing. 1080p only.",
 	),
-}
-
-/**
- * How the loop gets a frame out of a slot's surface.
- *
- * The loop lives in the view model and the surfaces live in the view, and a view model holding a
- * `View` is a thing that outlives the view and keeps it alive. So the view model is handed a
- * function instead: it can ask for a frame without ever learning what a `SurfaceView` is. The
- * implementation is built and owned by the player screen, which is the only thing that has the
- * views.
- */
-internal fun interface SurfaceGrabber {
-	/**
-	 * A copy of what [slot]'s surface is currently showing, or null if there was none.
-	 *
-	 * [target] is the shape the caller wants the bitmap in. It is passed rather than chosen here
-	 * because only the caller knows whether the run is high dynamic range, and getting that wrong
-	 * is what produces a still with the wrong colour rather than one that merely looks softer.
-	 *
-	 * Suspending because the copy is: PixelCopy is an asynchronous request, and whether it
-	 * completes is not the caller's decision.
-	 */
-	suspend fun grab(
-		slot: PlayerSlot,
-		target: PixelCopyCapture.CopyTarget,
-	): Bitmap?
 }

@@ -50,11 +50,17 @@ import com.neilturner.fauxfade.ui.player.StillCaptureMode
  *
  * Both pickers are the same shape because they are the same decision: two values that change what
  * a segment costs, chosen before any of it is paid for. Only one panel is ever open.
+ *
+ * [onGo] is handed the chosen capture method rather than starting the run itself. Four of the five
+ * run here, but [StillCaptureMode.PIXEL_COPY] has a screen and a view model of its own under
+ * `feature/pixelcopy`, and the caller is what knows to send it there - so the button reports which
+ * method was picked and lets the router decide what that means.
  */
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun StartupScreen(
 	viewModel: PlayerViewModel,
+	onGo: (StillCaptureMode) -> Unit,
 	modifier: Modifier = Modifier,
 ) {
 	val quality by viewModel.quality.collectAsStateWithLifecycle()
@@ -115,7 +121,7 @@ fun StartupScreen(
 				Text("Still: ${captureMode.label}", style = MaterialTheme.typography.titleMedium)
 			}
 
-			Button(onClick = viewModel::skipCountdown) {
+			Button(onClick = { onGo(captureMode) }) {
 				Text(startLabel(countdown), style = MaterialTheme.typography.titleMedium)
 			}
 		}
@@ -131,7 +137,9 @@ fun StartupScreen(
 						.onPreviewKeyEvent { event ->
 							// Not filtered to key-down. By the time the release arrives the panel
 							// is already closed and setting the flag again does nothing, and
-							// swallowing it keeps Back from reaching anything behind the scrim.
+							// swallowing it keeps Back from reaching anything behind the scrim -
+							// including the handler that would otherwise leave the feature for the
+							// startup screen.
 							if (event.key == Key.Back) {
 								open = null
 								true
