@@ -59,9 +59,10 @@ class MainActivity : ComponentActivity() {
  * from.
  *
  * [Shared] is the app's entry point and covers the startup screen as well as playback, because
- * those two are the same feature - one view model decides which of them is up. [PixelCopy] is the
- * one method that has been given a screen and a view model of its own; the other four are still
- * run by [Shared], and each will join [PixelCopy] as it is pulled out.
+ * those two are the same feature - one view model decides which of them is up, and Back during a
+ * run is answered by stopping it rather than by navigating. [PixelCopy] is the one method that has
+ * been given a screen and a view model of its own; the other four are still run by [Shared], and
+ * each will join [PixelCopy] as it is pulled out.
  */
 private sealed interface Screen {
 	/** The startup picker, and the playback screen behind it once a run has been started. */
@@ -79,6 +80,11 @@ private sealed interface Screen {
  * re-parse of the catalogue, which is asynchronous and which the picker does not wait for, and it
  * buys a screen that is in the state the user left it in rather than one restored from a run they
  * have already finished with.
+ *
+ * Both routes go through [FeatureHost], so leaving either releases what it built. Only leaving
+ * [Screen.PixelCopy] needs that: stopping a run on [Screen.Shared] releases the players itself and
+ * the view model stays put, which is what lets the two choices on the picker survive into the next
+ * run.
  */
 @Composable
 private fun FauxFadeApp() {
@@ -88,16 +94,17 @@ private fun FauxFadeApp() {
 	when (screen) {
 		Screen.Shared -> {
 			FeatureHost {
-				SharedMethod(
-					onGoToPixelCopy = { screen = Screen.PixelCopy },
-					onBack = toStartup,
-				)
+				SharedMethod(onGoToPixelCopy = { screen = Screen.PixelCopy })
 			}
 		}
 
 		Screen.PixelCopy -> {
 			FeatureHost {
-				BackToStartup(toStartup)
+				// Leaves for the startup screen, which unmounts this feature's store and so
+				// releases its player. A picker panel gets Back first and closes itself - see
+				// the `onPreviewKeyEvent` on the screens that have one - and key events only
+				// reach the dispatcher when nothing in Compose wanted them.
+				BackHandler(onBack = toStartup)
 				val viewModel: PixelCopyViewModel = viewModel()
 				PixelCopyScreen(viewModel = viewModel)
 			}
@@ -114,19 +121,20 @@ private fun FauxFadeApp() {
  * answered by going to [Screen.PixelCopy] instead of by building two players that were never going
  * to be used. The route is the only place the two halves meet, which is why the shared view model
  * can carry the other four without knowing PixelCopy exists at all.
+ *
+ * Because the picker and playback share a route, Back during a run cannot navigate anywhere and
+ * does not try. It stops the run instead - see [PlayerViewModel.stopRun] - which is what the same
+ * key does on the PixelCopy screen, where stopping means unmounting the feature.
  */
 @Composable
-private fun SharedMethod(
-	onGoToPixelCopy: () -> Unit,
-	onBack: () -> Unit,
-) {
+private fun SharedMethod(onGoToPixelCopy: () -> Unit) {
 	val viewModel: PlayerViewModel = viewModel()
 	val phase by viewModel.phase.collectAsStateWithLifecycle()
 
 	if (phase == AppPhase.PLAYING) {
-		// Only once there is a run to leave. On the picker Back has nowhere to go but out of the
-		// app, which is what the activity's own handler does when nothing has claimed it.
-		BackToStartup(onBack)
+		// Registered only once there is a run to stop: on the picker Back has nowhere to go but
+		// out of the app, which is what the activity's own handler does when nothing has claimed it.
+		BackHandler(onBack = viewModel::stopRun)
 		VideoPlayerScreen(viewModel = viewModel)
 	} else {
 		StartupScreen(
@@ -195,21 +203,4 @@ private class FeatureStoreOwner(
 	override val defaultViewModelProviderFactory: ViewModelProvider.Factory = parent.defaultViewModelProviderFactory
 
 	override val defaultViewModelCreationExtras: CreationExtras = parent.defaultViewModelCreationExtras
-}
-
-/**
- * Leaves a feature for the startup screen.
- *
- * Registered by the feature that has something to go back to, rather than once around the whole
- * `when`, so exactly one handler is ever active and there is no question about which screen a Back
- * belongs to. [SharedMethod] registers this only once a run is playing: on the picker there is
- * nowhere to go back to, and Back should reach the activity and close the app.
- *
- * A picker panel gets Back first - see the `onPreviewKeyEvent` on the screens that have one - so
- * Back closes an open panel before it leaves the feature. Key events reach the dispatcher only when
- * nothing in Compose wanted them.
- */
-@Composable
-private fun BackToStartup(onBack: () -> Unit) {
-	BackHandler(onBack = onBack)
 }

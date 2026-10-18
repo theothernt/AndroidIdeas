@@ -71,18 +71,37 @@ fun StartupScreen(
 
 	// Built for every entry up front rather than on demand: a FocusRequester has to be the same
 	// instance the row's modifier was built with, and a lazily created one would not be.
-	// Deliberately absent: any requestFocus() on the trigger buttons. TV Material manages focus
-	// for its own surfaces and hands it straight back - the request succeeds, and focus still
-	// ends up elsewhere. The triggers are the first focusable in the column, so D-pad navigation
-	// reaches them in one press from wherever focus lands.
+	// [triggerFocus] is the one for the controls themselves, for the reason in the effect below.
 	val qualityFocus = remember { Quality.entries.associateWith { FocusRequester() } }
 	val captureFocus = remember { StillCaptureMode.entries.associateWith { FocusRequester() } }
+	val triggerFocus = remember { FocusRequester() }
+
+	// Put focus on the first control whenever this screen is composed, which is the only thing that
+	// reliably does it.
+	//
+	// Relying on natural focus - "the triggers are the first focusable in the column, so focus
+	// lands there" - is true of the app's first frame and nothing else. Compose gives the window
+	// focus once, when the activity starts; every later composition has to ask. Coming back from
+	// playback is exactly that case: the player screen un-composes, the startup screen composes
+	// in its place, and nothing in the tree has a focused node, so the D-pad does nothing at all
+	// until something is pressed to give focus back to the framework.
+	//
+	// Deliberately not also done on the way out of a panel: the dismissal decides where focus lands
+	// there, and from every control the D-pad is at most one press away - see the effect below.
+	//
+	// Keyed on nothing, so it runs once per composition. A panel that opens and closes does not
+	// re-trigger it, because the screen itself is not re-composed.
+	LaunchedEffect(Unit) {
+		// Past this frame, so the request is not competing with the window's own initial focus
+		// assignment. The same slop the panel's own focus request needs.
+		withFrameNanos { }
+		triggerFocus.requestFocus()
+	}
 
 	// Focus the selected row while a panel is open, and leave focus entirely alone on the way
 	// out. The dismissal decides where it lands, and from there every control on the screen is at
 	// most two D-pad presses away - which is the same arrangement the first composition arrives
-	// with, so leaving is no different from getting there in the first place. Requesting focus on
-	// a trigger instead does not take: see the note above the triggers.
+	// with, so leaving is no different from getting there in the first place.
 	// Keyed on the selection too, so a panel that is opened on a newly picked value asks for that
 	// value rather than for whatever it last requested.
 	LaunchedEffect(open, quality, captureMode) {
@@ -109,7 +128,7 @@ fun StartupScreen(
 				color = MaterialTheme.colorScheme.onBackground,
 			)
 
-			Button(onClick = { open = OpenPanel.QUALITY }) {
+			Button(onClick = { open = OpenPanel.QUALITY }, modifier = Modifier.focusRequester(triggerFocus)) {
 				Text(quality.label, style = MaterialTheme.typography.titleMedium)
 			}
 

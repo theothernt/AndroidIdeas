@@ -227,14 +227,17 @@ class PlayerViewModel(
 	private var starting = false
 
 	/**
-	 * True once [onCleared] has released the players.
+	 * True between [beginPlayback] building the players and them being released.
 	 *
-	 * Only there to make [stop] safe. Leaving a feature clears its view model store, and whether
-	 * that happens before or after the screen's own disposal is a detail of how Compose tears a
-	 * subtree down rather than something this class can assume - so instead of depending on it, a
-	 * view model that has already released its players has nothing left to pause.
+	 * Two things release them and two things need to know: [stopRun] and [onCleared] release, and
+	 * [stop] - which the player screen runs when it leaves the composition - has to know there is
+	 * still something to pause. Leaving a feature clears its view model store, and whether that
+	 * lands before or after the screen's own disposal is a detail of how Compose tears a subtree
+	 * down rather than something this class can assume; and stopping a run releases first and
+	 * un-composes second, in the other order. Rather than depend on either, this asks the question
+	 * that actually matters - is there a player right now - instead of tracking how we got here.
 	 */
-	private var released = false
+	private var live = false
 
 	// Parse the catalogue, then run the countdown down to playback.
 	//
@@ -322,12 +325,26 @@ class PlayerViewModel(
 					PlayerSlot.entries.toList()
 				}
 			players = createPlayerSlots(getApplication(), quality, slots)
+			// As soon as there is something to act on. [stopRun] and [onCleared] release through
+			// this flag and [stop] declines to touch a player that is already gone, so it is set
+			// here rather than after the captures below, which are built in a world where a player
+			// already exists.
+			live = true
 			// After the players: the scheduled capture reads the player's application looper when it
 			// is built. Keyed off what was actually built rather than off the enum, so the preloaded
 			// run does not ask for a player that was never created.
 			scheduled = players.keys.associateWith { ScheduledFrameCapture(players.getValue(it)) }
 			retrievers = players.keys.associateWith { RetrieverFrameCapture() }
 			players.forEach { (slot, player) -> player.addAnalyticsListener(frameStats.getValue(slot)) }
+			// Everything below belongs to a run rather than to the view model, and a second run in
+			// the same view model would otherwise inherit it. The still is the one that matters: a
+			// run that ended mid-segment leaves a sealed or fading frame behind, and without this
+			// the next run's player screen would put it up and hold it there for the whole of the
+			// first segment, until the loop had a new one to replace it with.
+			_foreground.value = PlayerSlot.PRIMARY
+			_swapping.value = false
+			_stillFrame.value = null
+			_stillPhase.value = StillPhase.HIDDEN
 			_playingQuality.value = quality
 			Log.i(TAG, "startup: $quality, ${order.size} clips")
 			_phase.value = AppPhase.PLAYING
@@ -396,18 +413,70 @@ class PlayerViewModel(
 	/**
 	 * Stops the loop and leaves the players holding their frame, without releasing them.
 	 *
-	 * The counterpart to [onCleared], and deliberately the lighter of the two: nothing is built
-	 * here, so nothing has to be built again if the same view model is used again.
+	 * The counterpart to [stopRun], and deliberately the lighter of the two: nothing is built here,
+	 * so nothing has to be built again if the same view model is used again. Released players are
+	 * not touched - see [live].
 	 *
-	 * Guarded - see [released].
+	 * Called by the player screen when it leaves the composition, which on this path happens
+	 * *after* [stopRun] has already released them, so the guard is load-bearing rather than
+	 * defensive.
 	 */
 	fun stop() {
-		if (released) return
+		if (!live) return
 		loopJob?.cancel()
 		loopJob = null
 		memoryJob?.cancel()
 		memoryJob = null
-		if (::players.isInitialized) players.values.forEach { it.pause() }
+		players.values.forEach { it.pause() }
+	}
+
+	/**
+	 * Ends the run and puts the picker back up.
+	 *
+	 * What Back does during playback. Releasing the players is what changes the screen: the
+	 * player screen is composed only while the phase is [AppPhase.PLAYING], so flipping back to
+	 * [AppPhase.PICKING] takes it out of the composition and the startup screen in.
+	 *
+	 * Releasing rather than pausing is the point. A paused run would keep both decoders and the
+	 * whole of the buffered playlist alive under a screen with three buttons on it, and there is
+	 * nothing to come back to - the picker re-reads nothing, because the quality and the method
+	 * are still the same fields.
+	 *
+	 * The view model survives, so the two choices made on the picker are still there afterwards and
+	 * a second run costs nothing to start. Everything that belonged to the run rather than to the
+	 * view model is reset by [beginPlayback] when it does.
+	 */
+	fun stopRun() {
+		loopJob?.cancel()
+		loopJob = null
+		memoryJob?.cancel()
+		memoryJob = null
+		countdownJob?.cancel()
+		countdownJob = null
+		releasePlayers()
+		_phase.value = AppPhase.PICKING
+		Log.i(TAG, "stopped: ${_playingQuality.value}, back to the picker")
+	}
+
+	/**
+	 * Releases the players, if there are any, and forgets that there were.
+	 *
+	 * Shared by [stopRun], which then puts the picker back, and [onCleared], which does not
+	 * because there is nothing left to put anything back into. [live] goes down first so that a
+	 * [stop] arriving afterwards - from the player screen un-composing - sees no player rather
+	 * than a released one.
+	 */
+	private fun releasePlayers() {
+		if (!live) return
+		live = false
+		// Before the players: a capture in flight holds a pending PlayerMessage and possibly an
+		// installed effect, and both have to be dropped while the player they belong to still
+		// exists to drop them from. Both guards because [live] is set as soon as the players exist
+		// and the captures are built after them, so a failure in between leaves one initialised
+		// and the other not.
+		if (::scheduled.isInitialized) scheduled.values.forEach { it.release() }
+		// Uninitialised when the run is stopped from the picker, where no player was ever built.
+		if (::players.isInitialized) players.values.forEach { it.release() }
 	}
 
 	/**
@@ -889,16 +958,10 @@ class PlayerViewModel(
 	}
 
 	override fun onCleared() {
-		released = true
 		loopJob?.cancel()
 		memoryJob?.cancel()
 		countdownJob?.cancel()
-		// Before the players: a capture in flight holds a pending PlayerMessage and possibly an
-		// installed effect, and both have to be dropped while the player they belong to still
-		// exists to drop them from.
-		if (::scheduled.isInitialized) scheduled.values.forEach { it.release() }
-		// Uninitialised when the app is cleared from the picker, where no player was ever built.
-		if (::players.isInitialized) players.values.forEach { it.release() }
+		releasePlayers()
 	}
 }
 

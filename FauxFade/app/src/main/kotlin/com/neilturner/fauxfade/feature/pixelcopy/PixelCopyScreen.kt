@@ -98,12 +98,23 @@ private fun PixelCopyPicker(
 
 	// Built for every entry up front rather than on demand: a FocusRequester has to be the same
 	// instance the row's modifier was built with, and a lazily created one would not be.
+	// [triggerFocus] is the one for the controls themselves, for the reason in the effect below.
 	val qualityFocus = remember { Quality.entries.associateWith { FocusRequester() } }
+	val triggerFocus = remember { FocusRequester() }
+
+	// Put focus on the first control whenever this screen is composed, which is the only thing that
+	// reliably does it - see the same effect on `StartupScreen` for why natural focus is not enough
+	// once the app has been up. Coming back from playback is the case that matters here: the player
+	// screen un-composes, this one composes in its place, and without this the D-pad does nothing
+	// at all until a key is pressed to hand focus back to the framework.
+	LaunchedEffect(Unit) {
+		withFrameNanos { }
+		triggerFocus.requestFocus()
+	}
 
 	// Focus the selected row while the panel is open, and leave focus entirely alone on the way
-	// out. Requesting focus on the trigger button does not take on TV Material - the request
-	// succeeds and focus still ends up elsewhere - so the triggers are simply the first focusable
-	// in the column and D-pad navigation reaches them in one press.
+	// out. The dismissal decides where focus lands, and from there every control is at most one
+	// D-pad press away.
 	LaunchedEffect(open, quality) {
 		withFrameNanos { }
 		if (open) qualityFocus.getValue(quality).requestFocus()
@@ -124,7 +135,7 @@ private fun PixelCopyPicker(
 				color = MaterialTheme.colorScheme.onBackground,
 			)
 
-			Button(onClick = { open = true }) {
+			Button(onClick = { open = true }, modifier = Modifier.focusRequester(triggerFocus)) {
 				Text(quality.label, style = MaterialTheme.typography.titleMedium)
 			}
 
