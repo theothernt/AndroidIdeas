@@ -1,4 +1,4 @@
-package com.neilturner.fauxfade.ui.theme
+package com.neilturner.fauxfade.core.theme
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color

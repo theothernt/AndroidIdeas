@@ -1,4 +1,4 @@
-package com.neilturner.fauxfade.ui.player
+package com.neilturner.fauxfade.core.stats
 
 import android.os.SystemClock
 import android.util.Log
@@ -34,7 +34,13 @@ import com.neilturner.fauxfade.TAG
  */
 @OptIn(UnstableApi::class)
 internal class FrameStats(
-	private val slot: PlayerSlot,
+	/**
+	 * Identifies the player this records for, in every line it logs.
+	 *
+	 * A plain name rather than a [com.neilturner.fauxfade.ui.player.PlayerSlot]: this lives in
+	 * core, and taking the enum would make core depend on a feature's own player numbering.
+	 */
+	private val slot: String,
 ) : AnalyticsListener {
 	/** Cumulative since the renderer was created, so every sample is a delta against the last. */
 	private var droppedTotal = 0L
@@ -87,10 +93,16 @@ internal class FrameStats(
 	 * that explains a missed handoff. The handoff waits for the incoming player to render, and a
 	 * clip whose codec needs most of a second to initialise has spent most of its budget before it
 	 * has drawn anything - whether or not anything is in front of its render path.
+	 *
+	 * The four-argument form rather than the deprecated three, which media3 kept only as a
+	 * forwarding stub. The extra argument is when the decoder came up on the same clock
+	 * [startedAtMs] reads, so `sinceAttachMs` is a difference between two instants rather than
+	 * between an instant and the moment this callback got dispatched.
 	 */
 	override fun onVideoDecoderInitialized(
 		eventTime: AnalyticsListener.EventTime,
 		decoderName: String,
+		initializedTimestampMs: Long,
 		initializationDurationMs: Long,
 	) {
 		// positionMs and bufferedMs are there to separate the two reasons a codec can be slow to
@@ -100,7 +112,7 @@ internal class FrameStats(
 			TAG,
 			"decoder: slot=$slot name=$decoderName initMs=$initializationDurationMs " +
 				"atPositionMs=${eventTime.eventPlaybackPositionMs} bufferedMs=${eventTime.totalBufferedDurationMs} " +
-				"sinceAttachMs=${eventTime.realtimeMs - startedAtMs}",
+				"sinceAttachMs=${initializedTimestampMs - startedAtMs}",
 		)
 	}
 

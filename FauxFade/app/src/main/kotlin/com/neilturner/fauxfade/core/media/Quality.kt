@@ -1,4 +1,4 @@
-package com.neilturner.fauxfade.media
+package com.neilturner.fauxfade.core.media
 
 /**
  * The clip qualities on offer at startup, and the one a run starts on.
@@ -38,7 +38,7 @@ enum class Quality(
 	 * (`c2.amlogic.dolby-vision.dvhe.decoder`) and that one turns out to be the sturdier of the two
 	 * at 4K.
 	 *
-	 * This is what decides the shape of a captured still: see [PixelCopyCapture.CopyTarget]. Copying
+	 * This is what decides the shape of a captured still. Copying
 	 * high dynamic range into an 8-bit destination does not tone-map, it just reads the values as
 	 * sRGB, and what comes out has a magenta cast and is too dark - so the still has to be kept in
 	 * a shape that can carry the range and let the framework convert it at draw time.

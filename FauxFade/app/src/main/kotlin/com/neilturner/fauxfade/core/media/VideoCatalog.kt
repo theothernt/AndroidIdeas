@@ -1,4 +1,4 @@
-package com.neilturner.fauxfade.media
+package com.neilturner.fauxfade.core.media
 
 import android.content.Context
 import android.net.Uri

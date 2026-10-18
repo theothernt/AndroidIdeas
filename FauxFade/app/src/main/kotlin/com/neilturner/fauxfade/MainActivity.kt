@@ -13,11 +13,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Surface
+import com.neilturner.fauxfade.core.theme.FauxFadeTheme
 import com.neilturner.fauxfade.ui.player.AppPhase
 import com.neilturner.fauxfade.ui.player.PlayerViewModel
 import com.neilturner.fauxfade.ui.player.VideoPlayerScreen
 import com.neilturner.fauxfade.ui.startup.StartupScreen
-import com.neilturner.fauxfade.ui.theme.FauxFadeTheme
 
 class MainActivity : ComponentActivity() {
 	@OptIn(ExperimentalTvMaterial3Api::class)

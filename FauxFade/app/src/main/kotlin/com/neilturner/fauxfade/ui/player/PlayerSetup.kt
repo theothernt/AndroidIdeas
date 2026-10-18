@@ -5,7 +5,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
-import com.neilturner.fauxfade.media.Quality
+import com.neilturner.fauxfade.core.media.Quality
 
 /**
  * Builds one player per slot in [slots], all configured the same way.

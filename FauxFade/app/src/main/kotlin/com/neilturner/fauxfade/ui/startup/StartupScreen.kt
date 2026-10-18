@@ -33,7 +33,7 @@ import androidx.tv.material3.ListItemDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.RadioButton
 import androidx.tv.material3.Text
-import com.neilturner.fauxfade.media.Quality
+import com.neilturner.fauxfade.core.media.Quality
 import com.neilturner.fauxfade.ui.player.PlayerViewModel
 import com.neilturner.fauxfade.ui.player.StillCaptureMode
 

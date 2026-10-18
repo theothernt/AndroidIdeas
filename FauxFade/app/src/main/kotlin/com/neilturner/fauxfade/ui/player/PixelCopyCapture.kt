@@ -13,22 +13,20 @@ import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
- * **TEMPORARY — Phase 0 spike. Delete this file and its call sites once the question is answered.**
- *
  * Copies what a [SurfaceView] is currently showing into a bitmap, with no video pipeline
- * involved. The point of the spike is a single question: **can this copy from a paused player?**
+ * involved, and the question that made it the default capture path: **can this copy from a paused
+ * player?**
  *
- * That matters more than anything else about the approach. Every capture mechanism so far has been
- * forced to read a frame *before* pausing, because a paused player produces no frames:
+ * That matters more than anything else about the approach. Every other capture mechanism here has
+ * been forced to read a frame *before* pausing, because a paused player produces no frames:
  * - the tap has to be armed before the pause, which is why [PlayerViewModel.runDoublePlayerLoop]
  *   arms first and pauses second;
  * - the scheduled effect has to run ahead, and installing it mid-playback stops the player;
  * - the retriever has to pause and then wait two to three seconds for the file.
  *
  * PixelCopy is not reading the player at all - it is reading the surface, and a surface keeps its
- * last latched buffer after the producer stops. If that holds, the handoff can pause first and copy
- * afterwards, which is the natural order and removes all three problems above. If it does not hold,
- * this approach is just the tap again with more steps.
+ * last latched buffer after the producer stops. It does hold: the handoff can pause first and copy
+ * afterwards, which is the natural order and removes all three problems above.
  *
  * Copied from the [SurfaceView] rather than the window on purpose: the window also contains the
  * readout chips and the quality label, and a still with the user interface baked into it is not a
@@ -87,9 +85,9 @@ internal class PixelCopyCapture {
 	 * ever has to cover the screen, so this bounds the copy at the display's resolution instead of
 	 * the clip's. A 4K clip on a 1080p display costs the same as a 1080p one.
 	 *
-	 * ARGB_8888 throughout. That is right for SDR and wrong for HDR - an HDR surface copied into an
-	 * 8-bit destination will be tone-mapped or clipped, so the still will not match the video it is
-	 * covering. Worth a follow-up with RGBA_F16 if the HDR qualities survive this spike.
+	 * The destination's config comes from [target], which is [CopyTarget.HDR] for HDR video:
+	 * see [CopyTarget] for why an 8-bit destination tone-maps and so cannot match the layer it
+	 * covers.
 	 */
 	suspend fun capture(
 		surfaceView: SurfaceView,

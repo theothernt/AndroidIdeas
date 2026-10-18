@@ -1,4 +1,4 @@
-package com.neilturner.fauxfade.media
+package com.neilturner.fauxfade.core.media
 
 import androidx.annotation.OptIn
 import androidx.media3.common.MediaItem

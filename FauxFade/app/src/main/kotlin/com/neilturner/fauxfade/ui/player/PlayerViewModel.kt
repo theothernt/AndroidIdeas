@@ -4,7 +4,6 @@ import android.app.Application
 import android.graphics.Bitmap
 import android.os.Debug
 import android.util.Log
-import android.view.SurfaceView
 import androidx.annotation.OptIn
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -14,10 +13,11 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import com.neilturner.fauxfade.BuildConfig
 import com.neilturner.fauxfade.TAG
-import com.neilturner.fauxfade.media.AerialAsset
-import com.neilturner.fauxfade.media.Quality
-import com.neilturner.fauxfade.media.VideoCatalog
-import com.neilturner.fauxfade.media.VideoItem
+import com.neilturner.fauxfade.core.media.AerialAsset
+import com.neilturner.fauxfade.core.media.Quality
+import com.neilturner.fauxfade.core.media.VideoCatalog
+import com.neilturner.fauxfade.core.media.VideoItem
+import com.neilturner.fauxfade.core.stats.FrameStats
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -133,7 +133,7 @@ class PlayerViewModel(
 	 * tap installed costs frame rate, which is the whole argument for removing it, and that is not
 	 * something to guess at on a device this size.
 	 */
-	private val frameStats = PlayerSlot.entries.associateWith { FrameStats(it) }
+	private val frameStats = PlayerSlot.entries.associateWith { FrameStats(it.name) }
 
 	/**
 	 * How the run takes its stills, chosen on the startup screen and locked when playback starts.
@@ -384,50 +384,6 @@ class PlayerViewModel(
 					delay(MEMORY_POLL_MS)
 				}
 			}
-	}
-
-	/**
-	 * **TEMPORARY — Phase 0 spike.** Pause a slot's player, copy its surface, and put the result
-	 * straight into the still overlay so a screenshot is the verification.
-	 *
-	 * The overlay is being reused as a viewer rather than having the spike draw anything of its own:
-	 * it already takes a bitmap, already composites above both surfaces, and already costs nothing
-	 * when it is empty. What it adds here is the one thing the spike needs - the bitmap on screen at
-	 * full opacity, where orientation and colour can be judged rather than inferred from a mean.
-	 *
-	 * Sets the same still state the handoff uses, so single-player mode leaves it alone afterwards.
-	 */
-	fun spikeCapture(
-		slot: PlayerSlot,
-		surfaceView: SurfaceView,
-		pauseFirst: Boolean,
-	) {
-		viewModelScope.launch {
-			val player = players.getValue(slot)
-			if (pauseFirst) {
-				player.pause()
-				Log.i(TAG, "spike: paused $slot at positionMs=${player.currentPosition}")
-			}
-			val result = PixelCopyCapture().capture(surfaceView, stillTarget)
-			// meanRgb is debug-only by design, which suits a spike exactly.
-			val mean = result.bitmap?.let { meanRgb(it) }
-			Log.i(
-				TAG,
-				"spike: slot=$slot pauseFirst=$pauseFirst target=$stillTarget status=${result.status} " +
-					"ok=${result.succeeded} size=${result.bitmap?.width}x${result.bitmap?.height} " +
-					"elapsedMs=${result.elapsedMs} mean=$mean",
-			)
-			if (result.bitmap != null) {
-				_stillFrame.value = result.bitmap
-				_stillPhase.value = StillPhase.SEALED
-			}
-		}
-	}
-
-	/** **TEMPORARY — Phase 0 spike.** Takes the spiker's bitmap back off the screen. */
-	fun spikeClear() {
-		_stillFrame.value = null
-		_stillPhase.value = StillPhase.HIDDEN
 	}
 
 	fun stop() {
