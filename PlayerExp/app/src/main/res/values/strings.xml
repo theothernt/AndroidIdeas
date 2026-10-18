@@ -23,6 +23,11 @@
     <string name="plex_transcoding_video">Transcoding video for this device…</string>
     <string name="plex_transcoding_audio">Transcoding audio for this device…</string>
     <string name="plex_transcoding_video_and_audio">Transcoding video and audio for this device…</string>
+    <string name="plex_audio_picker">Audio</string>
+    <string name="plex_subtitles_picker">Subtitles</string>
+    <string name="plex_subtitles_off">Off</string>
+    <string name="plex_select_audio">Select an audio track</string>
+    <string name="plex_select_subtitles">Select subtitles</string>
     <string name="plex_on_deck_button">Latest TV and Movies</string>
     <string name="plex_on_deck_continue_watching">Continue Watching</string>
     <string name="plex_on_deck_latest_episodes">Latest TV Episodes</string>

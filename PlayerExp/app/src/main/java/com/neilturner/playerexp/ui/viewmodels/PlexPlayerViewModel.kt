@@ -11,15 +11,17 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
+import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.DefaultRenderersFactory
-import androidx.media3.exoplayer.audio.AudioCapabilities
 import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.AudioTrackAudioOutputProvider
 import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.HttpDataSource
@@ -30,10 +32,13 @@ import com.neilturner.playerexp.data.plex.PlexEpisode
 import com.neilturner.playerexp.data.plex.PlexLibrarySections
 import com.neilturner.playerexp.data.plex.PlexApi
 import com.neilturner.playerexp.data.plex.AndroidPlexCapabilityProbe
+import com.neilturner.playerexp.data.plex.PlexPlaybackPlan
 import com.neilturner.playerexp.data.plex.PlexPlaybackProfile
 import com.neilturner.playerexp.data.plex.PlexPlaybackStatus
 import com.neilturner.playerexp.data.plex.PlexStreamMode
 import com.neilturner.playerexp.data.plex.PlexStreamPlayback
+import com.neilturner.playerexp.data.plex.PlexAudioStream
+import com.neilturner.playerexp.data.plex.PlexSubtitleStream
 import com.neilturner.playerexp.data.plex.SessionCleanup
 import com.neilturner.playerexp.data.plex.SessionCleanupManager
 import okhttp3.OkHttpClient
@@ -96,7 +101,11 @@ sealed interface PlexPlayerUiState {
     data class Ready(
         val metadata: PlexPlaybackMetadata,
         val transcodeNotice: TranscodeNotice? = null,
-        val playbackStatus: PlexPlaybackStatus? = null
+        val playbackStatus: PlexPlaybackStatus? = null,
+        val availableSubtitles: List<PlexSubtitleStream> = emptyList(),
+        val selectedSubtitleId: Long? = null,
+        val availableAudio: List<PlexAudioStream> = emptyList(),
+        val selectedAudioId: Long? = null
     ) : PlexPlayerUiState
     data class Error(val message: String) : PlexPlayerUiState
 }
@@ -120,6 +129,11 @@ class PlexPlayerViewModel(
     private var stoppedSessionIdentifier: String? = null
     private var lastKnownPositionMillis: Long = 0L
     private var lastKnownDurationMillis: Long = 0L
+    private var currentServerUrl: String? = null
+    private var currentAccountToken: String? = null
+    private var currentEpisode: PlexEpisode? = null
+    private var currentProfile: PlexPlaybackProfile? = null
+    private var currentPlaybackPlan: PlexPlaybackPlan? = null
 
     /**
      * Plays one specific item, which is what a card on a shelf asks for. [title] is what the card
@@ -238,6 +252,12 @@ class PlexPlayerViewModel(
             lastKnownPositionMillis = selectedEpisode.viewOffset
             lastKnownDurationMillis = 0L
 
+            currentServerUrl = serverUrl
+            currentAccountToken = token
+            currentEpisode = selectedEpisode
+            currentProfile = profile
+            currentPlaybackPlan = playbackPlan
+
             // The card's title stands in for an episode Plex gave no title of its own; everything
             // else comes from the item, which is fetched before playback starts, so the overlay
             // always has the full set of pieces to lay out. The transcode notice comes from the
@@ -249,10 +269,20 @@ class PlexPlayerViewModel(
                     seasonNumber = selectedEpisode.seasonNumber,
                     episodeNumber = selectedEpisode.episodeNumber
                 ),
-                transcodeNotice = TranscodeNotice.fromPlaybackStatus(playbackPlan.playbackStatus)
+                transcodeNotice = TranscodeNotice.fromPlaybackStatus(playbackPlan.playbackStatus),
+                availableSubtitles = selectedEpisode.subtitleStreams,
+                selectedSubtitleId = null,
+                availableAudio = selectedEpisode.audioStreams,
+                selectedAudioId = selectedEpisode.audioStreams.firstOrNull { it.isDefault }?.id
             )
             val prepareStartedAt = SystemClock.elapsedRealtime()
             p.addListener(playbackListener(playbackPlan.playbackStatus, prepareStartedAt))
+
+            // Subtitle tracks start disabled unless selected
+            p.trackSelectionParameters = p.trackSelectionParameters
+                .buildUpon()
+                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                .build()
 
             p.setMediaItem(MediaItem.fromUri(playbackPlan.url))
             // A seek set before prepare is where playback opens: ExoPlayer holds it as the start
@@ -300,6 +330,192 @@ class PlexPlayerViewModel(
         player?.playWhenReady = true
     }
 
+    /**
+     * Selects a subtitle track by its Plex stream id, or null to disable subtitles.
+     *
+     * In Direct Play, ExoPlayer applies the change immediately via track selection parameters.
+     * In HLS transcode, the universal transcode session is re-established with the new subtitle
+     * stream requested, resuming playback from the current position.
+     */
+    fun selectSubtitle(subtitleStreamId: Long?) {
+        val readyState = _uiState.value as? PlexPlayerUiState.Ready ?: return
+        if (readyState.selectedSubtitleId == subtitleStreamId) return
+
+        val p = player ?: return
+        val selectedStream = readyState.availableSubtitles.firstOrNull { it.id == subtitleStreamId }
+
+        _uiState.value = readyState.copy(selectedSubtitleId = subtitleStreamId)
+
+        val plan = currentPlaybackPlan
+        if (plan is PlexPlaybackPlan.DirectPlay) {
+            updateExoPlayerSubtitleTrack(p, selectedStream)
+            return
+        }
+
+        val episode = currentEpisode ?: return
+        val serverUrl = currentServerUrl ?: return
+        val token = currentAccountToken ?: return
+        val profile = currentProfile ?: return
+
+        viewModelScope.launch {
+            try {
+                updateLastKnownTime(p)
+                val currentPos = p.currentPosition.coerceAtLeast(0L)
+                val oldTimeline = timeline
+                val newSessionIdentifier = UUID.randomUUID().toString()
+
+                if (oldTimeline != null) {
+                    sessionCleanup.enqueueTranscodeStop(
+                        serverUrl = oldTimeline.serverUrl,
+                        accountToken = oldTimeline.accountToken,
+                        sessionIdentifier = oldTimeline.sessionIdentifier
+                    )
+                }
+
+                val newPlan = api.playbackPlan(
+                    serverUrl = serverUrl,
+                    accountToken = token,
+                    episode = episode,
+                    profile = profile,
+                    sessionIdentifier = newSessionIdentifier,
+                    audioStreamId = readyState.selectedAudioId,
+                    subtitleStreamId = subtitleStreamId
+                )
+                currentPlaybackPlan = newPlan
+                timeline = PlexTimeline(
+                    serverUrl = serverUrl,
+                    accountToken = token,
+                    ratingKey = requireNotNull(episode.ratingKey),
+                    sessionIdentifier = newSessionIdentifier
+                )
+
+                p.setMediaItem(MediaItem.fromUri(newPlan.url))
+                if (currentPos > 0L) {
+                    p.seekTo(currentPos)
+                }
+                p.prepare()
+                p.playWhenReady = true
+                updateExoPlayerSubtitleTrack(p, selectedStream)
+            } catch (e: Exception) {
+                Log.e(
+                    PLAYBACK_LOG_TAG,
+                    "Failed to switch subtitle in HLS: type=${e.javaClass.simpleName}, message=${e.message.safeForLog()}"
+                )
+            }
+        }
+    }
+
+    /**
+     * Selects an audio track by its Plex stream id.
+     *
+     * In Direct Play, ExoPlayer applies the change immediately via preferred audio language.
+     * In HLS transcode, the session is re-established with the new audioStreamID, resuming from
+     * the current position.
+     */
+    fun selectAudio(audioStreamId: Long?) {
+        val readyState = _uiState.value as? PlexPlayerUiState.Ready ?: return
+        if (readyState.selectedAudioId == audioStreamId) return
+
+        val p = player ?: return
+        val selectedStream = readyState.availableAudio.firstOrNull { it.id == audioStreamId }
+
+        _uiState.value = readyState.copy(selectedAudioId = audioStreamId)
+
+        val plan = currentPlaybackPlan
+        if (plan is PlexPlaybackPlan.DirectPlay) {
+            val builder = p.trackSelectionParameters.buildUpon()
+            selectedStream?.languageCode?.let { builder.setPreferredAudioLanguage(it) }
+                ?: builder.setPreferredAudioLanguage(null)
+            p.trackSelectionParameters = builder.build()
+            return
+        }
+
+        val episode = currentEpisode ?: return
+        val serverUrl = currentServerUrl ?: return
+        val token = currentAccountToken ?: return
+        val profile = currentProfile ?: return
+
+        viewModelScope.launch {
+            try {
+                updateLastKnownTime(p)
+                val currentPos = p.currentPosition.coerceAtLeast(0L)
+                val oldTimeline = timeline
+                val newSessionIdentifier = UUID.randomUUID().toString()
+
+                if (oldTimeline != null) {
+                    sessionCleanup.enqueueTranscodeStop(
+                        serverUrl = oldTimeline.serverUrl,
+                        accountToken = oldTimeline.accountToken,
+                        sessionIdentifier = oldTimeline.sessionIdentifier
+                    )
+                }
+
+                val newPlan = api.playbackPlan(
+                    serverUrl = serverUrl,
+                    accountToken = token,
+                    episode = episode,
+                    profile = profile,
+                    sessionIdentifier = newSessionIdentifier,
+                    audioStreamId = audioStreamId,
+                    subtitleStreamId = readyState.selectedSubtitleId
+                )
+                currentPlaybackPlan = newPlan
+                timeline = PlexTimeline(
+                    serverUrl = serverUrl,
+                    accountToken = token,
+                    ratingKey = requireNotNull(episode.ratingKey),
+                    sessionIdentifier = newSessionIdentifier
+                )
+
+                p.setMediaItem(MediaItem.fromUri(newPlan.url))
+                if (currentPos > 0L) {
+                    p.seekTo(currentPos)
+                }
+                p.prepare()
+                p.playWhenReady = true
+            } catch (e: Exception) {
+                Log.e(
+                    PLAYBACK_LOG_TAG,
+                    "Failed to switch audio in HLS: type=${e.javaClass.simpleName}, message=${e.message.safeForLog()}"
+                )
+            }
+        }
+    }
+
+    private fun updateExoPlayerSubtitleTrack(
+        player: Player,
+        chosenStream: PlexSubtitleStream?
+    ) {
+        val builder = player.trackSelectionParameters.buildUpon()
+        if (chosenStream == null) {
+            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
+        } else {
+            builder.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+            builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            chosenStream.languageCode?.let { builder.setPreferredTextLanguage(it) }
+
+            val tracks = player.currentTracks
+            for (group in tracks.groups) {
+                if (group.type == C.TRACK_TYPE_TEXT) {
+                    for (i in 0 until group.length) {
+                        val format = group.getTrackFormat(i)
+                        val matchesId = format.id == chosenStream.id.toString()
+                        val matchesLang = chosenStream.languageCode != null &&
+                            format.language.equals(chosenStream.languageCode, ignoreCase = true)
+                        if (matchesId || matchesLang) {
+                            builder.setOverrideForType(
+                                TrackSelectionOverride(group.mediaTrackGroup, i)
+                            )
+                            break
+                        }
+                    }
+                }
+            }
+        }
+        player.trackSelectionParameters = builder.build()
+    }
+
     fun releasePlayer() {
         val currentPlayer = player
         stopProgressReporting()
@@ -309,6 +525,11 @@ class PlexPlayerViewModel(
         currentPlayer?.release()
         player = null
         timeline = null
+        currentServerUrl = null
+        currentAccountToken = null
+        currentEpisode = null
+        currentProfile = null
+        currentPlaybackPlan = null
     }
 
     override fun onCleared() {
@@ -353,8 +574,11 @@ class PlexPlayerViewModel(
                 context: Context,
                 enableFloatOutput: Boolean,
                 enableAudioOutputPlaybackParams: Boolean
-            ): AudioSink = DefaultAudioSink.Builder()
-                .setAudioCapabilities(AudioCapabilities.DEFAULT_AUDIO_CAPABILITIES)
+            ): AudioSink = DefaultAudioSink.Builder(context)
+                .setAudioOutputProvider(
+                    // No context => static DEFAULT_AUDIO_CAPABILITIES (no passthrough), same as the old no-arg builder path.
+                    AudioTrackAudioOutputProvider.Builder(null).build()
+                )
                 .setEnableFloatOutput(enableFloatOutput)
                 .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
                 .build()
@@ -427,6 +651,12 @@ class PlexPlayerViewModel(
             }
 
             override fun onTracksChanged(tracks: Tracks) {
+                val selectedSubtitleId = (_uiState.value as? PlexPlayerUiState.Ready)?.selectedSubtitleId
+                val selectedStream = (_uiState.value as? PlexPlayerUiState.Ready)?.availableSubtitles
+                    ?.firstOrNull { it.id == selectedSubtitleId }
+                player?.let { p ->
+                    updateExoPlayerSubtitleTrack(p, selectedStream)
+                }
                 val selectedFormats = tracks.groups.flatMap { group ->
                     (0 until group.length)
                         .filter(group::isTrackSelected)

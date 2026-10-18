@@ -223,15 +223,115 @@ data class PlexMediaPart(
     @SerialName("Stream") val stream: List<PlexMediaStream>? = null
 )
 
-/** One stream on a part: [streamType] 1 is video, 2 is audio, as Plex numbers them. */
+/** One stream on a part: [streamType] 1 is video, 2 is audio, 3 is subtitle, as Plex numbers them. */
 @Serializable
 data class PlexMediaStream(
+    val id: Long? = null,
     val streamType: Int? = null,
     val codec: String? = null,
+    val language: String? = null,
+    val languageCode: String? = null,
+    val default: Boolean? = null,
+    val forced: Boolean? = null,
+    val displayTitle: String? = null,
+    val extendedDisplayTitle: String? = null,
+    val title: String? = null,
+    val key: String? = null,
     val width: Int? = null,
     val height: Int? = null,
-    val frameRate: String? = null
+    val frameRate: String? = null,
+    val channels: Int? = null
 )
+
+@Immutable
+data class PlexSubtitleStream(
+    val id: Long,
+    val language: String? = null,
+    val languageCode: String? = null,
+    val codec: String? = null,
+    val forced: Boolean = false,
+    val isDefault: Boolean = false,
+    val title: String? = null,
+    val displayTitle: String? = null
+) {
+    val label: String
+        get() {
+            if (!displayTitle.isNullOrBlank()) return displayTitle
+            val lang = language ?: languageCode ?: "Subtitle"
+            val extras = listOfNotNull(
+                codec?.uppercase(),
+                if (forced) "Forced" else null
+            ).joinToString(" · ")
+            return if (extras.isNotBlank()) "$lang ($extras)" else lang
+        }
+}
+
+internal fun PlexMediaStream.isSupportedTextSubtitle(): Boolean {
+    if (streamType != 3) return false
+    val c = codec?.lowercase() ?: return false
+    return c !in UNSUPPORTED_SUBTITLE_CODECS
+}
+
+internal fun PlexMediaStream.toSubtitleStream(): PlexSubtitleStream? {
+    val streamId = id ?: return null
+    return PlexSubtitleStream(
+        id = streamId,
+        language = language,
+        languageCode = languageCode,
+        codec = codec,
+        forced = forced ?: false,
+        isDefault = default ?: false,
+        title = title,
+        displayTitle = displayTitle ?: extendedDisplayTitle
+    )
+}
+
+private val UNSUPPORTED_SUBTITLE_CODECS = setOf(
+    "pgs",
+    "dvd_subtitle",
+    "vobsub",
+    "dvb_subtitle",
+    "hdmv_pgs_subtitle",
+    "dvdsub"
+)
+
+/** One audio track the user may select during playback. */
+@Immutable
+data class PlexAudioStream(
+    val id: Long,
+    val language: String? = null,
+    val languageCode: String? = null,
+    val codec: String? = null,
+    val channels: Int? = null,
+    val isDefault: Boolean = false,
+    val displayTitle: String? = null
+) {
+    /** The label shown in the audio picker: display title, falling back to language + codec. */
+    val label: String
+        get() {
+            if (!displayTitle.isNullOrBlank()) return displayTitle
+            val lang = language ?: languageCode ?: "Audio"
+            val extras = listOfNotNull(
+                codec?.uppercase(),
+                channels?.let { "${it}ch" }
+            ).joinToString(" · ")
+            return if (extras.isNotBlank()) "$lang ($extras)" else lang
+        }
+}
+
+internal fun PlexMediaStream.toAudioStream(): PlexAudioStream? {
+    if (streamType != 2) return null
+    val streamId = id ?: return null
+    return PlexAudioStream(
+        id = streamId,
+        language = language,
+        languageCode = languageCode,
+        codec = codec,
+        channels = channels,
+        isDefault = default ?: false,
+        displayTitle = displayTitle ?: extendedDisplayTitle
+    )
+}
 
 data class PlexEpisode(
     val ratingKey: String?,
@@ -241,7 +341,9 @@ data class PlexEpisode(
     val episodeNumber: Int?,
     val partKey: String,
     /** Where playback opens, millis from the start; 0 for an item that starts fresh. */
-    val viewOffset: Long = 0L
+    val viewOffset: Long = 0L,
+    val subtitleStreams: List<PlexSubtitleStream> = emptyList(),
+    val audioStreams: List<PlexAudioStream> = emptyList()
 )
 
 /**
@@ -536,9 +638,16 @@ class PlexApi(private val clientIdentifier: String) {
         } }.body<PlexMediaContainerResponse>()
 
         return response.mediaContainer?.metadata.orEmpty().mapNotNull { item ->
-            val partKey = item.media.orEmpty().firstNotNullOfOrNull { mediaItem ->
-                mediaItem.part.orEmpty().firstNotNullOfOrNull { it.key }
+            val part = item.media.orEmpty().firstNotNullOfOrNull { mediaItem ->
+                mediaItem.part.orEmpty().firstOrNull { it.key != null }
             } ?: return@mapNotNull null
+            val partKey = part.key ?: return@mapNotNull null
+            val subtitleStreams = part.stream.orEmpty()
+                .filter { it.isSupportedTextSubtitle() }
+                .mapNotNull { it.toSubtitleStream() }
+            val audioStreams = part.stream.orEmpty()
+                .filter { it.streamType == 2 }
+                .mapNotNull { it.toAudioStream() }
 
             PlexEpisode(
                 ratingKey = item.ratingKey,
@@ -546,7 +655,9 @@ class PlexApi(private val clientIdentifier: String) {
                 episodeTitle = item.title,
                 seasonNumber = item.parentIndex,
                 episodeNumber = item.index,
-                partKey = partKey
+                partKey = partKey,
+                subtitleStreams = subtitleStreams,
+                audioStreams = audioStreams
             )
         }.take(limit)
     }
@@ -854,9 +965,16 @@ class PlexApi(private val clientIdentifier: String) {
 
         return response.mediaContainer?.metadata.orEmpty().firstNotNullOfOrNull { item ->
             val media = item.media.orEmpty().firstOrNull()
-            val partKey = item.media.orEmpty().firstNotNullOfOrNull { mediaItem ->
-                mediaItem.part.orEmpty().firstNotNullOfOrNull { it.key }
+            val part = item.media.orEmpty().firstNotNullOfOrNull { mediaItem ->
+                mediaItem.part.orEmpty().firstOrNull { it.key != null }
             } ?: return@firstNotNullOfOrNull null
+            val partKey = part.key ?: return@firstNotNullOfOrNull null
+            val subtitleStreams = part.stream.orEmpty()
+                .filter { it.isSupportedTextSubtitle() }
+                .mapNotNull { it.toSubtitleStream() }
+            val audioStreams = part.stream.orEmpty()
+                .filter { it.streamType == 2 }
+                .mapNotNull { it.toAudioStream() }
 
             PlexEpisode(
                 ratingKey = item.ratingKey,
@@ -865,7 +983,9 @@ class PlexApi(private val clientIdentifier: String) {
                 seasonNumber = item.parentIndex,
                 episodeNumber = item.index,
                 partKey = partKey,
-                viewOffset = resolveViewOffset(item.viewOffset, item.userState, media?.duration)
+                viewOffset = resolveViewOffset(item.viewOffset, item.userState, media?.duration),
+                subtitleStreams = subtitleStreams,
+                audioStreams = audioStreams
             )
         }
     }
@@ -876,7 +996,9 @@ class PlexApi(private val clientIdentifier: String) {
         accountToken: String,
         episode: PlexEpisode,
         profile: PlexPlaybackProfile,
-        sessionIdentifier: String
+        sessionIdentifier: String,
+        audioStreamId: Long? = null,
+        subtitleStreamId: Long? = null
     ): PlexPlaybackPlan {
         val ratingKey = requireNotNull(episode.ratingKey) { "The selected episode has no Plex rating key." }
         var decision = requestPlaybackDecision(
@@ -886,7 +1008,9 @@ class PlexApi(private val clientIdentifier: String) {
             profile = profile,
             sessionIdentifier = sessionIdentifier,
             directPlay = true,
-            directStreamAudio = true
+            directStreamAudio = true,
+            audioStreamId = audioStreamId,
+            subtitleStreamId = subtitleStreamId
         )
         var forceAudioTranscode = decision.hasUnsupportedDirectPlayAudio(profile)
         if (forceAudioTranscode && decision.isMdeDirectPlay()) {
@@ -901,7 +1025,9 @@ class PlexApi(private val clientIdentifier: String) {
                 profile = profile,
                 sessionIdentifier = sessionIdentifier,
                 directPlay = false,
-                directStreamAudio = false
+                directStreamAudio = false,
+                audioStreamId = audioStreamId,
+                subtitleStreamId = subtitleStreamId
             )
         }
 
@@ -944,7 +1070,9 @@ class PlexApi(private val clientIdentifier: String) {
                     ratingKey = ratingKey,
                     profile = profile,
                     sessionIdentifier = sessionIdentifier,
-                    directStreamAudio = !forceAudioTranscode
+                    directStreamAudio = !forceAudioTranscode,
+                    audioStreamId = audioStreamId,
+                    subtitleStreamId = subtitleStreamId
                 ),
                 decisionText = decisionText,
                 playbackStatus = response.playbackStatus(fallbackStatus)
@@ -1103,14 +1231,18 @@ class PlexApi(private val clientIdentifier: String) {
         profile: PlexPlaybackProfile,
         sessionIdentifier: String,
         directPlay: Boolean,
-        directStreamAudio: Boolean
+        directStreamAudio: Boolean,
+        audioStreamId: Long? = null,
+        subtitleStreamId: Long? = null
     ): PlaybackDecisionResult {
         val requestParameters = universalPlaybackParameters(
             ratingKey = ratingKey,
             profile = profile,
             sessionIdentifier = sessionIdentifier,
             directPlay = directPlay,
-            directStreamAudio = directStreamAudio
+            directStreamAudio = directStreamAudio,
+            audioStreamId = audioStreamId,
+            subtitleStreamId = subtitleStreamId
         )
         val decisionHttpResponse = apiCall("Request playback decision") {
             client.get("${serverUrl.trimEnd('/')}/video/:/transcode/universal/decision") {
@@ -1183,25 +1315,33 @@ class PlexApi(private val clientIdentifier: String) {
         profile: PlexPlaybackProfile,
         sessionIdentifier: String,
         directPlay: Boolean,
-        directStreamAudio: Boolean
-    ) = mapOf(
-        "path" to "/library/metadata/$ratingKey",
-        "mediaIndex" to "0",
-        "partIndex" to "0",
-        "protocol" to "hls",
-        "directPlay" to if (directPlay) "1" else "0",
-        "directStream" to "1",
-        "directStreamAudio" to if (directStreamAudio) "1" else "0",
-        "hasMDE" to "1",
-        "subtitles" to "none",
-        "videoQuality" to "99",
-        "videoResolution" to "3840x2160",
-        "X-Plex-Client-Identifier" to clientIdentifier,
-        "X-Plex-Client-Profile-Name" to PlexPlaybackProfile.GENERIC_PROFILE_NAME,
-        "X-Plex-Client-Profile-Extra" to profile.clientProfileExtra,
-        "X-Plex-Session-Identifier" to sessionIdentifier,
-        "session" to sessionIdentifier
-    )
+        directStreamAudio: Boolean,
+        audioStreamId: Long? = null,
+        subtitleStreamId: Long? = null
+    ) = buildMap {
+        put("path", "/library/metadata/$ratingKey")
+        put("mediaIndex", "0")
+        put("partIndex", "0")
+        put("protocol", "hls")
+        put("directPlay", if (directPlay) "1" else "0")
+        put("directStream", "1")
+        put("directStreamAudio", if (directStreamAudio) "1" else "0")
+        put("hasMDE", "1")
+        if (audioStreamId != null) {
+            put("audioStreamID", audioStreamId.toString())
+        }
+        put("subtitles", if (subtitleStreamId != null) "embedded" else "none")
+        if (subtitleStreamId != null) {
+            put("subtitleStreamID", subtitleStreamId.toString())
+        }
+        put("videoQuality", "99")
+        put("videoResolution", "3840x2160")
+        put("X-Plex-Client-Identifier", clientIdentifier)
+        put("X-Plex-Client-Profile-Name", PlexPlaybackProfile.GENERIC_PROFILE_NAME)
+        put("X-Plex-Client-Profile-Extra", profile.clientProfileExtra)
+        put("X-Plex-Session-Identifier", sessionIdentifier)
+        put("session", sessionIdentifier)
+    }
 
     private fun universalTranscodeUrl(
         serverUrl: String,
@@ -1209,14 +1349,18 @@ class PlexApi(private val clientIdentifier: String) {
         ratingKey: String,
         profile: PlexPlaybackProfile,
         sessionIdentifier: String,
-        directStreamAudio: Boolean
+        directStreamAudio: Boolean,
+        audioStreamId: Long? = null,
+        subtitleStreamId: Long? = null
     ): String = URLBuilder("${serverUrl.trimEnd('/')}/video/:/transcode/universal/start.m3u8").apply {
         universalPlaybackParameters(
             ratingKey = ratingKey,
             profile = profile,
             sessionIdentifier = sessionIdentifier,
             directPlay = false,
-            directStreamAudio = directStreamAudio
+            directStreamAudio = directStreamAudio,
+            audioStreamId = audioStreamId,
+            subtitleStreamId = subtitleStreamId
         )
             .forEach { (name, value) -> parameters.append(name, value) }
         parameters.append("X-Plex-Token", accountToken)
