@@ -21,6 +21,17 @@ enum class StillPhase {
 	/** Not on screen. */
 	HIDDEN,
 
+	/**
+	 * Coming up from invisible, over video that is still playing underneath.
+	 *
+	 * The mirror image of [SEALED], which is a snap rather than a ramp: there the still is a
+	 * copy of the frame the outgoing clip is already frozen on, so it has to be opaque the
+	 * instant it appears or the viewer sees the original flash underneath it first. Here nothing
+	 * is frozen, so arriving from nothing is the whole effect - the picture being watched turns
+	 * into the next one.
+	 */
+	DISSOLVING,
+
 	/** On screen at full opacity, held. */
 	SEALED,
 

@@ -3,14 +3,21 @@ package com.neilturner.fauxfade.ui.player
 import android.graphics.Bitmap
 
 /**
- * How the still is taken from the player that is about to be swapped out.
+ * How the still is obtained for a handoff - and for one mode, when.
+ *
+ * The first three all read something at the moment of the swap: a frame of the clip that is
+ * leaving, taken while the handoff is happening. [PRELOADED_FRAME] is the odd one out and reads
+ * in the other direction entirely - the first frame of the clip that is *arriving*, taken seconds
+ * earlier. That single change to which clip and to when is what turns a multi-second read from a
+ * freeze into something invisible.
  *
  * Chosen on the startup screen alongside the quality, and locked for the run the way the quality
  * is. They are the same kind of decision - both change what a segment costs - and the numbers from
  * one are only meaningful next to the other.
  *
  * [label] and [supporting] exist because the names alone do not say enough to pick from: two of
- * these read pixels out of the player's render path and two do not, and on a slow device that is
+ * these read pixels out of the player's render path or off its surface at the moment of the
+ * handoff, and one reads ahead from a clip that has not started yet. On a slow device that is
  * the difference that matters.
  */
 enum class StillCaptureMode(
@@ -95,6 +102,66 @@ enum class StillCaptureMode(
 	PIXEL_COPY(
 		"PixelCopy",
 		"No pipeline. Copies the screen, and survives the pause.",
+	),
+
+	/**
+	 * Reads the *incoming* clip's first frame seconds before it is needed, and dissolves the
+	 * outgoing clip into it while that clip is still playing.
+	 *
+	 * Every other mode here reads at the handoff, from the clip that is leaving. This one reads
+	 * ahead, from the clip that is arriving - and that inverts the whole difficulty: the read no
+	 * longer has to fit inside the transition. [METADATA_RETRIEVER]'s two to three seconds stop
+	 * being a freeze on screen and become something happening in the background.
+	 *
+	 * The sequence it drives, and what each step is for:
+	 *
+	 * 1. Part way through the segment, while clip one plays normally, clip two's first frame is
+	 *    read off the main thread and shrunk to the display's size.
+	 * 2. That frame goes on screen starting at zero opacity and rises to full over roughly three
+	 *    quarters of a second - while clip one *keeps playing underneath*. The viewer sees the
+	 *    picture being watched turn into the opening of the next one.
+	 * 3. Once it is opaque the player is stopped and clip two is prepared paused. Nothing on
+	 *    screen changes, because the still covers all of it, so the codec coming down and going
+	 *    up again is invisible. Stopping first means the old decoder is released before the new
+	 *    one is asked for rather than the two overlapping inside a transition.
+	 * 4. Clip two renders its first frame, the still fades off it, playback starts.
+	 *
+	 * Step 3 is worth having on its own: one player, stopped and re-prepared, so there is never a
+	 * second decoder. The concurrent-decoder problem the other single-player work exists to route
+	 * around is not routed around here - it simply does not arise.
+	 *
+	 * Two things it gives up. The still is not a frame of anything you have seen - it is a frame
+	 * that has not been shown yet - so it is only right if the read agrees with what the decoder
+	 * later produces from the same data. And the read is still the retriever, so it inherits what
+	 * the retriever inherits: it may be refused a cleartext source, and it does not tone-map, so
+	 * expect this to be visibly wrong on the high dynamic range qualities until it has been looked
+	 * at rather than assumed.
+	 *
+	 * Failure is a cut, as everywhere else - an empty read or one that outlives its budget leaves
+	 * the loop switching clips with no still at all.
+	 *
+	 * **Measured, release build, Chromecast outputting 1080p.**
+	 *
+	 * - **1080p SDR: works.** The read took 2360ms and came back 1920x1080, comfortably inside
+	 *   the segment, so it was already finished by the time the loop asked for it and the wait at
+	 *   the transition was 0ms. Four transitions, four first frames rendered, `dropped=0` on every
+	 *   one and no stall logged. So a second decoder running alongside the first did not visibly
+	 *   cost the running clip anything - though note this mode never installs the tap, so `carried`
+	 *   is zero by design and the `dropped` figure is the one already flagged elsewhere as
+	 *   unreliable. Nothing here shows contention; nothing here could fully rule it out either.
+	 * - **4K SDR and 4K HDR: does not work.** `getFrameAtTime` returns null for every clip, after
+	 *   2.7-3.5s, so the mode produces no still at all and every segment is a plain cut.
+	 *
+	 * The split is source size, not colour: 4K SDR fails exactly as 4K HDR does, so this is not
+	 * Dolby Vision and not the tone-mapping problem [PixelCopyCapture.CopyTarget] exists for. What
+	 * it is has not been pinned down between the retriever failing to get a second decoder while
+	 * the running clip holds the device's only 4K one, and it being unable to decode 4K at all -
+	 * the read fails quickly rather than timing out, which points at the second. Until that is
+	 * settled, pick this mode with one of the 1080p qualities and expect nothing from it at 4K.
+	 */
+	PRELOADED_FRAME(
+		"Preloaded frame",
+		"Reads the next clip's first frame early, while this one keeps playing.",
 	),
 }
 

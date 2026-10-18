@@ -72,10 +72,13 @@ fun StartupScreen(
 	val qualityFocus = remember { Quality.entries.associateWith { FocusRequester() } }
 	val captureFocus = remember { StillCaptureMode.entries.associateWith { FocusRequester() } }
 
-	// Focus the selected row while a panel is open, and hand it back to the trigger when it
-	// closes - including on the first composition, so the screen never arrives with nowhere to
-	// go. Keyed on the selection as well, so choosing an option lands on the trigger rather than
-	// re-requesting the row that was just clicked.
+	// Focus the selected row while a panel is open, and leave focus entirely alone on the way
+	// out. The dismissal decides where it lands, and from there every control on the screen is at
+	// most two D-pad presses away - which is the same arrangement the first composition arrives
+	// with, so leaving is no different from getting there in the first place. Requesting focus on
+	// a trigger instead does not take: see the note above the triggers.
+	// Keyed on the selection too, so a panel that is opened on a newly picked value asks for that
+	// value rather than for whatever it last requested.
 	LaunchedEffect(open, quality, captureMode) {
 		withFrameNanos { }
 		when (open) {

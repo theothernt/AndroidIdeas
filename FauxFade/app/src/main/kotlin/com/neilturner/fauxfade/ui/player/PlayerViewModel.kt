@@ -19,8 +19,11 @@ import com.neilturner.fauxfade.media.Quality
 import com.neilturner.fauxfade.media.VideoCatalog
 import com.neilturner.fauxfade.media.VideoItem
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -339,16 +342,17 @@ class PlayerViewModel(
 		// before playback starts rather than rebuilt underneath a running player.
 		//
 		// Only the always-on mode does it here. The scheduled path installs its own effect a lead
-		// time before each capture, and the retriever path never installs one at all, so for both
-		// of those the render path is left completely alone for the whole segment.
+		// time before each capture; the retriever, the surface copy and the preloaded frame never
+		// install one at all, so for all of those the render path is left completely alone for the
+		// whole segment - which is the entire argument for picking any of them.
 		// Safe get rather than getValue: taps is keyed off the enum, but single-player mode only
 		// builds one player, so asking for the other would throw.
 		if (CAPTURE_STILLS && _captureMode.value == StillCaptureMode.ALWAYS_ON_TAP) {
 			taps.forEach { (slot, tap) -> players[slot]?.setVideoEffects(listOf(tap)) }
 		}
-		// Logged so a run's numbers can be attributed to the path that produced them. The three
-		// modes are only comparable next to each other, and this is the only line that says which
-		// one a given set of timings came from.
+		// Logged so a run's numbers can be attributed to the path that produced them. The modes
+		// are only comparable next to each other, and this is the only line that says which one a
+		// given set of timings came from.
 		Log.i(TAG, "capture: mode=${_captureMode.value} stills=$CAPTURE_STILLS")
 		loopJob = viewModelScope.launch { runPlaylistLoop() }
 		startMemoryWatch()
@@ -435,14 +439,24 @@ class PlayerViewModel(
 	}
 
 	/**
-	 * Runs the loop appropriate to [SINGLE_PLAYER].
+	 * Runs the loop for whatever the picked mode actually needs.
 	 *
-	 * The split is deliberate and temporary: the single-player path exists to answer whether two
+	 * Not a choice about player count, but three sequences with genuinely different shapes. The
+	 * split is deliberate and temporary: the single-player path exists to answer whether two
 	 * concurrent players are what breaks 4K on this device, and it can only answer that if the
 	 * two-player path is left exactly as it was underneath.
 	 */
 	private suspend fun runPlaylistLoop() {
-		if (SINGLE_PLAYER) runSinglePlayerLoop() else runDoublePlayerLoop()
+		when {
+			// First, because it is not a variant of either of the others. It is one player by
+			// construction - it stops the outgoing clip before it prepares the incoming one - so
+			// it does not consult [SINGLE_PLAYER] at all, and works at 4K whatever that flag says.
+			_captureMode.value == StillCaptureMode.PRELOADED_FRAME -> runPreloadedFrameLoop()
+
+			SINGLE_PLAYER -> runSinglePlayerLoop()
+
+			else -> runDoublePlayerLoop()
+		}
 	}
 
 	/**
@@ -535,6 +549,143 @@ class PlayerViewModel(
 			currentIndex = nextIndex
 		}
 	}
+
+	/**
+	 * One player, and the still is the *next* clip's first frame rather than this clip's last.
+	 *
+	 * The change that makes this work is not a tuning change - it is a different clip and a
+	 * different moment. Every other path reads a frame of the clip that is leaving, at the instant
+	 * the handoff begins, so the read has to happen *inside* the transition and every millisecond
+	 * of it is a millisecond of frozen picture. This reads a frame of the clip that is arriving,
+	 * up to five seconds earlier, while nothing on screen has changed at all.
+	 *
+	 * So the sequence is inverted from the others, and each step buys something specific:
+	 *
+	 * - **Read ahead.** The retriever's two to three seconds were fatal in a handoff and are free
+	 *   here, because the outgoing clip plays straight through them. The read is off the main
+	 *   thread and starts part way into the segment, not at the end of it.
+	 * - **Dissolve in.** The frame rises from zero opacity over [DISSOLVE_MS] while clip one keeps
+	 *   playing underneath - so the viewer sees one picture turn into the next, and clip one is
+	 *   never paused. Nothing is captured from it, because nothing has to be: the still it fades
+	 *   into was never its frame.
+	 * - **Swap under cover.** Only once the frame is fully opaque does the player stop and clip two
+	 *   come in paused. The picture does not change during any of that, because the still is
+	 *   covering the entire screen. Stopping before preparing means the old decoder is released
+	 *   before the new one is requested rather than the two overlapping inside a transition.
+	 * - **Reveal on the real frame.** The still fades off clip two only once clip two has actually
+	 *   rendered, and playback starts as it does. There is no moment where an image is shown
+	 *   against an empty surface.
+	 *
+	 * The one thing to watch is the read competing with the decoder already running. It starts
+	 * mid-segment, when the decoder is in steady state rather than spinning up, and [frameStats]
+	 * is what would show it: the tell would be `dropped` climbing from the preload point rather
+	 * than from the handoff.
+	 */
+	private suspend fun runPreloadedFrameLoop() =
+		coroutineScope {
+			val slot = slots.first()
+			val player = players.getValue(slot)
+			var currentIndex = 0
+			_loading.value = true
+			Log.i(TAG, "playlist: ${order.map { it.uri.substringAfterLast('/') }}")
+			Log.i(TAG, "preload: ${order.size} clips, reading each first frame ahead of its segment")
+
+			val opened = player.firstRenderSignal()
+			val startedAt = TimeSource.Monotonic.markNow()
+			player.playFromStart(order[currentIndex])
+			if (withTimeoutOrNull(STARTUP_FRAME_TIMEOUT_MS) { opened.await() } == null) {
+				Log.w(TAG, "startup: $currentIndex had no first frame in ${STARTUP_FRAME_TIMEOUT_MS}ms")
+			}
+			Log.i(TAG, "startup: first frame after ${startedAt.elapsedNow().inWholeMilliseconds}ms")
+			_loading.value = false
+
+			while (coroutineContext.isActive) {
+				val nextIndex = (currentIndex + 1) % order.size
+				val next = order[nextIndex]
+
+				// Kicked off through the segment's preload point rather than at its end, so the read
+				// has the rest of the segment to finish in. The async is a child of the loop's own
+				// coroutineScope, not of the view model, so stopping the loop stops a read in flight
+				// instead of leaving it to finish into nothing.
+				var pending: Deferred<Bitmap?>? = null
+				tickSegment { pending = async { retrievers.getValue(slot).extractAt(next.uri, 0L) } }
+
+				// Normally already complete by now - it was started five seconds ago - so this
+				// returns at once. The branch for null is only there because a segment that somehow
+				// reaches here without a read still needs an answer rather than an unhandled null.
+				val t0 = TimeSource.Monotonic.markNow()
+				val extraction = pending ?: async { retrievers.getValue(slot).extractAt(next.uri, 0L) }
+				// Generous, and not because anything is waiting on it: nothing on screen is held up
+				// by this, so a read that outlives the budget costs a cut rather than a stall. Eight
+				// seconds on top of whatever headroom the segment already gave it.
+				val still = withTimeoutOrNull(PRELOAD_TIMEOUT_MS) { extraction.await() }
+				val extractMs = t0.elapsedNow().inWholeMilliseconds
+
+				if (still == null) {
+					val name = next.uri.substringAfterLast('/')
+					Log.w(TAG, "preload: no frame for $name after ${extractMs}ms, cutting instead")
+					_stillFrame.value = null
+					_stillPhase.value = StillPhase.HIDDEN
+					player.playFromStart(next)
+
+					// The same two lines the good path logs, and deliberately so. A run that
+					// degrades every segment is the run whose numbers most need recording -
+					// without them a mode that silently never produces a still would be
+					// indistinguishable in the logs from one that was never given the chance to.
+					// [PLAY_DURATION_MS] alone here rather than plus the dissolve, because with
+					// no still there is no dissolve: the switch happens the moment the segment's
+					// clock runs out.
+					val frames =
+						frameStats.getValue(slot).segment(player, PLAY_DURATION_MS) { taps.getValue(slot).framesSeen() }
+					Log.i(TAG, "frames: $frames")
+					Log.i(TAG, "timing: extractMs=$extractMs still=none handoffMs=${t0.elapsedNow().inWholeMilliseconds}")
+				} else {
+					// Nothing is paused here, which is the whole difference. Clip one plays on for the
+					// full dissolve, so the transition costs it no time at all - where every other mode
+					// freezes it for as long as its capture takes.
+					_stillFrame.value = still
+					_stillPhase.value = StillPhase.DISSOLVING
+					// The tween runs in the overlay, which starts it a frame or two after this loop
+					// sets the phase, so waiting exactly [DISSOLVE_MS] would reach the swap a frame
+					// short of the image being opaque. [STILL_LEAD_IN_MS] is the same slop the
+					// seal-then-swap above needs, for the same reason.
+					delay(DISSOLVE_MS + STILL_LEAD_IN_MS)
+
+					// Measured up to here rather than to the end of the loop, because this is where
+					// clip one's playback stops: everything after it is the swap, and nothing plays
+					// during the swap, so counting it would only make `expected` wrong.
+					val frames =
+						frameStats
+							.getValue(slot)
+							.segment(player, PLAY_DURATION_MS + DISSOLVE_MS) { taps.getValue(slot).framesSeen() }
+					Log.i(TAG, "frames: $frames")
+
+					// Release before request, and stop() rather than pause() - pausing would leave the
+					// finished clip's decoder held for its own duration and hand it straight back, so
+					// the next clip's would be requested while that one was still down. What the
+					// surface does underneath while this happens does not matter: the still is at full
+					// opacity over every pixel of it.
+					val firstFrame = player.firstRenderSignal()
+					player.stop()
+					player.preload(next)
+					val rendered = withTimeoutOrNull(_playingQuality.value.swapTimeoutMs) { firstFrame.await() } == true
+					// Started as the reveal begins, so the still comes off a clip that is already
+					// moving. The still is frame zero of this clip and the clip starts at frame zero,
+					// so the two agree at the first instant and only then drift apart - which is what
+					// makes the fade read as one image coming alive rather than two pictures swapped.
+					player.play()
+					_stillPhase.value = StillPhase.FADING
+
+					Log.i(
+						TAG,
+						"timing: extractMs=$extractMs dissolveMs=$DISSOLVE_MS " +
+							"handoffMs=${t0.elapsedNow().inWholeMilliseconds} firstFrame=$rendered",
+					)
+				}
+
+				currentIndex = nextIndex
+			}
+		}
 
 	/**
 	 * Two players, cross-fading through a captured still.
@@ -696,7 +847,7 @@ class PlayerViewModel(
 	/**
 	 * The still for this handoff, or null if the configured path could not produce one.
 	 *
-	 * Null is the same failure for all three and is handled the same way by the caller - the
+	 * Null is the same failure for every path and is handled the same way by the caller - the
 	 * handoff degrades to a cut - so no path has to reach for a second attempt on another's
 	 * behalf. What differs is the budget each one is given, because they have wildly different
 	 * costs: the always-on tap is already installed and answers on the next frame, the scheduled
@@ -746,6 +897,14 @@ class PlayerViewModel(
 			// that is the whole point of the mode, and see [pauseBeforeCapture].
 			StillCaptureMode.PIXEL_COPY -> {
 				withTimeoutOrNull(PIXEL_COPY_TIMEOUT_MS) { grabber?.grab(slot, stillTarget) }
+			}
+
+			// Not a handoff-time capture at all, so it has nothing to give here. Its loop reads the
+			// still from the *incoming* clip seconds earlier and never calls this function; the
+			// branch exists so the `when` stays exhaustive over the enum rather than reaching a
+			// mode it does not know at a point in the transition where there is no time to find out.
+			StillCaptureMode.PRELOADED_FRAME -> {
+				null
 			}
 		}
 	}
@@ -922,20 +1081,13 @@ private const val CAPTURE_STILLS = true
 /**
  * Which path the run takes its stills through.
  *
- * The always-on tap is still the default, because on this device the other two are not better
- * once you count what each actually costs. Measured, 1080p SDR, same build:
+ * Only a seed - the startup screen offers every mode, and this is what is on offer before anyone
+ * picks. See [StillCaptureMode] for what each one costs.
  *
- * - [StillCaptureMode.ALWAYS_ON_TAP] - capture 96-119ms, still correct, but the pipeline is in
- *   front of every frame for the whole run.
- * - [StillCaptureMode.SCHEDULED_EFFECT] - does not produce a still at all: installing the effect
- *   stops the player rather than hitching it, so the target is never reached. See the mode.
- * - [StillCaptureMode.METADATA_RETRIEVER] - capture 2.1-3.1s, still correct, no pipeline at all,
- *   but the outgoing clip is frozen for those 2-3s at every handoff.
- *
- * So the retriever trades per-frame overhead for a visible multi-second freeze at every handoff,
- * which is a bad deal for something meant to be looked at from across a room. Flip this to
- * [StillCaptureMode.METADATA_RETRIEVER] to try it anyway - it is the only one of the three that
- * both works and keeps the pipeline out of the render path.
+ * [StillCaptureMode.PIXEL_COPY] stays the default because it is the one that has been measured
+ * working at both 1080p and 4K, in both player configurations. [StillCaptureMode.PRELOADED_FRAME]
+ * is the newer alternative and the only one that never pauses anything; [StillCaptureMode
+ * .SCHEDULED_EFFECT] does not work at all, for the reason given on the mode.
  */
 private val CAPTURE_MODE = StillCaptureMode.PIXEL_COPY
 
@@ -985,6 +1137,41 @@ private const val RETRIEVER_TIMEOUT_MS = 5_000L
  * copy was still in flight when the budget ran out, so the still was null and nothing said so.
  */
 private const val PIXEL_COPY_TIMEOUT_MS = 2_000L
+
+/**
+ * How long the preloaded frame takes to rise from invisible to fully opaque.
+ *
+ * Inside the 500-1000ms that reads as a dissolve rather than as a crossfade with two different
+ * pictures in it. Longer than that and the reveal of a still image starts to feel like a
+ * slideshow; shorter and it stops being a dissolve and becomes the clip changing with a smear on
+ * it.
+ *
+ * Only [StillCaptureMode.PRELOADED_FRAME] runs this. It is time the outgoing clip spends playing,
+ * not time it spends frozen, so unlike every other cost in a handoff it is not on screen as a
+ * stall - which is also why the frame statistics for this mode measure a segment of
+ * [PLAY_DURATION_MS] plus this, not of [PLAY_DURATION_MS] alone.
+ *
+ * Internal rather than file-private because the loop's `delay` and the overlay's tween have to be
+ * the same number or the swap lands in the middle of the fade: one is the wait and the other is
+ * the animation it is waiting for, and two constants that only have to agree are two constants
+ * that will eventually stop agreeing.
+ */
+internal const val DISSOLVE_MS = 750L
+
+/**
+ * How long a read that is already running in the background is given before it is abandoned.
+ *
+ * Longer than [RETRIEVER_TIMEOUT_MS] on purpose, and not because this read is slower - it is the
+ * same read. The difference is what it is up against: the retriever at a handoff is competing with
+ * the transition that is happening right now, so every millisecond of it is visible, whereas this
+ * one is competing with a segment that still has seconds to run and has already had
+ * [PRELOAD_AFTER_MS] to get started. Eight seconds here costs nothing if it is spent, whereas five
+ * there would have cost the still.
+ *
+ * Abandoning it is not a failure of the same shape as a timeout elsewhere either: nothing is
+ * waiting on it, the loop simply cuts instead of dissolving.
+ */
+private const val PRELOAD_TIMEOUT_MS = 8_000L
 
 /**
  * Whether the app starts playback by itself.

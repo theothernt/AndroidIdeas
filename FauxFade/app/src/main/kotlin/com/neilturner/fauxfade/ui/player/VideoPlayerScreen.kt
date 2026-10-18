@@ -293,6 +293,19 @@ private fun StillOverlay(
 			// Snapped, not ramped. The still goes up over the outgoing video still paused on the
 			// same frame, so it has to be fully opaque the instant it appears - there is nothing
 			// behind it to dissolve against until the surfaces swap.
+			StillPhase.DISSOLVING -> {
+				val started = TimeSource.Monotonic.markNow()
+				// From nothing, not from wherever the last run left it: the overlay is keyed on
+				// the phase, so the same bitmap can come round again and has to rise from zero
+				// every time rather than carrying its previous opacity.
+				fade.snapTo(0f)
+				fade.animateTo(1f, tween(STILL_DISSOLVE_MS))
+				// Logged for the same reason the fade out is: it is the half of the transition the
+				// viewer actually watches, and a tween that under-runs is the difference between a
+				// dissolve and a cut with a smear on it.
+				Log.i(TAG, "timing: dissolveMs=${started.elapsedNow().inWholeMilliseconds}")
+			}
+
 			StillPhase.SEALED -> {
 				fade.snapTo(1f)
 			}
@@ -380,6 +393,21 @@ private fun SlotPlayerSurface(
 
 /** How long the captured still takes to fade out, revealing the video underneath it. */
 private const val STILL_FADE_MS = 1_500
+
+/**
+ * The overlay's half of a preloaded frame's dissolve-in, and how long the loop waits for it.
+ *
+ * The other side of [STILL_FADE_MS]: that one is a still coming off, this one is a still arriving
+ * on top of a picture that has not stopped moving. Sits inside the range where it reads as one
+ * image turning into another rather than as two pictures laid over each other.
+ *
+ * Taken from the view model rather than declared here, because the loop delays for this figure
+ * while this animation runs against it - see [DISSOLVE_MS] for why the two are one constant.
+ *
+ * Only reachable through [StillPhase.DISSOLVING], which only [StillCaptureMode.PRELOADED_FRAME]
+ * ever sets.
+ */
+private val STILL_DISSOLVE_MS = DISSOLVE_MS.toInt()
 
 /** How long the startup spinner takes to fade out once there is a frame to show. */
 private const val LOADER_FADE_MS = 400

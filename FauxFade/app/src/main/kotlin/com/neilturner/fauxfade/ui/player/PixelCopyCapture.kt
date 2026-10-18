@@ -154,5 +154,10 @@ internal class PixelCopyCapture {
  * uploaded only for the drawing to scale them back down. The other half of the saving is free -
  * the copy is the size of the surface rather than the size of the video, so a 4K clip on a 1080p
  * set already produces a 1080p bitmap.
+ *
+ * Internal rather than file-private because the limit is not a property of copying: anything else
+ * that produces a still - [RetrieverFrameCapture] reading a frame straight out of the file - has
+ * to arrive at the same answer, or the two paths would differ in size depending only on which
+ * one was picked.
  */
-private const val MAX_STILL_WIDTH = 1920
+internal const val MAX_STILL_WIDTH = 1920
