@@ -187,26 +187,28 @@ private const val PRESSED_MENU_BUTTON_SCALE = 0.97f
  * The colour each button on the main menu glows in, in the order the buttons are read: down the
  * left column and then down the right one. A glow is only drawn around the focused button, so
  * the colours are seen one at a time as the focus moves.
+ *
+ * The colours are dimmed, because a wide glow at full brightness reads as a hard ring rather
+ * than the haze it is meant to be.
  */
 private val MENU_GLOW_COLOURS = listOf(
-    Color(0xFFFF5252), // red
-    Color(0xFFFF9800), // orange
-    Color(0xFFFFCA28), // amber
-    Color(0xFF9CCC65), // light green
-    Color(0xFF26A69A), // teal
-    Color(0xFF29B6F6), // light blue
-    Color(0xFF5C6BC0), // indigo
-    Color(0xFFAB47BC)  // purple
+    Color(0xFF661F1F), // red
+    Color(0xFF663D00), // orange
+    Color(0xFF66521F), // amber
+    Color(0xFF3D661F), // light green
+    Color(0xFF1F665F), // teal
+    Color(0xFF1F5C66), // light blue
+    Color(0xFF333D66), // indigo
+    Color(0xFF661F66)  // purple
 )
 
 /**
  * How far the glow reaches out from the focused button.
  *
  * This is the radius of the blur the glow is drawn with, so a bigger one is a wider, softer halo
- * that reaches past the button and laps over the one beside it. The buttons are 20dp apart, so
- * anything much under that stops dead at the edge.
+ * that reaches past the button and laps over the one beside it.
  */
-private val MENU_GLOW_ELEVATION = 22.dp
+private val MENU_GLOW_ELEVATION = 48.dp
 
 /** The width of a menu button, and of the space left for the one that has no partner. */
 private val MENU_BUTTON_WIDTH = 300.dp
