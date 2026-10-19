@@ -257,20 +257,24 @@ fun PlexPlayerScreen(
                             }
                         }
 
-                        if (cues.isNotEmpty()) {
-                            AndroidView(
-                                factory = { context ->
-                                    SubtitleView(context).apply {
-                                        setUserDefaultStyle()
-                                        setUserDefaultTextSize()
-                                    }
-                                },
-                                update = { subtitleView ->
-                                    subtitleView.setCues(cues)
-                                },
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
+                        // The view is always there, whether or not there are any cues to draw.
+                        // The styled ASS subtitles are drawn by a child of it, and that child
+                        // has to be in the tree before the first one is rendered.
+                        AndroidView(
+                            factory = { context ->
+                                SubtitleView(context).apply {
+                                    setUserDefaultStyle()
+                                    setUserDefaultTextSize()
+                                    // The ASS subtitles ride in the same view, drawn over the
+                                    // picture with the styling the file asked for.
+                                    viewModel.assSupport.attachTo(this)
+                                }
+                            },
+                            update = { subtitleView ->
+                                subtitleView.setCues(cues)
+                            },
+                            modifier = Modifier.fillMaxSize()
+                        )
                     },
                     playbackStatus = state.playbackStatus,
                     transcodeNotice = state.transcodeNotice,

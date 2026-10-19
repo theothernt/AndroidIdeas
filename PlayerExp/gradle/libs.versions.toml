@@ -9,6 +9,7 @@ tvMaterial = "1.1.0"
 lifecycleRuntimeKtx = "2.11.0"
 activityCompose = "1.13.0"
 media3 = "1.11.1"
+assMedia = "0.5.1"
 material3 = "1.4.0"
 coil = "3.6.3"
 ktor = "3.6.0"
@@ -51,6 +52,7 @@ ktor-serialization-kotlinx-json = { group = "io.ktor", name = "ktor-serializatio
 androidx-navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version.ref = "navigation3" }
 androidx-navigation3-ui = { group = "androidx.navigation3", name = "navigation3-ui", version.ref = "navigation3" }
 androidx-lifecycle-viewmodel-navigation3 = { group = "androidx.lifecycle", name = "lifecycle-viewmodel-navigation3", version.ref = "lifecycleRuntimeKtx" }
+io-github-peerless2012-ass-media = { group = "io.github.peerless2012", name = "ass-media", version.ref = "assMedia" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 leakcanary = { group = "com.squareup.leakcanary", name = "leakcanary-android", version.ref = "leakcanary" }
 

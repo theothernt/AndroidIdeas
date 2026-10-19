@@ -11,10 +11,12 @@ import androidx.compose.foundation.background
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.media3.ui.SubtitleView
 import androidx.media3.ui.compose.material3.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.tv.material3.MaterialTheme
@@ -63,21 +65,38 @@ fun PlayerScreen(
 
     val player = viewModel.player
     if (player != null) {
-        Player(
-            player = player,
-            modifier = modifier.fillMaxSize(),
-            showControls = false,
-            shutter = {
-                Box(
-                    modifier = Modifier.fillMaxSize().background(Color.Black),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        color = MaterialTheme.colorScheme.primary
-                    )
+        Box(modifier = modifier.fillMaxSize()) {
+            Player(
+                player = player,
+                modifier = Modifier.fillMaxSize(),
+                showControls = false,
+                shutter = {
+                    Box(
+                        modifier = Modifier.fillMaxSize().background(Color.Black),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
-            }
-        )
+            )
+            // The subtitles are drawn in a view of their own: the ordinary ones are drawn by the
+            // view itself, and the styled ASS ones are drawn by libass in a child of it.
+            AndroidView(
+                factory = { context ->
+                    SubtitleView(context).apply {
+                        setUserDefaultStyle()
+                        setUserDefaultTextSize()
+                        viewModel.assSupport.attachTo(this)
+                    }
+                },
+                update = { subtitleView ->
+                    subtitleView.setCues(player.currentCues.cues)
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
     } else {
         Box(
             modifier = modifier.fillMaxSize(),

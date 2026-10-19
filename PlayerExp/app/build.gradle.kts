@@ -58,6 +58,7 @@ dependencies {
 	implementation(libs.androidx.media3.datasource.okhttp)
 	implementation(libs.androidx.media3.ui.compose)
 	implementation(libs.androidx.media3.ui.compose.material3)
+	implementation(libs.io.github.peerless2012.ass.media)
 	implementation(libs.coil.compose)
 	implementation(libs.coil.network.okhttp)
 	implementation(libs.ktor.client.okhttp)
