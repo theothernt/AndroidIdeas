@@ -24,6 +24,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -33,6 +34,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
+import androidx.tv.material3.Glow
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.playerexp.ui.viewmodels.HomeViewModel
@@ -125,18 +127,27 @@ fun HomeScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                 rowItems.forEachIndexed { columnIndex, item ->
+                    val menuIndex = rowIndex * 2 + columnIndex
                     Button(
                         onClick = item.second,
                         modifier = Modifier
-                            .focusRequester(focusRequesters[rowIndex * 2 + columnIndex])
+                            .focusRequester(focusRequesters[menuIndex])
                             .onFocusChanged {
-                                if (it.isFocused) lastFocusedIndex = rowIndex * 2 + columnIndex
+                                if (it.isFocused) lastFocusedIndex = menuIndex
                             }
                             .width(MENU_BUTTON_WIDTH)
                             .height(56.dp),
                         scale = ButtonDefaults.scale(
                             focusedScale = FOCUSED_MENU_BUTTON_SCALE,
                             pressedScale = PRESSED_MENU_BUTTON_SCALE
+                        ),
+                        // Each button glows in its own colour, so that the effect can be seen on
+                        // all of them at once rather than on one at a time.
+                        glow = ButtonDefaults.glow(
+                            focusedGlow = Glow(
+                                elevationColor = MENU_GLOW_COLOURS[menuIndex % MENU_GLOW_COLOURS.size],
+                                elevation = MENU_GLOW_ELEVATION
+                            )
                         )
                     ) {
                                 Box(
@@ -171,6 +182,31 @@ fun HomeScreen(
  */
 private const val FOCUSED_MENU_BUTTON_SCALE = 1.04f
 private const val PRESSED_MENU_BUTTON_SCALE = 0.97f
+
+/**
+ * The colour each button on the main menu glows in, in the order the buttons are read: down the
+ * left column and then down the right one. A glow is only drawn around the focused button, so
+ * the colours are seen one at a time as the focus moves.
+ */
+private val MENU_GLOW_COLOURS = listOf(
+    Color(0xFFFF5252), // red
+    Color(0xFFFF9800), // orange
+    Color(0xFFFFCA28), // amber
+    Color(0xFF9CCC65), // light green
+    Color(0xFF26A69A), // teal
+    Color(0xFF29B6F6), // light blue
+    Color(0xFF5C6BC0), // indigo
+    Color(0xFFAB47BC)  // purple
+)
+
+/**
+ * How far the glow reaches out from the focused button.
+ *
+ * This is the radius of the blur the glow is drawn with, so a bigger one is a wider, softer halo
+ * that reaches past the button and laps over the one beside it. The buttons are 20dp apart, so
+ * anything much under that stops dead at the edge.
+ */
+private val MENU_GLOW_ELEVATION = 22.dp
 
 /** The width of a menu button, and of the space left for the one that has no partner. */
 private val MENU_BUTTON_WIDTH = 300.dp

@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -219,17 +220,26 @@ private fun RailActionButton(
             .background(if (focused) RAIL_FOCUSED_COLOR else Color.Transparent)
             .focusable(interactionSource = interactionSource)
             .onPreviewKeyEvent { keyEvent ->
-                if (keyEvent.type != KeyEventType.KeyDown) {
-                    false
-                } else {
-                    onUserActivity()
-                    when (keyEvent.key) {
-                        Key.DirectionCenter, Key.Enter -> {
-                            onClick()
-                            true
-                        }
-                        else -> false
+                when (keyEvent.type) {
+                    KeyEventType.KeyDown -> {
+                        onUserActivity()
+                        false
                     }
+                    KeyEventType.KeyUp -> {
+                        // The click happens on the key up, the way the TV library's own buttons
+                        // do it, and the key up is consumed here. It matters that it is: the
+                        // drawer that opens takes the focus, and a key up left for it would
+                        // activate the row that had just been given the focus — choosing a
+                        // track and closing the drawer again in the same breath.
+                        when (keyEvent.key) {
+                            Key.DirectionCenter, Key.Enter -> {
+                                onClick()
+                                true
+                            }
+                            else -> false
+                        }
+                    }
+                    else -> false
                 }
             },
         contentAlignment = Alignment.Center
@@ -371,7 +381,7 @@ private fun DrawerRow(
         onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .height(DRAWER_ROW_HEIGHT)
+            .heightIn(min = DRAWER_ROW_HEIGHT)
             .onFocusChanged {
                 focused = it.isFocused
                 if (it.isFocused) {
@@ -410,7 +420,9 @@ private fun DrawerRow(
                         fontSize = DRAWER_LABEL_SIZE
                     ),
                     color = labelColour,
-                    maxLines = 1,
+                    // The name of a track can be long — the longer name Plex gives it goes in
+                    // brackets beside it — so it is given the room to wrap rather than being cut.
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis
                 )
                 if (item.subLabel != null) {

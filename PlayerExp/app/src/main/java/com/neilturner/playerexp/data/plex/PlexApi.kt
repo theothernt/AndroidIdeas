@@ -28,6 +28,7 @@ import io.ktor.websocket.close
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import io.ktor.client.statement.bodyAsText
+import io.ktor.client.call.body
 import kotlinx.serialization.json.Json
 import kotlinx.coroutines.CancellationException
 
@@ -252,17 +253,29 @@ data class PlexSubtitleStream(
     val forced: Boolean = false,
     val isDefault: Boolean = false,
     val title: String? = null,
-    val displayTitle: String? = null
+    val displayTitle: String? = null,
+    /** The longer name Plex gives the track: the variant, the language and the codec. */
+    val extendedDisplayTitle: String? = null
 ) {
     val label: String
         get() {
-            if (!displayTitle.isNullOrBlank()) return displayTitle
-            val lang = language ?: languageCode ?: "Subtitle"
-            val extras = listOfNotNull(
-                codec?.uppercase(),
-                if (forced) "Forced" else null
-            ).joinToString(" · ")
-            return if (extras.isNotBlank()) "$lang ($extras)" else lang
+            val name = displayTitle?.takeIf { it.isNotBlank() }
+            val extra = extendedDisplayTitle?.takeIf { it.isNotBlank() && it != name }
+            val main = if (name != null) {
+                name
+            } else {
+                // Plex gave no title, so the language stands in for it and what the track is
+                // goes with it, the way it always did.
+                val lang = language ?: languageCode ?: "Subtitle"
+                val extras = listOfNotNull(
+                    codec?.uppercase(),
+                    if (forced) "Forced" else null
+                ).joinToString(" · ")
+                if (extras.isNotBlank()) "$lang ($extras)" else lang
+            }
+            // The longer name says which of the tracks in the same language this is, so it goes
+            // in brackets beside the name rather than replacing it.
+            return if (extra != null) "$main [$extra]" else main
         }
 }
 
@@ -282,7 +295,8 @@ internal fun PlexMediaStream.toSubtitleStream(): PlexSubtitleStream? {
         forced = forced ?: false,
         isDefault = default ?: false,
         title = title,
-        displayTitle = displayTitle ?: extendedDisplayTitle
+        displayTitle = displayTitle,
+        extendedDisplayTitle = extendedDisplayTitle
     )
 }
 
@@ -304,18 +318,28 @@ data class PlexAudioStream(
     val codec: String? = null,
     val channels: Int? = null,
     val isDefault: Boolean = false,
-    val displayTitle: String? = null
+    val displayTitle: String? = null,
+    /** The longer name Plex gives the track: the bitrate, the layout and the language. */
+    val extendedDisplayTitle: String? = null
 ) {
     /** The label shown in the audio picker: display title, falling back to language + codec. */
     val label: String
         get() {
-            if (!displayTitle.isNullOrBlank()) return displayTitle
-            val lang = language ?: languageCode ?: "Audio"
-            val extras = listOfNotNull(
-                codec?.uppercase(),
-                channels?.let { "${it}ch" }
-            ).joinToString(" · ")
-            return if (extras.isNotBlank()) "$lang ($extras)" else lang
+            val name = displayTitle?.takeIf { it.isNotBlank() }
+            val extra = extendedDisplayTitle?.takeIf { it.isNotBlank() && it != name }
+            val main = if (name != null) {
+                name
+            } else {
+                val lang = language ?: languageCode ?: "Audio"
+                val extras = listOfNotNull(
+                    codec?.uppercase(),
+                    channels?.let { "${it}ch" }
+                ).joinToString(" · ")
+                if (extras.isNotBlank()) "$lang ($extras)" else lang
+            }
+            // The longer name says which of the tracks in the same language this is, so it goes
+            // in brackets beside the name rather than replacing it.
+            return if (extra != null) "$main [$extra]" else main
         }
 }
 
@@ -329,7 +353,8 @@ internal fun PlexMediaStream.toAudioStream(): PlexAudioStream? {
         codec = codec,
         channels = channels,
         isDefault = default ?: false,
-        displayTitle = displayTitle ?: extendedDisplayTitle
+        displayTitle = displayTitle,
+        extendedDisplayTitle = extendedDisplayTitle
     )
 }
 
@@ -971,7 +996,7 @@ class PlexApi(private val clientIdentifier: String) {
             val partKey = part.key ?: return@firstNotNullOfOrNull null
             Log.d(
                 PLAYBACK_LOG_TAG,
-                "Metadata for ${item.ratingKey}: media=${item.media?.size}, " +
+                "Metadata for ${item.ratingKey} '${item.title}': media=${item.media?.size}, " +
                     "streams=${part.stream?.size}, types=${part.stream?.map { it.streamType }}"
             )
             val subtitleStreams = part.stream.orEmpty()
