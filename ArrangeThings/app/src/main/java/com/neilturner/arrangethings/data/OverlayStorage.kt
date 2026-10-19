@@ -8,7 +8,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.neilturner.arrangethings.model.Corner
 import com.neilturner.arrangethings.model.OverlayConfig
-import com.neilturner.arrangethings.model.OverlayType
+import com.neilturner.arrangethings.model.OverlayVariant
 import kotlinx.serialization.Serializable
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
@@ -17,7 +17,7 @@ private val Context.arrangeThingsStore: DataStore<Preferences> by preferencesDat
 
 @Serializable
 private data class StoredOverlay(
-	val type: OverlayType,
+	val variant: OverlayVariant,
 	val corner: Corner,
 	val order: Int
 )
@@ -35,14 +35,14 @@ class OverlayStorage(private val context: Context) {
 
 		return runCatching {
 			json.decodeFromString<List<StoredOverlay>>(raw).map {
-				OverlayConfig(type = it.type, corner = it.corner, order = it.order)
+				OverlayConfig(variant = it.variant, corner = it.corner, order = it.order)
 			}
 		}.getOrNull()
 	}
 
 	/** Writes the layout. */
 	suspend fun save(overlays: List<OverlayConfig>) {
-		val stored = overlays.map { StoredOverlay(it.type, it.corner, it.order) }
+		val stored = overlays.map { StoredOverlay(it.variant, it.corner, it.order) }
 		context.arrangeThingsStore.edit { preferences ->
 			preferences[OVERLAYS_KEY] = json.encodeToString(stored)
 		}

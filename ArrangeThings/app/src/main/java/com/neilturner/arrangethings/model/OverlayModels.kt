@@ -8,19 +8,43 @@ enum class Corner {
 	BottomEnd
 }
 
-/** The kind of fake overlay shown in the editor. */
-enum class OverlayType {
-	Clock,
-	Date,
-	Location,
-	Weather,
-	NowPlaying,
-	CustomText
+/** How wide an overlay is in its slot. */
+enum class OverlayWidth {
+	Narrow,
+	Wide
+}
+
+/** How tall an overlay is in its slot. */
+enum class OverlayHeight {
+	SingleLine,
+	TwoLines,
+	Block
+}
+
+/**
+ * The kind of overlay a slot can show.
+ *
+ * Every variant declares the shape it takes, so the editor can lay the slots out without measuring the
+ * content. The content itself is drawn to fit that shape.
+ */
+enum class OverlayVariant(
+	val title: String,
+	val width: OverlayWidth,
+	val height: OverlayHeight
+) {
+	Clock("Clock", OverlayWidth.Narrow, OverlayHeight.SingleLine),
+	Date("Date", OverlayWidth.Narrow, OverlayHeight.SingleLine),
+	Location("Location", OverlayWidth.Narrow, OverlayHeight.SingleLine),
+	WeatherNow("Weather - now", OverlayWidth.Narrow, OverlayHeight.SingleLine),
+	Weather3Day("Weather - 3 day forecast", OverlayWidth.Wide, OverlayHeight.Block),
+	NowPlayingText("Now playing - text", OverlayWidth.Narrow, OverlayHeight.TwoLines),
+	NowPlayingAlbumArt("Now playing - album art", OverlayWidth.Wide, OverlayHeight.TwoLines),
+	CustomText("Custom text", OverlayWidth.Narrow, OverlayHeight.SingleLine)
 }
 
 /** An overlay sitting in one of the slots. */
 data class OverlayConfig(
-	val type: OverlayType,
+	val variant: OverlayVariant,
 	val corner: Corner,
 	val order: Int
 )

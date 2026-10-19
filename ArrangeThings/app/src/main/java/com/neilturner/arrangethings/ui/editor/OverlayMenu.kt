@@ -3,12 +3,15 @@ package com.neilturner.arrangethings.ui.editor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.requiredHeight
+import androidx.compose.foundation.layout.requiredWidth
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -20,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -33,7 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.neilturner.arrangethings.model.OverlaySlot
-import com.neilturner.arrangethings.model.OverlayType
+import com.neilturner.arrangethings.model.OverlayVariant
+import com.neilturner.arrangethings.ui.overlays.size
 
 /** Background of the menu panel. */
 val MenuBackground = Color(0xF21A2029)
@@ -41,22 +47,28 @@ val MenuBackground = Color(0xF21A2029)
 /** Colour of the scrim behind the menu. */
 val MenuScrim = Color(0xCC000000)
 
+/** Width of the little preview in a menu row. */
+private val PreviewWidth = 116.dp
+
+/** Height of the little preview in a menu row. */
+private val PreviewHeight = 42.dp
+
 /**
  * The overlay menu of a slot.
  *
- * The menu lists every overlay type plus "None", which empties the slot. The item for the type that is
- * currently in the slot starts focused.
+ * Every row shows a small copy of the slot the overlay would fill, so the differences between the variants
+ * can be seen before one is picked.
  */
 @Composable
 fun OverlayMenu(
 	slot: OverlaySlot,
-	currentType: OverlayType?,
-	onChoose: (OverlayType?) -> Unit,
+	currentVariant: OverlayVariant?,
+	onChoose: (OverlayVariant?) -> Unit,
 	onDismiss: () -> Unit,
 	modifier: Modifier = Modifier
 ) {
-	val items: List<OverlayType?> = OverlayType.entries.toList() + null
-	val startIndex = items.indexOf(currentType).let { if (it < 0) items.lastIndex else it }
+	val variants = OverlayVariant.entries
+	val startIndex = variants.indexOf(currentVariant).let { if (it < 0) variants.lastIndex else it }
 	val requester = remember { FocusRequester() }
 
 	LaunchedEffect(Unit) {
@@ -71,29 +83,29 @@ fun OverlayMenu(
 	) {
 		Column(
 			modifier = Modifier
-				.width(320.dp)
+				.width(480.dp)
 				.clip(RoundedCornerShape(16.dp))
 				.background(MenuBackground)
 				.border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(16.dp))
-				.padding(vertical = 10.dp)
+				.padding(vertical = 12.dp)
 		) {
 			Text(
 				text = slot.displayName,
 				color = FocusedRing,
 				fontSize = 14.sp,
-				modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 4.dp)
+				modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 6.dp)
 			)
 
-			items.forEachIndexed { index, type ->
-				MenuItem(
-					label = type?.displayName ?: "None",
-					selected = type == currentType,
+			variants.forEachIndexed { index, variant ->
+				MenuRow(
+					variant = variant,
+					selected = variant == currentVariant,
 					modifier = if (index == startIndex) {
 						Modifier.focusRequester(requester)
 					} else {
 						Modifier
 					},
-					onChoose = { onChoose(type) },
+					onChoose = { onChoose(variant) },
 					onDismiss = onDismiss
 				)
 			}
@@ -103,8 +115,8 @@ fun OverlayMenu(
 
 /** One entry of the overlay menu. */
 @Composable
-private fun MenuItem(
-	label: String,
+private fun MenuRow(
+	variant: OverlayVariant,
 	selected: Boolean,
 	modifier: Modifier = Modifier,
 	onChoose: () -> Unit,
@@ -137,19 +149,52 @@ private fun MenuItem(
 					else -> false
 				}
 			}
-			.padding(horizontal = 12.dp, vertical = 9.dp),
-		verticalAlignment = Alignment.CenterVertically,
-		horizontalArrangement = Arrangement.spacedBy(12.dp)
+			.padding(horizontal = 10.dp, vertical = 5.dp),
+		verticalAlignment = Alignment.CenterVertically
 	) {
+		VariantPreview(variant)
+
 		Text(
-			text = if (selected) "●" else "○",
-			color = if (selected) FocusedRing else Color(0x55FFFFFF),
-			fontSize = 12.sp
-		)
-		Text(
-			text = label,
+			text = variant.title,
 			color = Color(0xFFF2F2F5),
-			fontSize = 16.sp
+			fontSize = 15.sp,
+			modifier = Modifier
+				.weight(1f)
+				.padding(start = 14.dp)
 		)
+
+		Text(
+			text = if (selected) "✓" else "",
+			color = FocusedRing,
+			fontSize = 15.sp
+		)
+	}
+}
+
+/**
+ * A small copy of the slot the overlay would fill.
+ *
+ * The overlay is drawn at the size it declares and then scaled down, so the preview shows the real
+ * proportions.
+ */
+@Composable
+private fun VariantPreview(variant: OverlayVariant) {
+	val scale = (PreviewWidth / variant.width.size).coerceIn(0.3f, 0.8f)
+
+	Box(
+		modifier = Modifier
+			.size(PreviewWidth, PreviewHeight)
+			.clipToBounds(),
+		contentAlignment = Alignment.Center
+	) {
+		Box(Modifier.scale(scale)) {
+			OverlaySlotContent(
+				variant = variant,
+				modifier = Modifier
+					// The preview box is smaller than the slot, so the size has to be forced.
+					.requiredWidth(variant.width.size)
+					.requiredHeight(variant.height.size)
+			)
+		}
 	}
 }

@@ -8,7 +8,7 @@ import com.neilturner.arrangethings.logic.setSlot
 import com.neilturner.arrangethings.model.Corner
 import com.neilturner.arrangethings.model.OverlayConfig
 import com.neilturner.arrangethings.model.OverlaySlot
-import com.neilturner.arrangethings.model.OverlayType
+import com.neilturner.arrangethings.model.OverlayVariant
 import com.neilturner.arrangethings.model.SLOTS_PER_CORNER
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -53,21 +53,21 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 	}
 
 	/**
-	 * Puts the given overlay type in the open slot. A null type empties the slot.
+	 * Puts the given overlay in the open slot. A null variant empties the slot.
 	 */
-	fun chooseType(type: OverlayType?) {
+	fun chooseVariant(variant: OverlayVariant?) {
 		val slot = _state.value.menuSlot ?: return
-		val updated = setSlot(_state.value.overlays, slot.corner, slot.order, type)
+		val updated = setSlot(_state.value.overlays, slot.corner, slot.order, variant)
 
 		_state.update {
 			it.copy(
 				overlays = updated,
 				menuSlot = null,
 				focusTargetKey = slot.key,
-				statusMessage = if (type == null) {
+				statusMessage = if (variant == null) {
 					"${slot.corner.displayName()} slot ${slot.order + 1} cleared"
 				} else {
-					"${slot.corner.displayName()} slot ${slot.order + 1} set to ${type.displayName}"
+					"${slot.corner.displayName()} slot ${slot.order + 1} set to ${variant.title}"
 				}
 			)
 		}
@@ -104,22 +104,11 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 	// --- helpers -----------------------------------------------------------------------------
 
 	private fun seed(): List<OverlayConfig> = listOf(
-		OverlayConfig(type = OverlayType.Clock, corner = Corner.TopStart, order = 0),
-		OverlayConfig(type = OverlayType.Weather, corner = Corner.TopEnd, order = 0),
-		OverlayConfig(type = OverlayType.NowPlaying, corner = Corner.BottomEnd, order = 0)
+		OverlayConfig(variant = OverlayVariant.Clock, corner = Corner.TopStart, order = 0),
+		OverlayConfig(variant = OverlayVariant.WeatherNow, corner = Corner.TopEnd, order = 0),
+		OverlayConfig(variant = OverlayVariant.NowPlayingText, corner = Corner.BottomEnd, order = 0)
 	)
 }
-
-/** Human readable name of an overlay type. */
-val OverlayType.displayName: String
-	get() = when (this) {
-		OverlayType.Clock -> "Clock"
-		OverlayType.Date -> "Date"
-		OverlayType.Location -> "Location"
-		OverlayType.Weather -> "Weather"
-		OverlayType.NowPlaying -> "Now Playing"
-		OverlayType.CustomText -> "Custom Text"
-	}
 
 /** Human readable name of a corner. */
 fun Corner.displayName(): String = when (this) {

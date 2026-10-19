@@ -2,7 +2,7 @@ package com.neilturner.arrangethings.logic
 
 import com.neilturner.arrangethings.model.Corner
 import com.neilturner.arrangethings.model.OverlayConfig
-import com.neilturner.arrangethings.model.OverlayType
+import com.neilturner.arrangethings.model.OverlayVariant
 import com.neilturner.arrangethings.model.SLOTS_PER_CORNER
 
 /** The overlays of a corner, ordered by their slot. */
@@ -14,19 +14,19 @@ fun slotOverlay(overlays: List<OverlayConfig>, corner: Corner, order: Int): Over
 	overlays.firstOrNull { it.corner == corner && it.order == order }
 
 /**
- * Puts an overlay of the given type in a slot.
+ * Puts an overlay of the given variant in a slot.
  *
- * A null type empties the slot. Any overlay that was in the slot is replaced.
+ * A null variant empties the slot. Any overlay that was in the slot is replaced.
  */
 fun setSlot(
 	overlays: List<OverlayConfig>,
 	corner: Corner,
 	order: Int,
-	type: OverlayType?
+	variant: OverlayVariant?
 ): List<OverlayConfig> {
 	val without = overlays.filterNot { it.corner == corner && it.order == order }
-	if (type == null) return without
-	return without + OverlayConfig(type = type, corner = corner, order = order)
+	if (variant == null) return without
+	return without + OverlayConfig(variant = variant, corner = corner, order = order)
 }
 
 /**
