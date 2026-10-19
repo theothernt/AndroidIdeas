@@ -41,6 +41,7 @@ import com.neilturner.playerexp.data.plex.PlexAudioStream
 import com.neilturner.playerexp.data.plex.PlexSubtitleStream
 import com.neilturner.playerexp.data.plex.SessionCleanup
 import com.neilturner.playerexp.data.plex.SessionCleanupManager
+import com.neilturner.playerexp.ui.player.AssSubtitleSupport
 import okhttp3.OkHttpClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -122,6 +123,16 @@ class PlexPlayerViewModel(
     private val store = PlexAccountStore(application.applicationContext)
     private val api = PlexApi(store.clientIdentifier())
     private val sessionCleanup: SessionCleanup = SessionCleanupManager.getInstance()
+
+    /**
+     * Renders the styled ASS subtitles with libass.
+     *
+     * There is one of these for the view model rather than one for each playback: it holds the
+     * libass instance and the tracks read out of the file, and it outlives any one item. The
+     * screen puts it in the view that draws the subtitles, so the two have to be the same one for
+     * the whole life of the screen.
+     */
+    val assSupport = AssSubtitleSupport(application.applicationContext)
 
     private val _uiState = MutableStateFlow<PlexPlayerUiState>(PlexPlayerUiState.Loading)
     val uiState: StateFlow<PlexPlayerUiState> = _uiState.asStateFlow()
@@ -560,6 +571,9 @@ class PlexPlayerViewModel(
 
     override fun onCleared() {
         releasePlayer()
+        // The handler holds the libass instance, which is native memory. It is released here and
+        // not with the player, because the handler is reused for the next playback.
+        assSupport.release()
         super.onCleared()
     }
 
@@ -582,36 +596,34 @@ class PlexPlayerViewModel(
         val upstreamFactory = OkHttpDataSource.Factory(OkHttpClient())
             .setDefaultRequestProperties(headers)
         val dataSourceFactory = DefaultDataSource.Factory(context, upstreamFactory)
-        val mediaSourceFactory = DefaultMediaSourceFactory(dataSourceFactory)
         val forcePcmAudio = shouldForcePcmAudio()
         Log.d(
             PLAYBACK_LOG_TAG,
             "Audio sink: forcePcmAudio=$forcePcmAudio, device=${Build.DEVICE}, " +
                 "product=${Build.PRODUCT}, model=${Build.MODEL}"
         )
-        if (!forcePcmAudio) {
-            return ExoPlayer.Builder(context)
-                .setMediaSourceFactory(mediaSourceFactory)
-                .build()
+        val renderersFactory = if (forcePcmAudio) {
+            object : DefaultRenderersFactory(context) {
+                override fun buildAudioSink(
+                    context: Context,
+                    enableFloatOutput: Boolean,
+                    enableAudioOutputPlaybackParams: Boolean
+                ): AudioSink = DefaultAudioSink.Builder(context)
+                    .setAudioOutputProvider(
+                        // No context => static DEFAULT_AUDIO_CAPABILITIES (no passthrough), same as the old no-arg builder path.
+                        AudioTrackAudioOutputProvider.Builder(null).build()
+                    )
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
+                    .build()
+            }.setEnableDecoderFallback(true)
+        } else {
+            DefaultRenderersFactory(context)
         }
-
-        val renderersFactory = object : DefaultRenderersFactory(context) {
-            override fun buildAudioSink(
-                context: Context,
-                enableFloatOutput: Boolean,
-                enableAudioOutputPlaybackParams: Boolean
-            ): AudioSink = DefaultAudioSink.Builder(context)
-                .setAudioOutputProvider(
-                    // No context => static DEFAULT_AUDIO_CAPABILITIES (no passthrough), same as the old no-arg builder path.
-                    AudioTrackAudioOutputProvider.Builder(null).build()
-                )
-                .setEnableFloatOutput(enableFloatOutput)
-                .setEnableAudioOutputPlaybackParameters(enableAudioOutputPlaybackParams)
-                .build()
-        }.setEnableDecoderFallback(true)
-        return ExoPlayer.Builder(context, renderersFactory)
-            .setMediaSourceFactory(mediaSourceFactory)
-            .build()
+        return assSupport.buildPlayer(
+            builder = ExoPlayer.Builder(context, renderersFactory),
+            dataSourceFactory = dataSourceFactory
+        )
     }
 
     private fun shouldForcePcmAudio(): Boolean {

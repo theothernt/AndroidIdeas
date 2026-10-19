@@ -106,6 +106,7 @@ fun HomeScreen(
             val menuItems = listOf(
                 "Play MP4, MKV, etc" to { onNavigateToPlayer("progressive") },
                 "Play HLS Stream" to { onNavigateToPlayer("hls") },
+                "Play ASS subtitles" to { onNavigateToPlayer("ass") },
                 stringResource(R.string.plex_player_button) to { onNavigateToPlexPlayer() },
                 stringResource(R.string.plex_player_mock_button) to { onNavigateToPlexPlayerMock() },
                 stringResource(R.string.plex_on_deck_button) to { onNavigateToPlexOnDeck() },
