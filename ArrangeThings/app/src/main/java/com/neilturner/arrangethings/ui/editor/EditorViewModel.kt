@@ -1,6 +1,9 @@
 package com.neilturner.arrangethings.ui.editor
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.neilturner.arrangethings.data.OverlayStorage
 import com.neilturner.arrangethings.logic.MoveDirection
 import com.neilturner.arrangethings.logic.adjacentCorner
 import com.neilturner.arrangethings.logic.addOverlay
@@ -16,15 +19,32 @@ import com.neilturner.arrangethings.model.OverlayType
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import java.util.UUID
 
 /** Holds the layout and the state of the editor. */
-class EditorViewModel : ViewModel() {
+class EditorViewModel(application: Application) : AndroidViewModel(application) {
 
 	private val _state = MutableStateFlow(EditorUiState(overlays = seed()))
 	val state: StateFlow<EditorUiState> = _state.asStateFlow()
 
-	private var nextId = 0
+	private val storage = OverlayStorage(application)
+
+	init {
+		viewModelScope.launch {
+			// The stored layout is read first so that it is not overwritten by the seed.
+			storage.load()?.let { saved ->
+				_state.update { it.copy(overlays = saved) }
+			}
+
+			_state.map { it.overlays }
+				.distinctUntilChanged()
+				.collect { overlays -> storage.save(overlays) }
+		}
+	}
 
 	// --- palette -----------------------------------------------------------------------------
 
@@ -34,7 +54,7 @@ class EditorViewModel : ViewModel() {
 	 */
 	fun addOverlay(type: OverlayType) {
 		val current = _state.value
-		val id = "overlay-${nextId++}"
+		val id = "overlay-${UUID.randomUUID().toString().take(8)}"
 		val updated = addOverlay(current.overlays, type, id)
 
 		if (updated == null) {
@@ -180,7 +200,6 @@ class EditorViewModel : ViewModel() {
 
 	/** Puts the layout back to the starting arrangement. */
 	fun reset() {
-		nextId = 0
 		_state.update {
 			it.copy(
 				overlays = seed(),

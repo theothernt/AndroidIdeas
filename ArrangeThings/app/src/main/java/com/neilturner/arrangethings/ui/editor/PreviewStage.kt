@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.neilturner.arrangethings.logic.MoveDirection
@@ -29,6 +30,7 @@ import com.neilturner.arrangethings.logic.overlaysInCorner
 import com.neilturner.arrangethings.model.Corner
 import com.neilturner.arrangethings.model.MAX_PER_CORNER
 import com.neilturner.arrangethings.model.OverlayConfig
+import com.neilturner.arrangethings.model.OverlayType
 
 /** Colour of the area outside the safe area. */
 val StageBackground = Color(0xFF05070C)
@@ -287,4 +289,28 @@ private fun CornerCell(
 			)
 		}
 	}
+}
+
+@Preview(showBackground = true, widthDp = 640, heightDp = 360)
+@Composable
+private fun PreviewStagePreview() {
+	PreviewStage(
+		state = EditorUiState(
+			overlays = listOf(
+				OverlayConfig("a", OverlayType.Clock, Corner.TopStart, 0),
+				OverlayConfig("b", OverlayType.Weather, Corner.TopEnd, 0),
+				OverlayConfig("c", OverlayType.NowPlaying, Corner.BottomEnd, 0),
+				OverlayConfig("d", OverlayType.Location, Corner.BottomEnd, 1)
+			),
+			focusedOverlayId = "d"
+		),
+		onOverlayFocused = {},
+		onFocusTargetAchieved = {},
+		onGrab = {},
+		onDrop = {},
+		onCancel = {},
+		onMove = {},
+		onRemove = {},
+		onSwap = {}
+	)
 }

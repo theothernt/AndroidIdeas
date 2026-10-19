@@ -34,10 +34,13 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.neilturner.arrangethings.logic.MoveDirection
+import com.neilturner.arrangethings.model.Corner
 import com.neilturner.arrangethings.model.OverlayConfig
+import com.neilturner.arrangethings.model.OverlayType
 import com.neilturner.arrangethings.ui.overlays.OverlayVisual
 
 /** Colour of the ring around the focused overlay. */
@@ -160,6 +163,25 @@ fun MiniButton(
 }
 
 private val ACTIVATION_KEYS = setOf(Key.DirectionCenter, Key.Enter)
+
+@Preview(showBackground = true, widthDp = 320, heightDp = 120)
+@Composable
+private fun OverlayCardPreview() {
+	Box(Modifier.padding(12.dp)) {
+		OverlayCard(
+			overlay = OverlayConfig("a", OverlayType.Clock, Corner.TopStart, 0),
+			isGrabbed = false,
+			isTargeted = true,
+			focusTargetId = null,
+			onFocused = {},
+			onFocusTargetAchieved = {},
+			onGrab = {},
+			onDrop = {},
+			onCancel = {},
+			onMove = {}
+		)
+	}
+}
 
 /**
  * Handles the keys for the card.
