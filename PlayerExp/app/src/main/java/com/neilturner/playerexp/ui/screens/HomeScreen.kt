@@ -44,13 +44,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 fun HomeScreen(
     onNavigateToPlayer: (String) -> Unit,
     onNavigateToPlexPlayer: () -> Unit,
+    onNavigateToPlexPlayerMock: () -> Unit,
     onNavigateToPlexOnDeck: () -> Unit,
     onNavigateToPlexLibraries: () -> Unit,
     onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: HomeViewModel = viewModel()
 ) {
-    val focusRequesters = remember { List(6) { FocusRequester() } }
+    val focusRequesters = remember { List(8) { FocusRequester() } }
     var hasRequestedInitialFocus by rememberSaveable { mutableStateOf(false) }
     var lastFocusedIndex by rememberSaveable { mutableStateOf(0) }
 
@@ -106,6 +107,7 @@ fun HomeScreen(
                 "Play MP4, MKV, etc" to { onNavigateToPlayer("progressive") },
                 "Play HLS Stream" to { onNavigateToPlayer("hls") },
                 stringResource(R.string.plex_player_button) to { onNavigateToPlexPlayer() },
+                stringResource(R.string.plex_player_mock_button) to { onNavigateToPlexPlayerMock() },
                 stringResource(R.string.plex_on_deck_button) to { onNavigateToPlexOnDeck() },
                 stringResource(R.string.plex_libraries_button) to { onNavigateToPlexLibraries() },
                 stringResource(R.string.settings) to { onNavigateToSettings() }
@@ -129,7 +131,7 @@ fun HomeScreen(
                             .onFocusChanged {
                                 if (it.isFocused) lastFocusedIndex = rowIndex * 2 + columnIndex
                             }
-                            .width(300.dp)
+                            .width(MENU_BUTTON_WIDTH)
                             .height(56.dp),
                         scale = ButtonDefaults.scale(
                             focusedScale = FOCUSED_MENU_BUTTON_SCALE,
@@ -148,6 +150,13 @@ fun HomeScreen(
                                 }
                             }
                         }
+                        // A row with one item in it — the last one, because there are seven of
+                        // them — keeps the width of a full row. The item then stands exactly
+                        // where the item above it in the first column stands, rather than in
+                        // the middle of the screen.
+                        if (rowItems.size == 1) {
+                            Spacer(modifier = Modifier.width(MENU_BUTTON_WIDTH))
+                        }
                     }
                 }
             }
@@ -161,3 +170,6 @@ fun HomeScreen(
  */
 private const val FOCUSED_MENU_BUTTON_SCALE = 1.04f
 private const val PRESSED_MENU_BUTTON_SCALE = 0.97f
+
+/** The width of a menu button, and of the space left for the one that has no partner. */
+private val MENU_BUTTON_WIDTH = 300.dp

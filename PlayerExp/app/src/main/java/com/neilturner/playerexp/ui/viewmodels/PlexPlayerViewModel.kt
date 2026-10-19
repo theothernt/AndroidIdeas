@@ -105,7 +105,12 @@ sealed interface PlexPlayerUiState {
         val availableSubtitles: List<PlexSubtitleStream> = emptyList(),
         val selectedSubtitleId: Long? = null,
         val availableAudio: List<PlexAudioStream> = emptyList(),
-        val selectedAudioId: Long? = null
+        val selectedAudioId: Long? = null,
+        /** The rate the video is playing at, which the user can change while it plays. */
+        val playbackSpeed: Float = 1f,
+        /** The size of the picture being decoded, which is only known once a frame is on screen. */
+        val videoWidth: Int? = null,
+        val videoHeight: Int? = null
     ) : PlexPlayerUiState
     data class Error(val message: String) : PlexPlayerUiState
 }
@@ -190,7 +195,15 @@ class PlexPlayerViewModel(
                     return@launch
                 }
 
-                startPlayback(serverUrl, token, episodes.random(), title = null)
+                // The list of recently added episodes does not carry the streams, so the full
+                // metadata is fetched for the one that was picked. Without it the player has no
+                // audio or subtitle tracks to offer.
+                val chosen = episodes.random()
+                val episode = chosen.ratingKey
+                    ?.let { api.mediaForRatingKey(serverUrl, token, it) }
+                    ?: chosen
+
+                startPlayback(serverUrl, token, episode, title = null)
             } catch (e: Exception) {
                 failToStart(e)
             }
@@ -328,6 +341,19 @@ class PlexPlayerViewModel(
 
     fun resume() {
         player?.playWhenReady = true
+    }
+
+    /**
+     * Sets the rate the video plays at.
+     *
+     * The rate is kept in the state as well as on the player, so the menu that offers the rates
+     * can show which one is in use without asking the player.
+     */
+    fun setPlaybackSpeed(speed: Float) {
+        val readyState = _uiState.value as? PlexPlayerUiState.Ready ?: return
+        if (readyState.playbackSpeed == speed) return
+        _uiState.value = readyState.copy(playbackSpeed = speed)
+        player?.setPlaybackSpeed(speed)
     }
 
     /**
@@ -648,6 +674,15 @@ class PlexPlayerViewModel(
                     PLAYBACK_LOG_TAG,
                     "First video frame rendered after ${SystemClock.elapsedRealtime() - prepareStartedAt}ms"
                 )
+            }
+
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                _uiState.value = (_uiState.value as? PlexPlayerUiState.Ready)
+                    ?.copy(
+                        videoWidth = videoSize.width,
+                        videoHeight = videoSize.height
+                    )
+                    ?: return
             }
 
             override fun onTracksChanged(tracks: Tracks) {
