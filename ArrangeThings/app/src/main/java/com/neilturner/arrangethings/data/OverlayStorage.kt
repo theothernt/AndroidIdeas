@@ -17,7 +17,6 @@ private val Context.arrangeThingsStore: DataStore<Preferences> by preferencesDat
 
 @Serializable
 private data class StoredOverlay(
-	val id: String,
 	val type: OverlayType,
 	val corner: Corner,
 	val order: Int
@@ -36,14 +35,14 @@ class OverlayStorage(private val context: Context) {
 
 		return runCatching {
 			json.decodeFromString<List<StoredOverlay>>(raw).map {
-				OverlayConfig(id = it.id, type = it.type, corner = it.corner, order = it.order)
+				OverlayConfig(type = it.type, corner = it.corner, order = it.order)
 			}
 		}.getOrNull()
 	}
 
 	/** Writes the layout. */
 	suspend fun save(overlays: List<OverlayConfig>) {
-		val stored = overlays.map { StoredOverlay(it.id, it.type, it.corner, it.order) }
+		val stored = overlays.map { StoredOverlay(it.type, it.corner, it.order) }
 		context.arrangeThingsStore.edit { preferences ->
 			preferences[OVERLAYS_KEY] = json.encodeToString(stored)
 		}

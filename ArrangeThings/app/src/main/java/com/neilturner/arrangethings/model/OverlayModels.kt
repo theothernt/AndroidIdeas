@@ -1,6 +1,6 @@
 package com.neilturner.arrangethings.model
 
-/** The four corner slots an overlay can occupy. */
+/** The four corners of the layout. */
 enum class Corner {
 	TopStart,
 	TopEnd,
@@ -18,21 +18,26 @@ enum class OverlayType {
 	CustomText
 }
 
-/**
- * A single overlay placed in a corner.
- *
- * [order] is the position within the corner, 0 or 1. The overlay with order 0 is rendered above the one with
- * order 1.
- */
+/** An overlay sitting in one of the slots. */
 data class OverlayConfig(
-	val id: String,
 	val type: OverlayType,
 	val corner: Corner,
 	val order: Int
 )
 
-/** Maximum number of overlays a single corner can hold. */
-const val MAX_PER_CORNER = 2
+/** The number of slots in every corner. */
+const val SLOTS_PER_CORNER = 2
 
-/** Total number of overlays the layout can hold. */
-const val MAX_OVERLAYS = MAX_PER_CORNER * 4
+/** A fixed position in the layout. */
+data class OverlaySlot(
+	val corner: Corner,
+	val order: Int
+) {
+	/** Stable key for the slot, used as the Compose key and for the focus. */
+	val key: String get() = "${corner.name}-$order"
+}
+
+/** Every slot of the layout, in a stable order. */
+val ALL_SLOTS: List<OverlaySlot> = Corner.entries.flatMap { corner ->
+	(0 until SLOTS_PER_CORNER).map { OverlaySlot(corner, it) }
+}
