@@ -727,7 +727,7 @@ private fun drawerContentFor(
             title = stringResource(R.string.plex_playback_speed),
             items = speeds.map { speed ->
                 DrawerItem(
-                    key = "$DRAWER_KEY_PREFIX_SPEED$speed",
+                    key = "$DRAWER_KEY_PREFIX_SPEED-$speed",
                     label = formatPlaybackSpeed(speed),
                     icon = Icons.Outlined.Speed,
                     trailing = if (speed == playbackSpeed) DrawerTrailing.Check else DrawerTrailing.None,
@@ -1051,7 +1051,7 @@ internal fun audioChoices(
     selectedAudioId: Long?
 ): List<TrackChoice> = audio.map { stream ->
     TrackChoice(
-        key = "audio-${stream.id}",
+        key = "$DRAWER_KEY_PREFIX_AUDIO-${stream.id}",
         label = stream.label,
         selected = stream.id == selectedAudioId,
         streamId = stream.id
@@ -1071,7 +1071,7 @@ internal fun subtitleChoices(
 ): List<TrackChoice> = buildList {
     add(
         TrackChoice(
-            key = "subtitle-off",
+            key = "$DRAWER_KEY_PREFIX_SUBTITLES-off",
             label = offLabel,
             selected = selectedSubtitleId == null,
             streamId = null
@@ -1080,7 +1080,7 @@ internal fun subtitleChoices(
     subtitles.forEach { stream ->
         add(
             TrackChoice(
-                key = "subtitle-${stream.id}",
+                key = "$DRAWER_KEY_PREFIX_SUBTITLES-${stream.id}",
                 label = stream.label,
                 selected = stream.id == selectedSubtitleId,
                 streamId = stream.id
@@ -1233,12 +1233,17 @@ private const val MAX_RAIL_ACTIONS = 3
 /** How many rows a page of the drawer can hold before the list needs more requesters than this. */
 private const val MAX_DRAWER_ROWS = 32
 
-/** The keys of the drawer's own rows, and the prefixes the track rows are built from. */
+/**
+ * The keys of the drawer's own rows, and the prefixes the track rows are built from.
+ *
+ * The prefixes carry no dash of their own: the dash that separates the prefix from the stream id
+ * belongs to the key, so that a key reads the same however it is put together.
+ */
 private const val DRAWER_KEY_SPEED = "drawer-speed"
 private const val DRAWER_KEY_STREAM_INFO = "drawer-stream-info"
-private const val DRAWER_KEY_PREFIX_AUDIO = "audio-"
-private const val DRAWER_KEY_PREFIX_SUBTITLES = "subtitle-"
-private const val DRAWER_KEY_PREFIX_SPEED = "speed-"
+private const val DRAWER_KEY_PREFIX_AUDIO = "audio"
+private const val DRAWER_KEY_PREFIX_SUBTITLES = "subtitle"
+private const val DRAWER_KEY_PREFIX_SPEED = "speed"
 
 /** The rates a video can be played at. */
 private val PLAYBACK_SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
