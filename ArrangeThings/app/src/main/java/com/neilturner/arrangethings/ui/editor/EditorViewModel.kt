@@ -4,18 +4,12 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.neilturner.arrangethings.data.OverlayStorage
-import com.neilturner.arrangethings.logic.MoveDirection
-import com.neilturner.arrangethings.logic.adjacentCorner
-import com.neilturner.arrangethings.logic.addOverlay
-import com.neilturner.arrangethings.logic.cancelMove
-import com.neilturner.arrangethings.logic.isCornerFull
-import com.neilturner.arrangethings.logic.moveOverlay
-import com.neilturner.arrangethings.logic.overlaysInCorner
-import com.neilturner.arrangethings.logic.removeOverlay
-import com.neilturner.arrangethings.logic.swapOrderInCorner
+import com.neilturner.arrangethings.logic.setSlot
 import com.neilturner.arrangethings.model.Corner
 import com.neilturner.arrangethings.model.OverlayConfig
+import com.neilturner.arrangethings.model.OverlaySlot
 import com.neilturner.arrangethings.model.OverlayType
+import com.neilturner.arrangethings.model.SLOTS_PER_CORNER
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +17,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import java.util.UUID
 
 /** Holds the layout and the state of the editor. */
 class EditorViewModel(application: Application) : AndroidViewModel(application) {
@@ -46,185 +39,49 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 		}
 	}
 
-	// --- palette -----------------------------------------------------------------------------
+	// --- menu --------------------------------------------------------------------------------
+
+	/** Opens the overlay menu for a slot. */
+	fun openMenu(slot: OverlaySlot) {
+		_state.update { it.copy(menuSlot = slot) }
+	}
+
+	/** Closes the overlay menu without changing the slot. */
+	fun closeMenu() {
+		val slot = _state.value.menuSlot ?: return
+		_state.update { it.copy(menuSlot = null, focusTargetKey = slot.key) }
+	}
 
 	/**
-	 * Adds an overlay of the given type to the first corner with space and picks it up, so the user can move
-	 * it straight away.
+	 * Puts the given overlay type in the open slot. A null type empties the slot.
 	 */
-	fun addOverlay(type: OverlayType) {
-		val current = _state.value
-		val id = "overlay-${UUID.randomUUID().toString().take(8)}"
-		val updated = addOverlay(current.overlays, type, id)
+	fun chooseType(type: OverlayType?) {
+		val slot = _state.value.menuSlot ?: return
+		val updated = setSlot(_state.value.overlays, slot.corner, slot.order, type)
 
-		if (updated == null) {
-			_state.update { it.copy(statusMessage = "All four corners are full - remove an overlay first") }
-			return
-		}
-
-		val added = updated.first { it.id == id }
 		_state.update {
 			it.copy(
 				overlays = updated,
-				grabbedId = id,
-				originalConfig = added,
-				focusedOverlayId = id,
-				focusTargetId = id,
-				pendingRemovalId = null,
-				statusMessage = "Added ${type.displayName} - use the D-pad to place it"
-			)
-		}
-	}
-
-	// --- grab mode ---------------------------------------------------------------------------
-
-	/** Picks up the overlay with the given id. */
-	fun beginGrab(id: String) {
-		val current = _state.value
-		val overlay = current.overlays.firstOrNull { it.id == id } ?: return
-
-		_state.update {
-			it.copy(
-				grabbedId = id,
-				originalConfig = overlay,
-				focusedOverlayId = id,
-				pendingRemovalId = null,
-				statusMessage = "Picked up ${overlay.type.displayName} - Select to drop, Back to cancel"
-			)
-		}
-	}
-
-	/** Drops the grabbed overlay where it is. */
-	fun dropGrab() {
-		val current = _state.value
-		val grabbed = current.grabbedOverlay ?: return
-		_state.update {
-			it.copy(
-				grabbedId = null,
-				originalConfig = null,
-				pendingRemovalId = null,
-				statusMessage = "Dropped ${grabbed.type.displayName} in ${grabbed.corner.displayName}"
-			)
-		}
-	}
-
-	/** Cancels the grab and puts the overlay back where it came from. */
-	fun cancelGrab() {
-		val current = _state.value
-		val original = current.originalConfig
-		if (original == null) {
-			_state.update { it.copy(grabbedId = null) }
-			return
-		}
-
-		val restored = cancelMove(current.overlays, original)
-		val landed = restored.first { it.id == original.id }
-
-		_state.update {
-			it.copy(
-				overlays = restored,
-				grabbedId = null,
-				originalConfig = null,
-				pendingRemovalId = null,
-				focusedOverlayId = original.id,
-				focusTargetId = original.id,
-				statusMessage = if (landed.corner == original.corner) {
-					"Cancelled - ${original.type.displayName} put back in ${original.corner.displayName}"
+				menuSlot = null,
+				focusTargetKey = slot.key,
+				statusMessage = if (type == null) {
+					"${slot.corner.displayName()} slot ${slot.order + 1} cleared"
 				} else {
-					"Cancelled - ${original.corner.displayName} was full, ${original.type.displayName} placed in ${landed.corner.displayName}"
+					"${slot.corner.displayName()} slot ${slot.order + 1} set to ${type.displayName}"
 				}
 			)
 		}
 	}
 
-	/** Moves the grabbed overlay one step in the given direction. */
-	fun moveGrabbed(direction: MoveDirection) {
-		val current = _state.value
-		val grabbed = current.grabbedOverlay ?: return
-
-		val target = adjacentCorner(grabbed.corner, direction)
-		if (target == null) {
-			_state.update { it.copy(statusMessage = "No corner that way") }
-			return
-		}
-
-		if (isCornerFull(current.overlays, target)) {
-			_state.update { it.copy(statusMessage = "${target.displayName} is full - move refused") }
-			return
-		}
-
-		val updated = moveOverlay(current.overlays, grabbed.id, target)
-		_state.update {
-			it.copy(
-				overlays = updated,
-				focusedOverlayId = grabbed.id,
-				focusTargetId = grabbed.id,
-				pendingRemovalId = null,
-				statusMessage = "Moved to ${target.displayName}"
-			)
-		}
-	}
-
-	// --- action panel ------------------------------------------------------------------------
-
-	/** Removes the overlay the action panel is targeting. */
-	fun removeFocused() {
-		val current = _state.value
-		val target = current.focusedOverlay ?: return
-
-		if (current.pendingRemovalId != target.id) {
-			_state.update {
-				it.copy(
-					pendingRemovalId = target.id,
-					statusMessage = "Press Remove again to delete ${target.type.displayName}"
-				)
-			}
-			return
-		}
-
-		val updated = removeOverlay(current.overlays, target.id)
-		val nextFocus = focusNeighbour(updated, target)
-
-		_state.update {
-			it.copy(
-				overlays = updated,
-				grabbedId = null,
-				originalConfig = null,
-				focusedOverlayId = nextFocus,
-				focusTargetId = nextFocus,
-				pendingRemovalId = null,
-				statusMessage = "Removed ${target.type.displayName}"
-			)
-		}
-	}
-
-	/** Swaps the focused overlay with the other overlay in its corner. */
-	fun swapFocused() {
-		val current = _state.value
-		val target = current.focusedOverlay ?: return
-
-		val updated = swapOrderInCorner(current.overlays, target.id)
-		_state.update {
-			it.copy(
-				overlays = updated,
-				focusedOverlayId = target.id,
-				focusTargetId = target.id,
-				pendingRemovalId = null,
-				statusMessage = "Swapped the order in ${target.corner.displayName}"
-			)
-		}
-	}
+	// --- actions -----------------------------------------------------------------------------
 
 	/** Puts the layout back to the starting arrangement. */
 	fun reset() {
 		_state.update {
 			it.copy(
 				overlays = seed(),
-				grabbedId = null,
-				originalConfig = null,
-				focusedOverlayId = null,
-				focusTargetId = null,
-				pendingRemovalId = null,
+				menuSlot = null,
+				focusTargetKey = null,
 				statusMessage = "Layout reset"
 			)
 		}
@@ -232,55 +89,24 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
 	// --- focus -------------------------------------------------------------------------------
 
-	/** Called when an overlay takes focus. */
-	fun onOverlayFocused(id: String) {
-		_state.update {
-			if (it.focusedOverlayId == id) {
-				it
-			} else {
-				it.copy(focusedOverlayId = id, pendingRemovalId = null)
-			}
-		}
+	/** Called when a slot takes focus. */
+	fun onSlotFocused(slot: OverlaySlot) {
+		_state.update { it.copy(focusTargetKey = null) }
 	}
 
-	/**
-	 * Called when focus leaves the overlays for the palette. The action panel keeps its own target while focus
-	 * is inside it, so the target is only dropped here.
-	 */
-	fun onPaletteFocused() {
-		_state.update { it.copy(focusedOverlayId = null) }
-	}
-
-	/** Called once the requested focus target has actually taken focus. */
-	fun onFocusTargetAchieved(id: String) {
+	/** Called once the requested focus target has taken focus. */
+	fun onFocusTargetAchieved(key: String) {
 		_state.update { state ->
-			if (state.focusTargetId == id) state.copy(focusTargetId = null) else state
+			if (state.focusTargetKey == key) state.copy(focusTargetKey = null) else state
 		}
 	}
 
 	// --- helpers -----------------------------------------------------------------------------
 
-	/**
-	 * Picks the overlay that should take focus after [removed] was deleted: another overlay in the same corner
-	 * first, then one in a neighbouring corner, and finally nothing when the layout is empty.
-	 */
-	private fun focusNeighbour(overlays: List<OverlayConfig>, removed: OverlayConfig): String? {
-		val sameCorner = overlaysInCorner(overlays, removed.corner)
-		sameCorner.getOrNull(removed.order)?.let { return it.id }
-		sameCorner.firstOrNull()?.let { return it.id }
-
-		for (direction in MoveDirection.entries) {
-			val adjacent = adjacentCorner(removed.corner, direction) ?: continue
-			overlaysInCorner(overlays, adjacent).firstOrNull()?.let { return it.id }
-		}
-
-		return null
-	}
-
 	private fun seed(): List<OverlayConfig> = listOf(
-		OverlayConfig(id = "seed-clock", type = OverlayType.Clock, corner = Corner.TopStart, order = 0),
-		OverlayConfig(id = "seed-weather", type = OverlayType.Weather, corner = Corner.TopEnd, order = 0),
-		OverlayConfig(id = "seed-now-playing", type = OverlayType.NowPlaying, corner = Corner.BottomEnd, order = 0)
+		OverlayConfig(type = OverlayType.Clock, corner = Corner.TopStart, order = 0),
+		OverlayConfig(type = OverlayType.Weather, corner = Corner.TopEnd, order = 0),
+		OverlayConfig(type = OverlayType.NowPlaying, corner = Corner.BottomEnd, order = 0)
 	)
 }
 
@@ -296,10 +122,13 @@ val OverlayType.displayName: String
 	}
 
 /** Human readable name of a corner. */
-val Corner.displayName: String
-	get() = when (this) {
-		Corner.TopStart -> "Top Start"
-		Corner.TopEnd -> "Top End"
-		Corner.BottomStart -> "Bottom Start"
-		Corner.BottomEnd -> "Bottom End"
-	}
+fun Corner.displayName(): String = when (this) {
+	Corner.TopStart -> "Top Start"
+	Corner.TopEnd -> "Top End"
+	Corner.BottomStart -> "Bottom Start"
+	Corner.BottomEnd -> "Bottom End"
+}
+
+/** Human readable name of a slot. */
+val OverlaySlot.displayName: String
+	get() = "${corner.displayName()} slot ${order + 1} of $SLOTS_PER_CORNER"

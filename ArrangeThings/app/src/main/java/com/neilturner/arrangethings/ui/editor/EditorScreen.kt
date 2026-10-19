@@ -1,7 +1,9 @@
 package com.neilturner.arrangethings.ui.editor
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,34 +18,43 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.tv.material3.Button
 import androidx.tv.material3.Text
 
 /**
  * The layout editor.
  *
- * Everything is driven with the D-pad: the palette adds overlays, the preview moves them around and the action
- * row at the end of a corner cell removes them or swaps their order.
+ * Every one of the eight slots is a button that opens a menu with the overlay types.
  */
 @Composable
 fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 	val state by viewModel.state.collectAsStateWithLifecycle()
+
+	// Back closes the overlay menu instead of leaving the app.
+	BackHandler(enabled = state.isMenuOpen) {
+		viewModel.closeMenu()
+	}
 
 	Column(
 		modifier = Modifier
 			.fillMaxSize()
 			.padding(horizontal = 24.dp, vertical = 20.dp)
 	) {
-		Text(text = "Arrange Things", fontSize = 30.sp)
+		Row(
+			modifier = Modifier.fillMaxWidth(),
+			verticalAlignment = Alignment.CenterVertically
+		) {
+			Text(text = "Arrange Things", fontSize = 30.sp)
 
-		Spacer(Modifier.height(12.dp))
+			Spacer(Modifier.weight(1f))
 
-		PaletteRow(
-			enabled = !state.isFull,
-			onSelect = viewModel::addOverlay,
-			onReset = viewModel::reset,
-			onFocused = viewModel::onPaletteFocused,
-			modifier = Modifier.fillMaxWidth()
-		)
+			Button(
+				onClick = viewModel::reset,
+				enabled = !state.isMenuOpen
+			) {
+				Text(text = "Reset")
+			}
+		}
 
 		Spacer(Modifier.height(12.dp))
 
@@ -54,14 +65,11 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 		) {
 			PreviewStage(
 				state = state,
-				onOverlayFocused = viewModel::onOverlayFocused,
+				onSlotFocused = viewModel::onSlotFocused,
 				onFocusTargetAchieved = viewModel::onFocusTargetAchieved,
-				onGrab = viewModel::beginGrab,
-				onDrop = viewModel::dropGrab,
-				onCancel = viewModel::cancelGrab,
-				onMove = viewModel::moveGrabbed,
-				onRemove = viewModel::removeFocused,
-				onSwap = viewModel::swapFocused,
+				onOpenMenu = viewModel::openMenu,
+				onChooseType = viewModel::chooseType,
+				onDismissMenu = viewModel::closeMenu,
 				modifier = Modifier.align(Alignment.Center)
 			)
 		}
@@ -69,15 +77,7 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 		Spacer(Modifier.height(12.dp))
 
 		Text(
-			text = buildString {
-				append(state.statusMessage ?: "Select an overlay in the preview to pick it up")
-				if (state.overlays.isEmpty()) {
-					append("   -   No overlays yet, add one from the palette above")
-				}
-				if (state.isFull) {
-					append("   -   All four corners are full, remove an overlay to add another")
-				}
-			},
+			text = state.statusMessage ?: "Select a slot to choose the overlay it shows",
 			fontSize = 15.sp,
 			color = Color(0xCCFFFFFF)
 		)
@@ -85,7 +85,7 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 		Spacer(Modifier.height(4.dp))
 
 		Text(
-			text = "D-pad: move   -   Select: pick up / drop   -   Back: cancel   -   Down: overlay actions",
+			text = "D-pad: choose an overlay   -   Select: pick it   -   Back: close the menu",
 			fontSize = 13.sp,
 			color = Color(0x88FFFFFF)
 		)
