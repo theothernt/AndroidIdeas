@@ -48,16 +48,39 @@ internal class PixelCopyCapture {
 	 */
 	enum class CopyTarget(
 		val config: Bitmap.Config,
-		val colorSpace: ColorSpace,
 	) {
 		/** Ordinary video. Nothing to convert, so the obvious destination. */
-		SDR(Bitmap.Config.ARGB_8888, ColorSpace.get(ColorSpace.Named.SRGB)),
+		SDR(Bitmap.Config.ARGB_8888),
 
 		/**
 		 * HDR video. Half-float so values above 1.0 survive, and tagged BT.2020 PQ because that is
 		 * what the Dolby Vision profiles the catalogue carries are encoded with.
 		 */
-		HDR(Bitmap.Config.RGBA_F16, ColorSpace.get(ColorSpace.Named.BT2020_PQ)),
+		HDR(Bitmap.Config.RGBA_F16),
+		;
+
+		/**
+		 * The colour space the values in the bitmap are in.
+		 *
+		 * The PQ name is looked up rather than written as a constant because
+		 * [ColorSpace.Named.BT2020_PQ] only exists from Android 14, and a direct reference to it
+		 * is a [NoSuchFieldError] on anything older - thrown while this enum is initialised, which
+		 * is before anything has decided it wants an HDR still. That took the whole feature down
+		 * on an SDR run.
+		 *
+		 * The lookup is by name over the enum's own constants, so it costs a small scan and needs
+		 * no version check.
+		 */
+		val colorSpace: ColorSpace
+			get() =
+				when (this) {
+					SDR -> ColorSpace.get(ColorSpace.Named.SRGB)
+
+					// Older than Android 14, so there is no PQ name to ask for. sRGB is a guess:
+					// the values are the display-referred ones the video layer wrote, which is what
+					// an untagged copy would have given anyway.
+					HDR -> pqColorSpace ?: ColorSpace.get(ColorSpace.Named.SRGB)
+				}
 	}
 
 	/**
@@ -158,3 +181,20 @@ internal class PixelCopyCapture {
  * stills of different sizes depending only on which one was picked.
  */
 private const val MAX_STILL_WIDTH = 1920
+
+/**
+ * BT.2020 with the PQ transfer function, if this device knows the name.
+ *
+ * [ColorSpace.Named.BT2020_PQ] is Android 14 and later. It cannot be written as a constant
+ * because the reference itself fails on anything older - and it fails while the enum that uses it
+ * is initialising, which is before any decision has been made about whether an HDR still is
+ * wanted at all. A device that has not heard of the name gets a null here and the SDR fallback.
+ *
+ * The lookup is over the enum's own constants rather than a version check, so there is one code
+ * path and no branch on the API level.
+ */
+private val pqColorSpace: ColorSpace? =
+	ColorSpace.Named
+		.values()
+		.firstOrNull { it.name == "BT2020_PQ" }
+		?.let { ColorSpace.get(it) }

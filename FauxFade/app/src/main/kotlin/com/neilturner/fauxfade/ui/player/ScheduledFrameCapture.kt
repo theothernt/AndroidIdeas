@@ -28,8 +28,11 @@ import kotlin.math.roundToInt
  * cost is paid once per capture instead of once per frame.
  *
  * The sequence:
- * 1. [captureAt] schedules a [PlayerMessage] at (target - lead). Messages are delivered on the
- *    player's application looper, which is the only thread allowed to touch the player.
+ * 1. [captureAt] schedules a [PlayerMessage] at (target - lead). The message is delivered on the
+ *    player's application looper, which is the only thread allowed to touch the player. That is
+ *    not the default: media3 gives a player message the *playback* looper, so the looper has to
+ *    be set explicitly or the target is called on the player's own thread, where every call
+ *    into the player throws.
  * 2. On delivery the effect is installed. Media3 builds the frame processor, an EGL context and
  *    the shader program here, which is why the lead time exists - it is the window in which the
  *    pipeline becomes ready to produce a frame.
@@ -39,6 +42,14 @@ import kotlin.math.roundToInt
  *    here rather than a reference handed out.
  * 4. Delivery is posted back to the application looper, which pauses the player and removes the
  *    effect. The player is never called from the processing thread.
+ *
+ * **Where guava comes from.** The two `com.google.common.util.concurrent` imports below are not
+ * ours: [ByteBufferGlEffect.Processor] declares [ListenableFuture] in its public signature, so
+ * implementing it means implementing a guava type. There is no guava dependency in this app's
+ * own build file, and there does not need to be: media3-common declares
+ * `com.google.guava:guava` as an *api* dependency, so it is on the compile classpath and the
+ * shipped dex either way. Verified by building both ways - the release dex is byte-for-byte
+ * identical with and without a direct guava dependency.
  *
  * One of these per player. The effect and its processor are per-player state because each player
  * has its own GL context and its own render thread.
@@ -90,6 +101,13 @@ internal class ScheduledFrameCapture(
 		// "after the last one" rather than "immediately".
 		val installAtMs = max(0L, targetPositionMs - LEAD_TIME_MS)
 		val msg = player.createMessage(this)
+		// The looper the target is called on. Media3's default for a player message is the
+		// *playback* looper, not the application looper, so without this the target runs on the
+		// player's own thread and the install below throws "Player is accessed on the wrong
+		// thread" - which takes the player down with it rather than just missing the still.
+		// Checked against the source of media3 1.11.1: ExoPlayerImpl.createMessageInternal passes
+		// internalPlayer.getPlaybackLooper() as the default looper.
+		msg.setLooper(handler.looper)
 		msg.setPosition(installAtMs)
 		msg.setDeleteAfterDelivery(true)
 		message = msg
