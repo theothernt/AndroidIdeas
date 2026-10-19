@@ -3,11 +3,13 @@ package com.neilturner.arrangethings.ui.editor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -32,8 +34,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
 import com.neilturner.arrangethings.model.OverlayConfig
+import com.neilturner.arrangethings.model.OverlayHeight
 import com.neilturner.arrangethings.model.OverlaySlot
-import com.neilturner.arrangethings.ui.overlays.OverlayVisual
+import com.neilturner.arrangethings.model.OverlayVariant
+import com.neilturner.arrangethings.model.OverlayWidth
+import com.neilturner.arrangethings.ui.overlays.OverlayContent
+import com.neilturner.arrangethings.ui.overlays.size
 
 /** Colour of the ring around the focused slot. */
 val FocusedRing = Color(0xFF7FD1FF)
@@ -44,10 +50,47 @@ val SlotBackground = Color(0xE6101014)
 /** Background of a slot that is empty. */
 val EmptySlotBackground = Color(0x14FFFFFF)
 
+/** The shape an empty slot takes. */
+private val EmptyWidth = OverlayWidth.Narrow
+private val EmptyHeight = OverlayHeight.SingleLine
+
+/**
+ * The content of a slot: the overlay and the chevron that says it can be changed.
+ *
+ * The menu draws a scaled down copy of this, so the preview in the menu looks exactly like the slot.
+ */
+@Composable
+fun OverlaySlotContent(
+	variant: OverlayVariant?,
+	modifier: Modifier = Modifier,
+	chevronColor: Color = Color(0x66FFFFFF)
+) {
+	Row(
+		modifier = modifier,
+		verticalAlignment = Alignment.CenterVertically
+	) {
+		Box(Modifier.weight(1f)) {
+			if (variant == null) {
+				Text(
+					text = "Empty",
+					color = Color(0x88FFFFFF),
+					fontSize = 15.sp,
+					maxLines = 1
+				)
+			} else {
+				OverlayContent(variant)
+			}
+		}
+		Spacer(Modifier.width(6.dp))
+		Text(text = "▾", color = chevronColor, fontSize = 13.sp, maxLines = 1)
+	}
+}
+
 /**
  * One of the eight slots of the layout.
  *
- * The slot is a button: selecting it opens the menu with the overlay types.
+ * The slot takes the shape the overlay declares, so the layout is stable and the editor never has to measure
+ * the content.
  */
 @Composable
 fun OverlaySlotCard(
@@ -70,11 +113,18 @@ fun OverlaySlotCard(
 		}
 	}
 
+	val variant = overlay?.variant
+	val width = variant?.width ?: EmptyWidth
+	val height = variant?.height ?: EmptyHeight
+
 	val shape = RoundedCornerShape(12.dp)
 	val scale = if (isFocused) 1.03f else 1f
 
 	Box(
 		modifier = modifier
+			.width(width.size)
+			.height(height.size)
+			// The focus requester has to sit in front of the focus target so that it can reach it.
 			.focusRequester(requester)
 			.onFocusChanged {
 				isFocused = it.isFocused
@@ -94,31 +144,15 @@ fun OverlaySlotCard(
 				scaleY = scale
 			}
 			.clip(shape)
-			.background(if (overlay == null) EmptySlotBackground else SlotBackground)
+			.background(if (variant == null) EmptySlotBackground else SlotBackground)
 			.border(if (isFocused) 2.dp else 1.dp, if (isFocused) FocusedRing else Color(0x33FFFFFF), shape)
-			.padding(horizontal = 10.dp, vertical = 8.dp)
+			.padding(horizontal = 8.dp, vertical = 6.dp)
 	) {
-		Row(
-			verticalAlignment = Alignment.CenterVertically,
-			horizontalArrangement = Arrangement.spacedBy(8.dp)
-		) {
-			if (overlay == null) {
-				Text(
-					text = "Empty",
-					color = Color(0x88FFFFFF),
-					fontSize = 15.sp,
-					modifier = Modifier.widthIn(min = 92.dp)
-				)
-			} else {
-				OverlayVisual(type = overlay.type)
-			}
-
-			Text(
-				text = "▾",
-				color = if (isFocused) FocusedRing else Color(0x66FFFFFF),
-				fontSize = 13.sp
-			)
-		}
+		OverlaySlotContent(
+			variant = variant,
+			modifier = Modifier.fillMaxSize(),
+			chevronColor = if (isFocused) FocusedRing else Color(0x66FFFFFF)
+		)
 	}
 }
 

@@ -20,11 +20,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.Button
 import androidx.tv.material3.Text
+import com.neilturner.arrangethings.logic.slotOverlay
 
 /**
  * The layout editor.
  *
- * Every one of the eight slots is a button that opens a menu with the overlay types.
+ * Every one of the eight slots is a button that opens a menu with the overlay it can show.
  */
 @Composable
 fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
@@ -35,59 +36,69 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 		viewModel.closeMenu()
 	}
 
-	Column(
-		modifier = Modifier
-			.fillMaxSize()
-			.padding(horizontal = 24.dp, vertical = 20.dp)
-	) {
-		Row(
-			modifier = Modifier.fillMaxWidth(),
-			verticalAlignment = Alignment.CenterVertically
-		) {
-			Text(text = "Arrange Things", fontSize = 30.sp)
-
-			Spacer(Modifier.weight(1f))
-
-			Button(
-				onClick = viewModel::reset,
-				enabled = !state.isMenuOpen
-			) {
-				Text(text = "Reset")
-			}
-		}
-
-		Spacer(Modifier.height(12.dp))
-
-		Box(
+	Box(modifier = Modifier.fillMaxSize()) {
+		Column(
 			modifier = Modifier
-				.fillMaxWidth()
-				.weight(1f)
+				.fillMaxSize()
+				.padding(horizontal = 24.dp, vertical = 20.dp)
 		) {
-			PreviewStage(
-				state = state,
-				onSlotFocused = viewModel::onSlotFocused,
-				onFocusTargetAchieved = viewModel::onFocusTargetAchieved,
-				onOpenMenu = viewModel::openMenu,
-				onChooseType = viewModel::chooseType,
-				onDismissMenu = viewModel::closeMenu,
-				modifier = Modifier.align(Alignment.Center)
+			Row(
+				modifier = Modifier.fillMaxWidth(),
+				verticalAlignment = Alignment.CenterVertically
+			) {
+				Text(text = "Arrange Things", fontSize = 30.sp)
+
+				Spacer(Modifier.weight(1f))
+
+				Button(
+					onClick = viewModel::reset,
+					enabled = !state.isMenuOpen
+				) {
+					Text(text = "Reset")
+				}
+			}
+
+			Spacer(Modifier.height(12.dp))
+
+			Box(
+				modifier = Modifier
+					.fillMaxWidth()
+					.weight(1f)
+			) {
+				PreviewStage(
+					state = state,
+					onSlotFocused = viewModel::onSlotFocused,
+					onFocusTargetAchieved = viewModel::onFocusTargetAchieved,
+					onOpenMenu = viewModel::openMenu,
+					modifier = Modifier.align(Alignment.Center)
+				)
+			}
+
+			Spacer(Modifier.height(12.dp))
+
+			Text(
+				text = state.statusMessage ?: "Select a slot to choose the overlay it shows",
+				fontSize = 15.sp,
+				color = Color(0xCCFFFFFF)
+			)
+
+			Spacer(Modifier.height(4.dp))
+
+			Text(
+				text = "D-pad: choose an overlay   -   Select: pick it   -   Back: close the menu",
+				fontSize = 13.sp,
+				color = Color(0x88FFFFFF)
 			)
 		}
 
-		Spacer(Modifier.height(12.dp))
-
-		Text(
-			text = state.statusMessage ?: "Select a slot to choose the overlay it shows",
-			fontSize = 15.sp,
-			color = Color(0xCCFFFFFF)
-		)
-
-		Spacer(Modifier.height(4.dp))
-
-		Text(
-			text = "D-pad: choose an overlay   -   Select: pick it   -   Back: close the menu",
-			fontSize = 13.sp,
-			color = Color(0x88FFFFFF)
-		)
+		val menuSlot = state.menuSlot
+		if (menuSlot != null) {
+			OverlayMenu(
+				slot = menuSlot,
+				currentVariant = slotOverlay(state.overlays, menuSlot.corner, menuSlot.order)?.variant,
+				onChoose = viewModel::chooseVariant,
+				onDismiss = viewModel::closeMenu
+			)
+		}
 	}
 }

@@ -27,7 +27,7 @@ import com.neilturner.arrangethings.logic.slotOverlay
 import com.neilturner.arrangethings.model.Corner
 import com.neilturner.arrangethings.model.OverlayConfig
 import com.neilturner.arrangethings.model.OverlaySlot
-import com.neilturner.arrangethings.model.OverlayType
+import com.neilturner.arrangethings.model.OverlayVariant
 import com.neilturner.arrangethings.model.SLOTS_PER_CORNER
 
 /** Colour of the area outside the safe area. */
@@ -51,8 +51,6 @@ fun PreviewStage(
 	onSlotFocused: (OverlaySlot) -> Unit,
 	onFocusTargetAchieved: (String) -> Unit,
 	onOpenMenu: (OverlaySlot) -> Unit,
-	onChooseType: (OverlayType?) -> Unit,
-	onDismissMenu: () -> Unit,
 	modifier: Modifier = Modifier
 ) {
 	val safeAreaShape = RoundedCornerShape(10.dp)
@@ -135,15 +133,6 @@ fun PreviewStage(
 				}
 			}
 		}
-
-		if (state.menuSlot != null) {
-			OverlayMenu(
-				slot = state.menuSlot,
-				currentType = slotOverlay(state.overlays, state.menuSlot.corner, state.menuSlot.order)?.type,
-				onChoose = onChooseType,
-				onDismiss = onDismissMenu
-			)
-		}
 	}
 }
 
@@ -194,15 +183,13 @@ private fun PreviewStagePreview() {
 	PreviewStage(
 		state = EditorUiState(
 			overlays = listOf(
-				OverlayConfig(OverlayType.Clock, Corner.TopStart, 0),
-				OverlayConfig(OverlayType.Weather, Corner.TopEnd, 0),
-				OverlayConfig(OverlayType.NowPlaying, Corner.BottomEnd, 1)
+				OverlayConfig(OverlayVariant.Clock, Corner.TopStart, 0),
+				OverlayConfig(OverlayVariant.WeatherNow, Corner.TopEnd, 0),
+				OverlayConfig(OverlayVariant.NowPlayingText, Corner.BottomEnd, 1)
 			)
 		),
 		onSlotFocused = {},
 		onFocusTargetAchieved = {},
-		onOpenMenu = {},
-		onChooseType = {},
-		onDismissMenu = {}
+		onOpenMenu = {}
 	)
 }
