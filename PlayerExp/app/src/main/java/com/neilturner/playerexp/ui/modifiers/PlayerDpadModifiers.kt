@@ -19,6 +19,10 @@ import android.view.KeyEvent as NativeKeyEvent
  * directional press should reveal the overlay rather than wander. Once it is up the press only
  * counts as activity, which restarts the auto-hide timer, and is left unconsumed.
  *
+ * Right is the one direction that does something of its own: it is the way from the video to the
+ * rail of buttons down the right-hand edge, so it hands the focus to [onMoveRight] as well as
+ * revealing the overlay.
+ *
  * A Back press while the overlay is visible is not handled here: the overlay draws nothing
  * focusable, so the press reaches the screen's back handler, which dismisses the overlay instead
  * of leaving playback.
@@ -33,17 +37,24 @@ import android.view.KeyEvent as NativeKeyEvent
  */
 fun Modifier.playerOverlayControls(
     controlsVisible: Boolean,
-    onRevealControls: () -> Unit
+    onRevealControls: () -> Unit,
+    onMoveRight: () -> Unit = {}
 ): Modifier = this
     .focusable()
     .onKeyEvent { keyEvent ->
         if (keyEvent.type != KeyEventType.KeyDown) {
             false
-        } else when (keyEvent.nativeKeyEvent.keyCode) {
-            NativeKeyEvent.KEYCODE_BACK, NativeKeyEvent.KEYCODE_ESCAPE -> false
-            else -> {
-                onRevealControls()
-                !controlsVisible
+        } else {
+            when (keyEvent.nativeKeyEvent.keyCode) {
+                NativeKeyEvent.KEYCODE_BACK, NativeKeyEvent.KEYCODE_ESCAPE -> false
+                NativeKeyEvent.KEYCODE_DPAD_RIGHT -> {
+                    onMoveRight()
+                    !controlsVisible
+                }
+                else -> {
+                    onRevealControls()
+                    !controlsVisible
+                }
             }
         }
     }

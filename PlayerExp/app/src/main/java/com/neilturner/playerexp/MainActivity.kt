@@ -18,6 +18,7 @@ import com.neilturner.playerexp.ui.screens.HomeScreen
 import com.neilturner.playerexp.ui.screens.PlayerScreen
 import com.neilturner.playerexp.ui.screens.PlexLibrariesScreen
 import com.neilturner.playerexp.ui.screens.PlexOnDeckScreen
+import com.neilturner.playerexp.ui.screens.PlexPlayerMockScreen
 import com.neilturner.playerexp.ui.screens.PlexPlayerScreen
 import com.neilturner.playerexp.ui.screens.PlexSettingsScreen
 import com.neilturner.playerexp.ui.screens.PlexShowScreen
@@ -49,6 +50,13 @@ data object PlexOnDeckRoute : PlayerExpRoute
 
 @Serializable
 data object PlexLibrariesRoute : PlayerExpRoute
+
+/**
+ * The player with a still picture behind it, for working on the chrome without a round trip to
+ * Plex and a transcode to wait for.
+ */
+@Serializable
+data object PlexPlayerMockRoute : PlayerExpRoute
 
 /**
  * A TV show opened from an episode card on On Deck, showing its seasons and full episode list.
@@ -89,6 +97,7 @@ class MainActivity : ComponentActivity() {
                                         backStack.add(PlayerRoute(mediaId))
                                     },
                                     onNavigateToPlexPlayer = { backStack.add(PlexPlayerRoute()) },
+                                    onNavigateToPlexPlayerMock = { backStack.add(PlexPlayerMockRoute) },
                                     onNavigateToPlexOnDeck = { backStack.add(PlexOnDeckRoute) },
                                     onNavigateToPlexLibraries = { backStack.add(PlexLibrariesRoute) },
                                     onNavigateToSettings = { backStack.add(PlexSettingsRoute) }
@@ -132,6 +141,9 @@ class MainActivity : ComponentActivity() {
                             }
                             entry<PlexLibrariesRoute> {
                                 PlexLibrariesScreen()
+                            }
+                            entry<PlexPlayerMockRoute> {
+                                PlexPlayerMockScreen(onBack = { backStack.removeLastOrNull() })
                             }
                         }
                     )

@@ -969,6 +969,11 @@ class PlexApi(private val clientIdentifier: String) {
                 mediaItem.part.orEmpty().firstOrNull { it.key != null }
             } ?: return@firstNotNullOfOrNull null
             val partKey = part.key ?: return@firstNotNullOfOrNull null
+            Log.d(
+                PLAYBACK_LOG_TAG,
+                "Metadata for ${item.ratingKey}: media=${item.media?.size}, " +
+                    "streams=${part.stream?.size}, types=${part.stream?.map { it.streamType }}"
+            )
             val subtitleStreams = part.stream.orEmpty()
                 .filter { it.isSupportedTextSubtitle() }
                 .mapNotNull { it.toSubtitleStream() }

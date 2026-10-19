@@ -15,6 +15,7 @@
     <string name="plex_retrying">Connection issue. Retrying…</string>
     <string name="back">Back</string>
     <string name="plex_player_button">Play random Plex episode</string>
+    <string name="plex_player_mock_button">Player mock (no Plex)</string>
     <string name="plex_not_authorised">You must authorise Plex first</string>
     <string name="plex_no_episodes">No TV show episodes found on your Plex server</string>
     <string name="plex_player_error">Could not load Plex episode: %1$s</string>
@@ -28,6 +29,12 @@
     <string name="plex_subtitles_off">Off</string>
     <string name="plex_select_audio">Select an audio track</string>
     <string name="plex_select_subtitles">Select subtitles</string>
+    <string name="plex_more_options">More options</string>
+    <string name="plex_playback_speed">Playback speed</string>
+    <string name="plex_stream_info">Stream info</string>
+    <string name="plex_stream_video">Video</string>
+    <string name="plex_stream_audio">Audio</string>
+    <string name="plex_stream_resolution">Resolution</string>
     <string name="plex_on_deck_button">Latest TV and Movies</string>
     <string name="plex_on_deck_continue_watching">Continue Watching</string>
     <string name="plex_on_deck_latest_episodes">Latest TV Episodes</string>
