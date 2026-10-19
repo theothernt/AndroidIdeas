@@ -1,13 +1,12 @@
 package com.neilturner.arrangethings.ui.editor
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -22,8 +21,8 @@ import androidx.tv.material3.Text
 /**
  * The layout editor.
  *
- * Everything is driven with the D-pad: the palette adds overlays, the preview moves them around and the panel
- * on the right removes them or swaps their order.
+ * Everything is driven with the D-pad: the palette adds overlays, the preview moves them around and the action
+ * row at the end of a corner cell removes them or swaps their order.
  */
 @Composable
 fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
@@ -41,13 +40,14 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 		PaletteRow(
 			enabled = !state.isFull,
 			onSelect = viewModel::addOverlay,
+			onReset = viewModel::reset,
 			onFocused = viewModel::onPaletteFocused,
 			modifier = Modifier.fillMaxWidth()
 		)
 
 		Spacer(Modifier.height(12.dp))
 
-		Row(
+		Box(
 			modifier = Modifier
 				.fillMaxWidth()
 				.weight(1f)
@@ -60,29 +60,24 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 				onDrop = viewModel::dropGrab,
 				onCancel = viewModel::cancelGrab,
 				onMove = viewModel::moveGrabbed,
-				modifier = Modifier.weight(1f)
-			)
-
-			Spacer(Modifier.width(16.dp))
-
-			ActionPanel(
-				state = state,
 				onRemove = viewModel::removeFocused,
 				onSwap = viewModel::swapFocused,
-				onReset = viewModel::reset,
-				modifier = Modifier.width(260.dp)
+				modifier = Modifier.align(Alignment.Center)
 			)
 		}
 
 		Spacer(Modifier.height(12.dp))
 
 		Text(
-			text = state.statusMessage
-				?: if (state.isFull) {
-					"All four corners are full - remove an overlay to add another"
-				} else {
-					"Select an overlay in the preview to pick it up"
-				},
+			text = buildString {
+				append(state.statusMessage ?: "Select an overlay in the preview to pick it up")
+				if (state.overlays.isEmpty()) {
+					append("   -   No overlays yet, add one from the palette above")
+				}
+				if (state.isFull) {
+					append("   -   All four corners are full, remove an overlay to add another")
+				}
+			},
 			fontSize = 15.sp,
 			color = Color(0xCCFFFFFF)
 		)
@@ -90,7 +85,7 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 		Spacer(Modifier.height(4.dp))
 
 		Text(
-			text = "D-pad: move   -   Select: pick up / drop   -   Back: cancel   -   Right from the right hand column: actions",
+			text = "D-pad: move   -   Select: pick up / drop   -   Back: cancel   -   Down: overlay actions",
 			fontSize = 13.sp,
 			color = Color(0x88FFFFFF)
 		)

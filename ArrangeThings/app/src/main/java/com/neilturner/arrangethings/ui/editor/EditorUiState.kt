@@ -1,7 +1,6 @@
 package com.neilturner.arrangethings.ui.editor
 
 import com.neilturner.arrangethings.logic.firstCornerWithSpace
-import com.neilturner.arrangethings.logic.overlaysInCorner
 import com.neilturner.arrangethings.model.OverlayConfig
 
 /** The whole state of the layout editor. */
@@ -27,8 +26,4 @@ data class EditorUiState(
 
 	/** True when every corner is full and no further overlay can be added. */
 	val isFull: Boolean get() = firstCornerWithSpace(overlays) == null
-
-	/** True when the focused overlay shares its corner with another one. */
-	val canSwapFocused: Boolean
-		get() = focusedOverlay?.let { overlaysInCorner(overlays, it.corner).size > 1 } ?: false
 }

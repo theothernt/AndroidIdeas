@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -59,6 +60,8 @@ fun PreviewStage(
 	onDrop: () -> Unit,
 	onCancel: () -> Unit,
 	onMove: (MoveDirection) -> Unit,
+	onRemove: () -> Unit,
+	onSwap: () -> Unit,
 	modifier: Modifier = Modifier
 ) {
 	val safeAreaShape = RoundedCornerShape(10.dp)
@@ -96,6 +99,8 @@ fun PreviewStage(
 						onDrop = onDrop,
 						onCancel = onCancel,
 						onMove = onMove,
+						onRemove = onRemove,
+						onSwap = onSwap,
 						modifier = Modifier
 							.weight(1f)
 							.fillMaxHeight()
@@ -109,6 +114,8 @@ fun PreviewStage(
 						onDrop = onDrop,
 						onCancel = onCancel,
 						onMove = onMove,
+						onRemove = onRemove,
+						onSwap = onSwap,
 						modifier = Modifier
 							.weight(1f)
 							.fillMaxHeight()
@@ -128,6 +135,8 @@ fun PreviewStage(
 						onDrop = onDrop,
 						onCancel = onCancel,
 						onMove = onMove,
+						onRemove = onRemove,
+						onSwap = onSwap,
 						modifier = Modifier
 							.weight(1f)
 							.fillMaxHeight()
@@ -141,6 +150,8 @@ fun PreviewStage(
 						onDrop = onDrop,
 						onCancel = onCancel,
 						onMove = onMove,
+						onRemove = onRemove,
+						onSwap = onSwap,
 						modifier = Modifier
 							.weight(1f)
 							.fillMaxHeight()
@@ -162,6 +173,8 @@ private fun CornerCell(
 	onDrop: () -> Unit,
 	onCancel: () -> Unit,
 	onMove: (MoveDirection) -> Unit,
+	onRemove: () -> Unit,
+	onSwap: () -> Unit,
 	modifier: Modifier = Modifier
 ) {
 	val overlays = overlaysInCorner(state.overlays, corner)
@@ -169,6 +182,10 @@ private fun CornerCell(
 	val isFull = overlays.size >= MAX_PER_CORNER
 	val showDropTarget = isGrabbing && overlays.isEmpty()
 	val showFull = isGrabbing && isFull
+
+	// The overlay the actions apply to, when it lives in this corner.
+	val target = state.focusedOverlay?.takeIf { it.corner == corner }
+	val canSwap = target != null && overlays.size > 1
 
 	val horizontalAlignment = when (corner) {
 		Corner.TopStart, Corner.BottomStart -> Alignment.Start
@@ -180,10 +197,14 @@ private fun CornerCell(
 	}
 	// The hint sits on the edge of the cell that the overlays do not use.
 	val hintAlignment = when (corner) {
-		Corner.TopStart -> Alignment.BottomStart
-		Corner.TopEnd -> Alignment.BottomEnd
-		Corner.BottomStart -> Alignment.TopStart
-		Corner.BottomEnd -> Alignment.TopEnd
+		Corner.TopStart -> Alignment.BottomEnd
+		Corner.TopEnd -> Alignment.BottomStart
+		Corner.BottomStart -> Alignment.TopEnd
+		Corner.BottomEnd -> Alignment.TopStart
+	}
+	val actionAlignment = when (corner) {
+		Corner.TopStart, Corner.BottomStart -> Alignment.BottomStart
+		Corner.TopEnd, Corner.BottomEnd -> Alignment.BottomEnd
 	}
 
 	Box(
@@ -217,7 +238,41 @@ private fun CornerCell(
 					onCancel = onCancel,
 					onMove = onMove
 				)
-				Spacer(Modifier.height(10.dp))
+				Spacer(Modifier.height(8.dp))
+			}
+
+			// The action row sits at the end of the cell. The space for it is always kept so that nothing
+			// moves when the actions appear.
+			Box(
+				modifier = Modifier.height(ActionRowHeight),
+				contentAlignment = Alignment.BottomStart
+			) {
+				if (target != null) {
+					Row(
+						modifier = Modifier.align(actionAlignment),
+						verticalAlignment = Alignment.Bottom
+					) {
+						Text(
+							text = target.type.displayName,
+							color = FocusedRing,
+							fontSize = 12.sp,
+							modifier = Modifier.padding(end = 10.dp)
+						)
+						MiniButton(
+							text = "Remove",
+							onClick = onRemove,
+							onFocused = { onOverlayFocused(target.id) }
+						)
+						if (canSwap) {
+							Spacer(Modifier.width(8.dp))
+							MiniButton(
+								text = "Swap",
+								onClick = onSwap,
+								onFocused = { onOverlayFocused(target.id) }
+							)
+						}
+					}
+				}
 			}
 		}
 

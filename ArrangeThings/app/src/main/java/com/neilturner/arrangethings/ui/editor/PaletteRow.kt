@@ -15,7 +15,7 @@ import androidx.tv.material3.Text
 import com.neilturner.arrangethings.model.OverlayType
 
 /**
- * The row of overlay types that can be added.
+ * The row of overlay types that can be added, followed by the reset action.
  *
  * The palette is disabled when every corner is full.
  */
@@ -23,6 +23,7 @@ import com.neilturner.arrangethings.model.OverlayType
 fun PaletteRow(
 	enabled: Boolean,
 	onSelect: (OverlayType) -> Unit,
+	onReset: () -> Unit,
 	onFocused: () -> Unit,
 	modifier: Modifier = Modifier
 ) {
@@ -42,6 +43,15 @@ fun PaletteRow(
 			) {
 				Text(text = type.displayName)
 			}
+		}
+
+		Button(
+			onClick = onReset,
+			modifier = Modifier
+				.padding(vertical = 4.dp)
+				.onFocusChanged { if (it.isFocused) onFocused() }
+		) {
+			Text(text = "Reset")
 		}
 	}
 }
