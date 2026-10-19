@@ -15,6 +15,8 @@ data class EditorUiState(
 	val focusedOverlayId: String? = null,
 	/** The overlay that should take focus next. */
 	val focusTargetId: String? = null,
+	/** The overlay that is waiting for a second confirmation before it is removed. */
+	val pendingRemovalId: String? = null,
 	/** Short message shown under the preview. */
 	val statusMessage: String? = null
 ) {

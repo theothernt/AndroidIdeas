@@ -261,7 +261,7 @@ private fun CornerCell(
 							modifier = Modifier.padding(end = 10.dp)
 						)
 						MiniButton(
-							text = "Remove",
+							text = if (state.pendingRemovalId == target.id) "Confirm?" else "Remove",
 							onClick = onRemove,
 							onFocused = { onOverlayFocused(target.id) }
 						)

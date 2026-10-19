@@ -70,6 +70,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 				originalConfig = added,
 				focusedOverlayId = id,
 				focusTargetId = id,
+				pendingRemovalId = null,
 				statusMessage = "Added ${type.displayName} - use the D-pad to place it"
 			)
 		}
@@ -87,6 +88,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 				grabbedId = id,
 				originalConfig = overlay,
 				focusedOverlayId = id,
+				pendingRemovalId = null,
 				statusMessage = "Picked up ${overlay.type.displayName} - Select to drop, Back to cancel"
 			)
 		}
@@ -100,6 +102,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 			it.copy(
 				grabbedId = null,
 				originalConfig = null,
+				pendingRemovalId = null,
 				statusMessage = "Dropped ${grabbed.type.displayName} in ${grabbed.corner.displayName}"
 			)
 		}
@@ -122,6 +125,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 				overlays = restored,
 				grabbedId = null,
 				originalConfig = null,
+				pendingRemovalId = null,
 				focusedOverlayId = original.id,
 				focusTargetId = original.id,
 				statusMessage = if (landed.corner == original.corner) {
@@ -155,6 +159,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 				overlays = updated,
 				focusedOverlayId = grabbed.id,
 				focusTargetId = grabbed.id,
+				pendingRemovalId = null,
 				statusMessage = "Moved to ${target.displayName}"
 			)
 		}
@@ -167,6 +172,16 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 		val current = _state.value
 		val target = current.focusedOverlay ?: return
 
+		if (current.pendingRemovalId != target.id) {
+			_state.update {
+				it.copy(
+					pendingRemovalId = target.id,
+					statusMessage = "Press Remove again to delete ${target.type.displayName}"
+				)
+			}
+			return
+		}
+
 		val updated = removeOverlay(current.overlays, target.id)
 		val nextFocus = focusNeighbour(updated, target)
 
@@ -177,6 +192,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 				originalConfig = null,
 				focusedOverlayId = nextFocus,
 				focusTargetId = nextFocus,
+				pendingRemovalId = null,
 				statusMessage = "Removed ${target.type.displayName}"
 			)
 		}
@@ -193,6 +209,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 				overlays = updated,
 				focusedOverlayId = target.id,
 				focusTargetId = target.id,
+				pendingRemovalId = null,
 				statusMessage = "Swapped the order in ${target.corner.displayName}"
 			)
 		}
@@ -207,6 +224,7 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 				originalConfig = null,
 				focusedOverlayId = null,
 				focusTargetId = null,
+				pendingRemovalId = null,
 				statusMessage = "Layout reset"
 			)
 		}
@@ -216,7 +234,13 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
 	/** Called when an overlay takes focus. */
 	fun onOverlayFocused(id: String) {
-		_state.update { it.copy(focusedOverlayId = id) }
+		_state.update {
+			if (it.focusedOverlayId == id) {
+				it
+			} else {
+				it.copy(focusedOverlayId = id, pendingRemovalId = null)
+			}
+		}
 	}
 
 	/**
