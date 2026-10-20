@@ -36,20 +36,22 @@ class MainActivity : ComponentActivity() {
 					modifier = Modifier.fillMaxSize(),
 					shape = RectangleShape,
 				) {
-					MainScreen(
-						isScreenSaverEnabled = isScreenSaverEnabled,
-						onPreviewDream = {
-							startActivity(Intent(this@MainActivity, DreamActivity::class.java))
-						},
-						onOpenDreamSettings = {
-							if (!openDreamSettings()) {
-								showSetupHelp = true
-							}
-						},
-					)
-
+					// The overlay replaces the screen rather than covering it, so that the buttons
+					// behind it cannot keep the focus.
 					if (showSetupHelp) {
 						SetupHelpOverlay(onDismiss = { showSetupHelp = false })
+					} else {
+						MainScreen(
+							isScreenSaverEnabled = isScreenSaverEnabled,
+							onPreviewDream = {
+								startActivity(Intent(this@MainActivity, DreamActivity::class.java))
+							},
+							onOpenDreamSettings = {
+								if (!openDreamSettings()) {
+									showSetupHelp = true
+								}
+							},
+						)
 					}
 				}
 			}
@@ -65,7 +67,7 @@ class MainActivity : ComponentActivity() {
 
 	/**
 	 * Opens the system screen saver settings. Returns false when the device does not have them,
-	 * which is the case on most Android TV builds.
+	 * which is the case on Google TV builds.
 	 */
 	private fun openDreamSettings(): Boolean =
 		try {

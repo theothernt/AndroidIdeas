@@ -7,8 +7,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -33,6 +36,11 @@ fun MainScreen(
 	onOpenDreamSettings: () -> Unit,
 	modifier: Modifier = Modifier,
 ) {
+	// The screen is shown again after the help overlay was dismissed, and the focus does not
+	// come back on its own then.
+	val firstButtonFocusRequester = remember { FocusRequester() }
+	FocusOnAppear(firstButtonFocusRequester)
+
 	Column(
 		modifier =
 			modifier
@@ -58,7 +66,10 @@ fun MainScreen(
 			color = if (isScreenSaverEnabled) Color(0xFF7BD88F) else Color.LightGray,
 			textAlign = TextAlign.Center,
 		)
-		Button(onClick = onPreviewDream) {
+		Button(
+			onClick = onPreviewDream,
+			modifier = Modifier.focusRequester(firstButtonFocusRequester),
+		) {
 			Text(text = stringResource(R.string.preview_dream))
 		}
 		Button(onClick = onOpenDreamSettings) {
@@ -74,6 +85,12 @@ fun MainScreen(
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
 fun SetupHelpOverlay(onDismiss: () -> Unit) {
+	// The overlay is opened from a button, so the focus is still on that button when the
+	// overlay appears. The OK button asks for the focus explicitly, otherwise the D-pad has to
+	// be used to find it.
+	val okButtonFocusRequester = remember { FocusRequester() }
+	FocusOnAppear(okButtonFocusRequester)
+
 	Box(
 		modifier =
 			Modifier
@@ -100,7 +117,10 @@ fun SetupHelpOverlay(onDismiss: () -> Unit) {
 				style = MaterialTheme.typography.bodyMedium,
 				textAlign = TextAlign.Center,
 			)
-			Button(onClick = onDismiss) {
+			Button(
+				onClick = onDismiss,
+				modifier = Modifier.focusRequester(okButtonFocusRequester),
+			) {
 				Text(text = stringResource(R.string.ok))
 			}
 		}

@@ -77,6 +77,10 @@ dependencies {
 	implementation(libs.androidx.compose.ui.tooling.preview)
 	implementation(libs.androidx.core.ktx)
 	implementation(libs.androidx.lifecycle.runtime.ktx)
+	// ExoPlayer for the screensaver, and the Compose bindings that draw the video on a
+	// SurfaceView.
+	implementation(libs.androidx.media3.exoplayer)
+	implementation(libs.androidx.media3.ui.compose)
 	implementation(libs.androidx.tv.foundation)
 	implementation(libs.androidx.tv.material)
 	androidTestImplementation(platform(libs.androidx.compose.bom))
