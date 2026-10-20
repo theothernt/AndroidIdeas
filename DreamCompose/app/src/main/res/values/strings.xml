@@ -1,3 +1,12 @@
 <resources>
     <string name="app_name">Dream Compose</string>
+    <string name="dream_name">Dream Compose</string>
+    <string name="dream_description">Shows the current time and a friendly message.</string>
+    <string name="preview_dream">Preview dream</string>
+    <string name="set_as_screensaver">Set as screen saver</string>
+    <string name="ok">OK</string>
+    <string name="screen_saver_enabled">Dream Compose is the active screen saver</string>
+    <string name="screen_saver_not_enabled">Dream Compose is not set as the screen saver</string>
+    <string name="dream_setup_help">This device has no screen saver settings screen. Enable the dream manually with:</string>
+    <string name="dream_setup_commands">adb shell settings put secure screensaver_components com.neilturner.dreamcompose/.dream.DreamService\nadb shell settings put secure screensaver_activate_on_sleep 1</string>
 </resources>
