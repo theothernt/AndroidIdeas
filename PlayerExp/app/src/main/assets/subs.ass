@@ -1,0 +1,17 @@
+[Script Info]
+; A subtitle file that sits beside the media rather than inside it, so that the way a
+; separate file is fetched and rendered can be seen against the one in the file itself.
+Title: Player Exp sidecar test
+ScriptType: v4.00+
+PlayResX: 640
+PlayResY: 360
+WrapStyle: 2
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Sidecar,Verdana,40,&H0000FFFF,&H000000FF,&H00202020,&H80000000,1,1,0,0,100,100,0,0,1,2,1,2,60,60,40,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+Dialogue: 0,0:00:00.50,0:00:24.00,Sidecar,,0,0,0,,{\pos(320,120)}SIDECAR FILE

@@ -39,6 +39,7 @@ import com.neilturner.playerexp.data.plex.PlexStreamMode
 import com.neilturner.playerexp.data.plex.PlexStreamPlayback
 import com.neilturner.playerexp.data.plex.PlexAudioStream
 import com.neilturner.playerexp.data.plex.PlexSubtitleStream
+import com.neilturner.playerexp.data.plex.subtitleConfiguration
 import com.neilturner.playerexp.data.plex.SessionCleanup
 import com.neilturner.playerexp.data.plex.SessionCleanupManager
 import com.neilturner.playerexp.ui.player.AssSubtitleSupport
@@ -308,7 +309,14 @@ class PlexPlayerViewModel(
                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                 .build()
 
-            p.setMediaItem(MediaItem.fromUri(playbackPlan.url))
+            p.setMediaItem(
+                mediaItemFor(
+                    url = playbackPlan.url,
+                    episode = selectedEpisode,
+                    serverUrl = serverUrl,
+                    attachExternalSubtitles = playbackPlan is PlexPlaybackPlan.DirectPlay
+                )
+            )
             // A seek set before prepare is where playback opens: ExoPlayer holds it as the start
             // position, so playWhenReady begins mid-episode rather than at the first frame.
             val resumeAtMillis = selectedEpisode.viewOffset
@@ -322,6 +330,37 @@ class PlexPlayerViewModel(
         } catch (e: Exception) {
             failToStart(e)
         }
+    }
+
+    /**
+     * The media to play, with the subtitle files that sit beside it attached.
+     *
+     * A subtitle that is a file of its own rather than a track inside the media is a separate
+     * thing that Plex serves at an address of its own, so the player has to be told about it or
+     * it will never turn up as a track at all. The files are only attached for a direct play:
+     * when Plex transcodes it has already folded the chosen subtitle into the stream it sends,
+     * and attaching the file as well would show it twice.
+     */
+    private fun mediaItemFor(
+        url: String,
+        episode: PlexEpisode?,
+        serverUrl: String?,
+        attachExternalSubtitles: Boolean
+    ): MediaItem {
+        val builder = MediaItem.Builder().setUri(url)
+        if (attachExternalSubtitles && episode != null && serverUrl != null) {
+            val configurations = episode.subtitleStreams
+                .mapNotNull { it.subtitleConfiguration(serverUrl) }
+            if (configurations.isNotEmpty()) {
+                builder.setSubtitleConfigurations(configurations)
+                Log.d(
+                    PLAYBACK_LOG_TAG,
+                    "Attached ${configurations.size} subtitle files: " +
+                        configurations.joinToString { it.id ?: "" }
+                )
+            }
+        }
+        return builder.build()
     }
 
     /** Resolves and caches the server URL, reporting the missing-server case itself. */
@@ -426,7 +465,14 @@ class PlexPlayerViewModel(
                     sessionIdentifier = newSessionIdentifier
                 )
 
-                p.setMediaItem(MediaItem.fromUri(newPlan.url))
+                p.setMediaItem(
+                    mediaItemFor(
+                        url = newPlan.url,
+                        episode = episode,
+                        serverUrl = serverUrl,
+                        attachExternalSubtitles = newPlan is PlexPlaybackPlan.DirectPlay
+                    )
+                )
                 if (currentPos > 0L) {
                     p.seekTo(currentPos)
                 }
@@ -504,7 +550,14 @@ class PlexPlayerViewModel(
                     sessionIdentifier = newSessionIdentifier
                 )
 
-                p.setMediaItem(MediaItem.fromUri(newPlan.url))
+                p.setMediaItem(
+                    mediaItemFor(
+                        url = newPlan.url,
+                        episode = episode,
+                        serverUrl = serverUrl,
+                        attachExternalSubtitles = newPlan is PlexPlaybackPlan.DirectPlay
+                    )
+                )
                 if (currentPos > 0L) {
                     p.seekTo(currentPos)
                 }
@@ -532,26 +585,43 @@ class PlexPlayerViewModel(
             builder.clearOverridesOfType(C.TRACK_TYPE_TEXT)
             chosenStream.languageCode?.let { builder.setPreferredTextLanguage(it) }
 
-            val tracks = player.currentTracks
-            for (group in tracks.groups) {
-                if (group.type == C.TRACK_TYPE_TEXT) {
-                    for (i in 0 until group.length) {
-                        val format = group.getTrackFormat(i)
-                        val matchesId = format.id == chosenStream.id.toString()
-                        val matchesLang = chosenStream.languageCode != null &&
-                            format.language.equals(chosenStream.languageCode, ignoreCase = true)
-                        if (matchesId || matchesLang) {
-                            builder.setOverrideForType(
-                                TrackSelectionOverride(group.mediaTrackGroup, i)
-                            )
-                            break
-                        }
+            // The id is what says which of the tracks in the same language was asked for, so it
+            // is looked for first: a file attached to the media carries the Plex stream id as
+            // its own, and the language alone cannot tell two tracks of the same language
+            // apart. The language is the fallback for the tracks that are inside the media,
+            // where the id is the track's number in the file rather than Plex's id for it.
+            //
+            // The id of a track that came in beside the media is prefixed with the source it
+            // came from — "1:264366" — because the media and the subtitles are merged into
+            // one, so only the part after the colon is the id that was given.
+            val groups = player.currentTracks.groups.filter { it.type == C.TRACK_TYPE_TEXT }
+            val byId = groups.firstNotNullOfOrNull { group ->
+                (0 until group.length)
+                    .firstOrNull { index ->
+                        group.getTrackFormat(index).id.afterColon() == chosenStream.id.toString()
                     }
-                }
+                    ?.let { index -> group to index }
+            }
+            val byLanguage = groups.firstNotNullOfOrNull { group ->
+                (0 until group.length)
+                    .firstOrNull { index ->
+                        val format = group.getTrackFormat(index)
+                        chosenStream.languageCode != null &&
+                            format.language.equals(chosenStream.languageCode, ignoreCase = true)
+                    }
+                    ?.let { index -> group to index }
+            }
+            val match = byId ?: byLanguage
+            if (match != null) {
+                builder.setOverrideForType(
+                    TrackSelectionOverride(match.first.mediaTrackGroup, match.second)
+                )
             }
         }
         player.trackSelectionParameters = builder.build()
     }
+
+    private fun String?.afterColon(): String = this?.substringAfter(":") ?: ""
 
     fun releasePlayer() {
         val currentPlayer = player

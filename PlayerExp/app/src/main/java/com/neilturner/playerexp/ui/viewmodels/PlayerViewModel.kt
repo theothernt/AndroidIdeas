@@ -1,12 +1,14 @@
 package com.neilturner.playerexp.ui.viewmodels
 
 import android.app.Application
+import android.net.Uri
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
 import androidx.media3.common.Tracks
@@ -22,6 +24,9 @@ sealed interface PlayerUiState {
     data object Idle : PlayerUiState
     data class Ready(val title: String) : PlayerUiState
 }
+
+/** The id the subtitle file that sits beside the media is given. */
+private const val SIDECAR_TRACK_ID = "42"
 
 class PlayerViewModel(
     application: Application
@@ -46,12 +51,17 @@ class PlayerViewModel(
             player = it
             it.addListener(object : Player.Listener {
                 override fun onTracksChanged(tracks: Tracks) {
-                    selectFirstTextTrack(it, tracks)
+                    selectTextTrack(it, tracks, SIDECAR_TRACK_ID)
                 }
             })
         }
 
-        val mediaItem = MediaItem.fromUri(source.uri)
+        // The test file has an ASS track inside it, and a second one beside it, so that both
+        // ways of arriving at a subtitle are exercised.
+        val mediaItem = MediaItem.Builder()
+            .setUri(source.uri)
+            .setSubtitleConfigurations(listOf(sidecarSubtitle()))
+            .build()
 
         p.setMediaItem(mediaItem)
         p.prepare()
@@ -61,17 +71,45 @@ class PlayerViewModel(
     }
 
     /**
-     * Switches on the first text track in the file.
+     * A subtitle file that sits beside the media rather than inside it.
      *
-     * The ASS track in the test file is not marked as the default one, so the player would
-     * otherwise leave it switched off and there would be nothing to look at.
+     * This is the shape a Plex subtitle file of its own arrives in: a separate thing at its own
+     * address, which the player has to be told about, and which it is fetched from with the same
+     * credentials as the media. The id is the stream's own, so that the track the player ends up
+     * with can be matched back to the one that was asked for.
      */
-    private fun selectFirstTextTrack(player: Player, tracks: Tracks) {
-        val textGroup = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_TEXT } ?: return
-        if (textGroup.length == 0) return
+    private fun sidecarSubtitle(): MediaItem.SubtitleConfiguration =
+        MediaItem.SubtitleConfiguration.Builder(Uri.parse("asset:///subs.ass"))
+            .setMimeType(MimeTypes.TEXT_SSA)
+            .setId(SIDECAR_TRACK_ID)
+            .setLanguage("eng")
+            .setLabel("English")
+            .build()
+
+    /**
+     * Switches on the text track with the given id.
+     *
+     * The track that came in beside the media has its id prefixed with the source it came
+     * from, because the media and the subtitles are merged into one, so only the part after
+     * the colon is the id that was given.
+     */
+    private fun selectTextTrack(player: Player, tracks: Tracks, wantedId: String) {
+        // The tracks arrive in more than one group: a track that came in beside the media is in a
+        // group of its own, so every group has to be looked at.
+        val match = tracks.groups
+            .filter { it.type == C.TRACK_TYPE_TEXT }
+            .firstNotNullOfOrNull { group ->
+                (0 until group.length)
+                    .firstOrNull { i ->
+                        group.getTrackFormat(i).id?.substringAfter(":") == wantedId
+                    }
+                    ?.let { i -> group to i }
+            } ?: return
         player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            .setOverrideForType(TrackSelectionOverride(textGroup.mediaTrackGroup, 0))
+            .setOverrideForType(
+                TrackSelectionOverride(match.first.mediaTrackGroup, match.second)
+            )
             .build()
     }
 

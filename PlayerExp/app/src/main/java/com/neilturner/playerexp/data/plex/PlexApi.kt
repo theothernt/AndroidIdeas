@@ -1,7 +1,11 @@
 package com.neilturner.playerexp.data.plex
 
+import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.Immutable
+import androidx.media3.common.C
+import androidx.media3.common.MediaItem
+import androidx.media3.common.MimeTypes
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.engine.okhttp.OkHttp
@@ -230,6 +234,8 @@ data class PlexMediaStream(
     val id: Long? = null,
     val streamType: Int? = null,
     val codec: String? = null,
+    /** The format of a subtitle file that sits beside the media, where there is one. */
+    val format: String? = null,
     val language: String? = null,
     val languageCode: String? = null,
     val default: Boolean? = null,
@@ -237,6 +243,7 @@ data class PlexMediaStream(
     val displayTitle: String? = null,
     val extendedDisplayTitle: String? = null,
     val title: String? = null,
+    /** Where a subtitle file of its own can be fetched, when it is not a track in the media. */
     val key: String? = null,
     val width: Int? = null,
     val height: Int? = null,
@@ -255,8 +262,29 @@ data class PlexSubtitleStream(
     val title: String? = null,
     val displayTitle: String? = null,
     /** The longer name Plex gives the track: the variant, the language and the codec. */
-    val extendedDisplayTitle: String? = null
+    val extendedDisplayTitle: String? = null,
+    /** Where a subtitle file of its own can be fetched, when it is not a track in the media. */
+    val key: String? = null,
+    /** The format of a subtitle file of its own, where there is one: "srt", "ass", "vtt". */
+    val format: String? = null
 ) {
+    /** Whether the subtitle is a file beside the media rather than a track inside it. */
+    val isExternal: Boolean get() = !key.isNullOrBlank()
+
+    /**
+     * The media type the subtitle is played as, or null when its format is one that cannot be
+     * played: the picture-based ones, and the ones that would need converting first.
+     */
+    val mimeType: String?
+        get() = when (format?.lowercase() ?: codec?.lowercase()) {
+            "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
+            "ass", "ssa" -> MimeTypes.TEXT_SSA
+            "vtt", "webvtt" -> MimeTypes.TEXT_VTT
+            "ttml", "dfxp" -> MimeTypes.APPLICATION_TTML
+            "tx3g" -> MimeTypes.APPLICATION_TX3G
+            else -> null
+        }
+
     val label: String
         get() {
             val name = displayTitle?.takeIf { it.isNotBlank() }
@@ -296,8 +324,45 @@ internal fun PlexMediaStream.toSubtitleStream(): PlexSubtitleStream? {
         isDefault = default ?: false,
         title = title,
         displayTitle = displayTitle,
-        extendedDisplayTitle = extendedDisplayTitle
+        extendedDisplayTitle = extendedDisplayTitle,
+        key = key,
+        format = format
     )
+}
+
+/**
+ * Where a subtitle file of its own can be fetched from, or null when there is not one that can
+ * be played: a track inside the media has no file, and a format that cannot be played is no use.
+ */
+internal fun PlexSubtitleStream.externalSubtitleUrl(serverUrl: String): String? {
+    val path = key?.takeIf { it.isNotBlank() } ?: return null
+    if (mimeType == null) return null
+    return if (path.startsWith("http")) {
+        path
+    } else {
+        "${serverUrl.trimEnd('/')}$path"
+    }
+}
+
+/**
+ * The player's own description of a subtitle file that sits beside the media.
+ *
+ * Plex serves such a file at an address of its own, so the player has to be told about it or it
+ * will never turn up as a track. The id is the Plex stream id, so that the track the player ends
+ * up with can be matched back to the one that was asked for.
+ */
+internal fun PlexSubtitleStream.subtitleConfiguration(
+    serverUrl: String
+): MediaItem.SubtitleConfiguration? {
+    val url = externalSubtitleUrl(serverUrl) ?: return null
+    val mime = mimeType ?: return null
+    return MediaItem.SubtitleConfiguration.Builder(Uri.parse(url))
+        .setMimeType(mime)
+        .setId(id.toString())
+        .setLanguage(languageCode ?: language)
+        .setLabel(title ?: language ?: "")
+        .setSelectionFlags(if (isDefault) C.SELECTION_FLAG_DEFAULT else 0)
+        .build()
 }
 
 private val UNSUPPORTED_SUBTITLE_CODECS = setOf(
@@ -998,6 +1063,13 @@ class PlexApi(private val clientIdentifier: String) {
                 PLAYBACK_LOG_TAG,
                 "Metadata for ${item.ratingKey} '${item.title}': media=${item.media?.size}, " +
                     "streams=${part.stream?.size}, types=${part.stream?.map { it.streamType }}"
+            )
+            // The subtitles, and whether each one is in the file or beside it: a stream with a
+            // key is a separate file that has to be fetched, one without is a track in the file.
+            Log.d(
+                PLAYBACK_LOG_TAG,
+                "  subtitles: " + part.stream.orEmpty().filter { it.streamType == 3 }
+                    .joinToString { "${it.id}:${it.codec}${it.key?.let { key -> "@$key" } ?: ""}" }
             )
             val subtitleStreams = part.stream.orEmpty()
                 .filter { it.isSupportedTextSubtitle() }
