@@ -3,6 +3,7 @@ package com.neilturner.dreamcompose.dream
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
 import android.service.dreams.DreamService
+import android.util.Log
 import android.view.ViewGroup
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -11,6 +12,12 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.neilturner.dreamcompose.ui.screens.DreamScreen
 import com.neilturner.dreamcompose.ui.theme.DreamComposeTheme
+
+/**
+ * The tag of the logs about the life of the dream itself, so that they can be followed on their
+ * own with `adb logcat -s DreamCompose`.
+ */
+private const val TAG = "DreamCompose"
 
 /**
  * The screensaver for this app.
@@ -25,6 +32,8 @@ class DreamService : DreamService() {
 
 	override fun onAttachedToWindow() {
 		super.onAttachedToWindow()
+
+		Log.i(TAG, "Dream attached to the window")
 
 		isInteractive = false
 		isFullscreen = true
@@ -58,6 +67,7 @@ class DreamService : DreamService() {
 	}
 
 	override fun onDetachedFromWindow() {
+		Log.i(TAG, "Dream detached from the window")
 		composeView?.setContent { }
 		composeView = null
 		host?.stop()
