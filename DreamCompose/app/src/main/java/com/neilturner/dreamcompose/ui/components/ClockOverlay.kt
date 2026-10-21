@@ -60,8 +60,9 @@ internal fun ClockOverlay(
 			text = time,
 			modifier =
 				Modifier
+					.glow(RoundedCornerShape(10.dp))
 					.background(
-						color = Color.Black.copy(alpha = 0.8f),
+						color = Color.Black.copy(alpha = PANEL_ALPHA),
 						shape = RoundedCornerShape(10.dp),
 					).padding(horizontal = 12.dp, vertical = 6.dp),
 			color = Color.White,

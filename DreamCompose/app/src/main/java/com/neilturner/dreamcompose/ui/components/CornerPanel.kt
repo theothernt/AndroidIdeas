@@ -13,6 +13,9 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
@@ -29,6 +32,36 @@ internal const val SLIDE_DURATION_MS = 1000
  * How long the fade in and the fade out of a panel take.
  */
 internal const val FADE_DURATION_MS = 600
+
+/**
+ * The colour of the glow around the clock and the countdown.
+ *
+ * It is not fully opaque, because a wide glow at full brightness reads as a hard ring rather
+ * than the haze it is meant to be.
+ */
+internal val GLOW_COLOUR = Color.White.copy(alpha = 0.4f)
+
+/**
+ * How opaque the background of the clock and the countdown is.
+ */
+internal const val PANEL_ALPHA = 0.5f
+
+/**
+ * How far the glow reaches out from the panel. This is the radius of the blur it is drawn with,
+ * so a bigger one is a wider, softer halo.
+ */
+internal val GLOW_ELEVATION = 40.dp
+
+/**
+ * The glow around a panel, in the shape of the panel.
+ */
+internal fun Modifier.glow(shape: Shape) =
+	shadow(
+		elevation = GLOW_ELEVATION,
+		shape = shape,
+		ambientColor = GLOW_COLOUR,
+		spotColor = GLOW_COLOUR,
+	)
 
 /**
  * A panel in a corner of the screen that slides in from off-screen.
