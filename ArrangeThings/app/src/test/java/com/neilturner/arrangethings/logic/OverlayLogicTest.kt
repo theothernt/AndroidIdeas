@@ -113,7 +113,7 @@ class OverlayLogicTest {
 
 	@Test
 	fun `metadata keeps the configuration it was given`() {
-		val config = MetadataConfig(setOf(MetadataField.Iso, MetadataField.Place))
+		val config = MetadataConfig(listOf(MetadataField.Iso, MetadataField.Place))
 		val overlays = setSlot(emptyList(), Corner.TopStart, 0, OverlayVariant.Metadata, config)
 
 		assertEquals(config, slotOverlay(overlays, Corner.TopStart, 0)?.metadata)
@@ -134,7 +134,7 @@ class OverlayLogicTest {
 			Corner.TopStart,
 			0,
 			OverlayVariant.Metadata,
-			MetadataConfig(setOf(MetadataField.Iso))
+			MetadataConfig(listOf(MetadataField.Iso))
 		)
 		overlays = setSlot(overlays, Corner.TopStart, 0, OverlayVariant.Clock)
 
@@ -148,7 +148,7 @@ class OverlayLogicTest {
 			Corner.TopStart,
 			0,
 			OverlayVariant.Clock,
-			MetadataConfig(setOf(MetadataField.Iso))
+			MetadataConfig(listOf(MetadataField.Iso))
 		)
 
 		assertNull(slotOverlay(overlays, Corner.TopStart, 0)?.metadata)
@@ -156,8 +156,8 @@ class OverlayLogicTest {
 
 	@Test
 	fun `per slot metadata is independent`() {
-		val first = MetadataConfig(setOf(MetadataField.CameraMake))
-		val second = MetadataConfig(setOf(MetadataField.Place))
+		val first = MetadataConfig(listOf(MetadataField.Iso))
+		val second = MetadataConfig(listOf(MetadataField.Place))
 
 		var overlays = setSlot(emptyList(), Corner.TopStart, 0, OverlayVariant.Metadata, first)
 		overlays = setSlot(overlays, Corner.TopStart, 1, OverlayVariant.Metadata, second)

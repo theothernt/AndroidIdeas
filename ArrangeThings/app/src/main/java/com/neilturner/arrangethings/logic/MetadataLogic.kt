@@ -1,55 +1,67 @@
 package com.neilturner.arrangethings.logic
 
-import com.neilturner.arrangethings.model.MAX_METADATA_FIELDS
-import com.neilturner.arrangethings.model.MetadataCategory
 import com.neilturner.arrangethings.model.MetadataConfig
 import com.neilturner.arrangethings.model.MetadataField
 
-/** A category and the fields of it that are selected, in canonical order. */
-data class MetadataSection(
-	val category: MetadataCategory,
-	val fields: List<MetadataField>
-)
-
-/** The sections of a config, in category order, skipping empty categories. */
-fun metadataSections(config: MetadataConfig): List<MetadataSection> =
-	MetadataCategory.entries.mapNotNull { category ->
-		val fields = selectedFields(config, category)
-		if (fields.isEmpty()) null else MetadataSection(category, fields)
-	}
-
-/** The selected fields of a category, in canonical order. */
-fun selectedFields(config: MetadataConfig, category: MetadataCategory): List<MetadataField> =
-	MetadataField.entries.filter { it.category == category && it in config.fields }
+/** The selected fields of a config, in the order the overlay draws them. */
+fun selectedFields(config: MetadataConfig): List<MetadataField> = config.fields
 
 /**
  * Toggles one field.
  *
- * A field is never added when the config already holds the maximum number of fields.
+ * A field that is not shown is appended to the end, so the order in the preview decides where it
+ * appears in the overlay.
  */
 fun toggleField(config: MetadataConfig, field: MetadataField): MetadataConfig {
 	val fields = config.fields
-	return when {
-		field in fields -> config.copy(fields = fields - field)
-		fields.size >= MAX_METADATA_FIELDS -> config
-		else -> config.copy(fields = fields + field)
+	return if (field in fields) {
+		config.copy(fields = fields - field)
+	} else {
+		config.copy(fields = fields + field)
 	}
 }
 
 /**
- * Toggles every field of a category.
+ * Moves a field one place to the left (negative delta) or right (positive delta).
  *
- * A fully selected category is cleared. An empty or partially selected category is completed,
- * up to the maximum number of fields.
+ * A move that would leave the list changes nothing.
  */
-fun toggleCategory(config: MetadataConfig, category: MetadataCategory): MetadataConfig {
-	val all = MetadataField.entries.filter { it.category == category }
-	val selected = all.filter { it in config.fields }
-	if (selected.size == all.size) return config.copy(fields = config.fields - all.toSet())
+fun moveField(config: MetadataConfig, field: MetadataField, delta: Int): MetadataConfig {
+	val fields = config.fields
+	val from = fields.indexOf(field)
+	if (from < 0) return config
 
-	val room = MAX_METADATA_FIELDS - config.fields.size
-	if (room <= 0) return config
+	val to = (from + delta).coerceIn(0, fields.lastIndex)
+	if (from == to) return config
 
-	val missing = all.filterNot { it in config.fields }.take(room)
-	return config.copy(fields = config.fields + missing)
+	val reordered = fields.toMutableList()
+	reordered.removeAt(from)
+	reordered.add(to, field)
+	return config.copy(fields = reordered)
+}
+
+/** The field with a given stored name, including the names used by older versions. */
+fun metadataFieldFromName(name: String): MetadataField? {
+	if (name.equals("Shutter", ignoreCase = true)) return MetadataField.ShutterSpeed
+
+	return MetadataField.entries.firstOrNull { it.name.equals(name, ignoreCase = true) }
+}
+
+/**
+ * Turns stored field names into a config.
+ *
+ * Names that no longer map to a field are dropped. An empty stored list means the user cleared
+ * every field, but a list that maps to nothing at all comes from an older default and falls back to
+ * the current defaults.
+ */
+fun metadataConfigFromNames(names: List<String>): MetadataConfig {
+	val fields = names.mapNotNull(::metadataFieldFromName).distinct()
+
+	return MetadataConfig(
+		fields = if (fields.isEmpty() && names.isNotEmpty()) {
+			MetadataConfig.DEFAULT_FIELDS
+		} else {
+			fields
+		}
+	)
 }

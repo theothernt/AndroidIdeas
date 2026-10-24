@@ -30,9 +30,13 @@ import com.neilturner.arrangethings.logic.slotOverlay
 fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 	val state by viewModel.state.collectAsStateWithLifecycle()
 
-	// Back closes the metadata setup or the overlay menu instead of leaving the app.
+	// Back drops a held metadata chip first, then closes the setup or the overlay menu.
 	BackHandler(enabled = state.isMetadataEditorOpen) {
-		viewModel.cancelMetadata()
+		if (state.metadataEditor?.pickedUp != null) {
+			viewModel.dropMetadataPickup()
+		} else {
+			viewModel.cancelMetadata()
+		}
 	}
 
 	BackHandler(enabled = state.isMenuOpen) {
@@ -97,9 +101,10 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 		if (metadataEditor != null) {
 			MetadataSetupScreen(
 				editor = metadataEditor,
-				onShowCategory = viewModel::showMetadataCategory,
 				onToggleField = viewModel::toggleMetadataField,
-				onToggleCategory = viewModel::toggleMetadataCategory,
+				onTogglePickup = viewModel::toggleMetadataPickup,
+				onMoveField = viewModel::moveMetadataField,
+				onDropPickup = viewModel::dropMetadataPickup,
 				onDefaults = viewModel::resetMetadataDraft,
 				onCancel = viewModel::cancelMetadata,
 				onApply = viewModel::applyMetadata

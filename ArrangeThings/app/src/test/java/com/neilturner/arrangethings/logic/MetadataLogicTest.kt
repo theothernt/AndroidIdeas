@@ -1,164 +1,160 @@
 package com.neilturner.arrangethings.logic
 
-import com.neilturner.arrangethings.model.MAX_METADATA_FIELDS
-import com.neilturner.arrangethings.model.MetadataCategory
 import com.neilturner.arrangethings.model.MetadataConfig
 import com.neilturner.arrangethings.model.MetadataField
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertTrue
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 class MetadataLogicTest {
 
-	private fun fieldsOf(category: MetadataCategory): List<MetadataField> =
-		MetadataField.entries.filter { it.category == category }
-
 	@Test
-	fun `default config holds eight fields`() {
-		assertEquals(MAX_METADATA_FIELDS, MetadataConfig.Default.fields.size)
+	fun `default config holds the five fields in display order`() {
+		assertEquals(MetadataField.entries.toList(), MetadataConfig.Default.fields)
 	}
 
 	@Test
-	fun `sections are in category order`() {
+	fun `selected fields keep the order of the config`() {
 		val config = MetadataConfig(
-			setOf(MetadataField.Place, MetadataField.Iso, MetadataField.CameraMake)
+			listOf(MetadataField.Place, MetadataField.Iso, MetadataField.ShutterSpeed)
 		)
 
 		assertEquals(
-			listOf(
-				MetadataCategory.Camera,
-				MetadataCategory.Exposure,
-				MetadataCategory.Location
-			),
-			metadataSections(config).map { it.category }
+			listOf(MetadataField.Place, MetadataField.Iso, MetadataField.ShutterSpeed),
+			selectedFields(config)
 		)
 	}
 
 	@Test
-	fun `sections skip empty categories`() {
-		val config = MetadataConfig(setOf(MetadataField.Iso))
-
-		assertEquals(listOf(MetadataCategory.Exposure), metadataSections(config).map { it.category })
-	}
-
-	@Test
-	fun `sections list their fields in canonical order`() {
-		val config = MetadataConfig(
-			setOf(
-				MetadataField.Shutter,
-				MetadataField.Iso,
-				MetadataField.Aperture
-			)
-		)
-
-		assertEquals(
-			listOf(MetadataField.Iso, MetadataField.Aperture, MetadataField.Shutter),
-			metadataSections(config).single().fields
-		)
-	}
-
-	@Test
-	fun `an empty config has no sections`() {
-		assertTrue(metadataSections(MetadataConfig(emptySet())).isEmpty())
-	}
-
-	@Test
-	fun `selected fields only returns the fields of the category`() {
-		val config = MetadataConfig(
-			setOf(MetadataField.Iso, MetadataField.Place, MetadataField.CameraMake)
-		)
-
-		assertEquals(
-			listOf(MetadataField.CameraMake),
-			selectedFields(config, MetadataCategory.Camera)
-		)
+	fun `an empty config has no selected fields`() {
+		assertEquals(emptyList<MetadataField>(), selectedFields(MetadataConfig(emptyList())))
 	}
 
 	// --- field toggles -----------------------------------------------------------------------
 
 	@Test
-	fun `toggling a field adds it`() {
-		val config = MetadataConfig(setOf(MetadataField.CameraMake))
-		val updated = toggleField(config, MetadataField.Iso)
+	fun `toggling a field appends it`() {
+		val config = MetadataConfig(listOf(MetadataField.Iso))
+		val updated = toggleField(config, MetadataField.Place)
 
-		assertEquals(setOf(MetadataField.CameraMake, MetadataField.Iso), updated.fields)
+		assertEquals(listOf(MetadataField.Iso, MetadataField.Place), updated.fields)
 	}
 
 	@Test
 	fun `toggling a selected field removes it`() {
-		val config = MetadataConfig(setOf(MetadataField.CameraMake, MetadataField.Iso))
-		val updated = toggleField(config, MetadataField.CameraMake)
+		val config = MetadataConfig(listOf(MetadataField.Iso, MetadataField.Place))
+		val updated = toggleField(config, MetadataField.Iso)
 
-		assertEquals(setOf(MetadataField.Iso), updated.fields)
+		assertEquals(listOf(MetadataField.Place), updated.fields)
 	}
 
 	@Test
-	fun `toggling a field at the limit changes nothing`() {
-		val full = MetadataConfig(MetadataField.entries.take(MAX_METADATA_FIELDS).toSet())
-
-		assertEquals(full, toggleField(full, MetadataField.VideoBitrate))
-	}
-
-	@Test
-	fun `a selected field can still be removed at the limit`() {
-		val full = MetadataConfig(MetadataField.entries.take(MAX_METADATA_FIELDS).toSet())
-		val updated = toggleField(full, MetadataField.CameraMake)
-
-		assertEquals(MAX_METADATA_FIELDS - 1, updated.fields.size)
-	}
-
-	// --- category toggles --------------------------------------------------------------------
-
-	@Test
-	fun `toggling an empty category adds all of its fields`() {
-		val updated = toggleCategory(MetadataConfig(emptySet()), MetadataCategory.Exposure)
-
-		assertEquals(fieldsOf(MetadataCategory.Exposure).toSet(), updated.fields)
-	}
-
-	@Test
-	fun `toggling a full category clears it`() {
-		val config = MetadataConfig(fieldsOf(MetadataCategory.Camera).toSet())
-		val updated = toggleCategory(config, MetadataCategory.Camera)
-
-		assertTrue(updated.fields.isEmpty())
-	}
-
-	@Test
-	fun `toggling a partial category completes it`() {
-		val config = MetadataConfig(setOf(MetadataField.CameraMake))
-		val updated = toggleCategory(config, MetadataCategory.Camera)
-
-		assertEquals(fieldsOf(MetadataCategory.Camera).toSet(), updated.fields)
-	}
-
-	@Test
-	fun `toggling a category stops at the field limit`() {
-		val start = setOf(
-			MetadataField.Iso,
-			MetadataField.Aperture,
-			MetadataField.Shutter,
-			MetadataField.FocalLength
+	fun `a removed field is added to the end again`() {
+		val config = MetadataConfig(
+			listOf(MetadataField.Iso, MetadataField.Aperture, MetadataField.FocalLength)
 		)
-		val updated = toggleCategory(MetadataConfig(start), MetadataCategory.File)
+		val without = toggleField(config, MetadataField.Aperture)
+		val restored = toggleField(without, MetadataField.Aperture)
 
-		assertEquals(MAX_METADATA_FIELDS, updated.fields.size)
-		assertTrue(updated.fields.containsAll(start))
-		assertTrue(MetadataField.FileName in updated.fields)
-		assertTrue(MetadataField.DateTaken !in updated.fields)
+		assertEquals(
+			listOf(MetadataField.Iso, MetadataField.FocalLength, MetadataField.Aperture),
+			restored.fields
+		)
+	}
+
+	// --- moves -------------------------------------------------------------------------------
+
+	@Test
+	fun `moving a field right swaps it with its neighbour`() {
+		val config = MetadataConfig(
+			listOf(MetadataField.Iso, MetadataField.Aperture, MetadataField.Place)
+		)
+		val updated = moveField(config, MetadataField.Iso, 1)
+
+		assertEquals(
+			listOf(MetadataField.Aperture, MetadataField.Iso, MetadataField.Place),
+			updated.fields
+		)
 	}
 
 	@Test
-	fun `toggling a category at the limit changes nothing`() {
-		val full = MetadataConfig(MetadataField.entries.take(MAX_METADATA_FIELDS).toSet())
+	fun `moving a field left swaps it with its neighbour`() {
+		val config = MetadataConfig(
+			listOf(MetadataField.Iso, MetadataField.Aperture, MetadataField.Place)
+		)
+		val updated = moveField(config, MetadataField.Place, -1)
 
-		assertEquals(full, toggleCategory(full, MetadataCategory.Video))
+		assertEquals(
+			listOf(MetadataField.Iso, MetadataField.Place, MetadataField.Aperture),
+			updated.fields
+		)
 	}
 
 	@Test
-	fun `every field belongs to a category that has at least one field`() {
-		for (category in MetadataCategory.entries) {
-			assertTrue("$category has no fields", fieldsOf(category).isNotEmpty())
-		}
+	fun `moving the first field left changes nothing`() {
+		val config = MetadataConfig(listOf(MetadataField.Iso, MetadataField.Place))
+
+		assertEquals(config, moveField(config, MetadataField.Iso, -1))
+	}
+
+	@Test
+	fun `moving the last field right changes nothing`() {
+		val config = MetadataConfig(listOf(MetadataField.Iso, MetadataField.Place))
+
+		assertEquals(config, moveField(config, MetadataField.Place, 1))
+	}
+
+	@Test
+	fun `moving a field that is not selected changes nothing`() {
+		val config = MetadataConfig(listOf(MetadataField.Iso))
+
+		assertEquals(config, moveField(config, MetadataField.Place, 1))
+	}
+
+	// --- stored names ------------------------------------------------------------------------
+
+	@Test
+	fun `stored names map to their fields`() {
+		assertEquals(MetadataField.Iso, metadataFieldFromName("Iso"))
+		assertEquals(MetadataField.ShutterSpeed, metadataFieldFromName("ShutterSpeed"))
+	}
+
+	@Test
+	fun `the old shutter name maps to shutter speed`() {
+		assertEquals(MetadataField.ShutterSpeed, metadataFieldFromName("Shutter"))
+	}
+
+	@Test
+	fun `an unknown stored name maps to nothing`() {
+		assertNull(metadataFieldFromName("CameraMake"))
+	}
+
+	@Test
+	fun `stored names become an ordered config`() {
+		val config = metadataConfigFromNames(listOf("Place", "Iso", "Shutter"))
+
+		assertEquals(
+			listOf(MetadataField.Place, MetadataField.Iso, MetadataField.ShutterSpeed),
+			config.fields
+		)
+	}
+
+	@Test
+	fun `duplicate stored names are shown once`() {
+		val config = metadataConfigFromNames(listOf("Iso", "Place", "Iso"))
+
+		assertEquals(listOf(MetadataField.Iso, MetadataField.Place), config.fields)
+	}
+
+	@Test
+	fun `an empty stored list stays empty`() {
+		assertEquals(emptyList<MetadataField>(), metadataConfigFromNames(emptyList()).fields)
+	}
+
+	@Test
+	fun `a stored list of only removed fields falls back to the defaults`() {
+		val config = metadataConfigFromNames(listOf("CameraMake", "Lens", "Coordinates"))
+
+		assertEquals(MetadataConfig.DEFAULT_FIELDS, config.fields)
 	}
 }

@@ -4,13 +4,11 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.neilturner.arrangethings.data.OverlayStorage
-import com.neilturner.arrangethings.logic.metadataSections
+import com.neilturner.arrangethings.logic.moveField
 import com.neilturner.arrangethings.logic.setSlot
 import com.neilturner.arrangethings.logic.slotOverlay
-import com.neilturner.arrangethings.logic.toggleCategory
 import com.neilturner.arrangethings.logic.toggleField
 import com.neilturner.arrangethings.model.Corner
-import com.neilturner.arrangethings.model.MetadataCategory
 import com.neilturner.arrangethings.model.MetadataConfig
 import com.neilturner.arrangethings.model.MetadataField
 import com.neilturner.arrangethings.model.OverlayConfig
@@ -89,45 +87,64 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 	private fun openMetadataEditor(slot: OverlaySlot) {
 		val existing = slotOverlay(_state.value.overlays, slot.corner, slot.order)?.metadata
 			?: MetadataConfig.Default
-		val category = metadataSections(existing).firstOrNull()?.category ?: MetadataCategory.Camera
 
 		_state.update {
 			it.copy(
 				menuSlot = null,
-				metadataEditor = MetadataEditorState(
-					slot = slot,
-					draft = existing,
-					activeCategory = category
-				)
+				metadataEditor = MetadataEditorState(slot = slot, draft = existing)
 			)
 		}
 	}
 
-	/** Shows the fields of a category on the right of the setup screen. */
-	fun showMetadataCategory(category: MetadataCategory) {
-		_state.update { state ->
-			val editor = state.metadataEditor ?: return@update state
-			state.copy(metadataEditor = editor.copy(activeCategory = category))
-		}
-	}
-
-	/** Adds or removes one field of the draft. */
+	/** Adds or removes one field of the draft. A new field is appended to the end. */
 	fun toggleMetadataField(field: MetadataField) {
 		_state.update { state ->
 			val editor = state.metadataEditor ?: return@update state
-			state.copy(metadataEditor = editor.copy(draft = toggleField(editor.draft, field)))
+			val draft = toggleField(editor.draft, field)
+
+			state.copy(
+				metadataEditor = editor.copy(
+					draft = draft,
+					pickedUp = editor.pickedUp?.takeIf { it in draft.fields }
+				)
+			)
 		}
 	}
 
-	/** Selects or clears every field of the active category. */
-	fun toggleMetadataCategory() {
+	/** Picks a field up in the preview, or drops it when it is already held. */
+	fun toggleMetadataPickup(field: MetadataField) {
 		_state.update { state ->
 			val editor = state.metadataEditor ?: return@update state
+			if (field !in editor.draft.fields) return@update state
+
 			state.copy(
 				metadataEditor = editor.copy(
-					draft = toggleCategory(editor.draft, editor.activeCategory)
+					pickedUp = if (editor.pickedUp == field) null else field
 				)
 			)
+		}
+	}
+
+	/** Moves a held field one place to the left or right in the preview. */
+	fun moveMetadataField(field: MetadataField, delta: Int) {
+		_state.update { state ->
+			val editor = state.metadataEditor ?: return@update state
+			val draft = moveField(editor.draft, field, delta)
+
+			state.copy(
+				metadataEditor = editor.copy(
+					draft = draft,
+					pickedUp = editor.pickedUp?.takeIf { it in draft.fields }
+				)
+			)
+		}
+	}
+
+	/** Drops a held field without closing the setup. */
+	fun dropMetadataPickup() {
+		_state.update { state ->
+			val editor = state.metadataEditor ?: return@update state
+			state.copy(metadataEditor = editor.copy(pickedUp = null))
 		}
 	}
 
@@ -135,7 +152,12 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 	fun resetMetadataDraft() {
 		_state.update { state ->
 			val editor = state.metadataEditor ?: return@update state
-			state.copy(metadataEditor = editor.copy(draft = MetadataConfig.Default))
+			state.copy(
+				metadataEditor = editor.copy(
+					draft = MetadataConfig.Default,
+					pickedUp = null
+				)
+			)
 		}
 	}
 

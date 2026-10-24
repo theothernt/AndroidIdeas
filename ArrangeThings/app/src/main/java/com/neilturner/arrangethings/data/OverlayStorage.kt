@@ -6,8 +6,10 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.neilturner.arrangethings.logic.metadataConfigFromNames
 import com.neilturner.arrangethings.model.Corner
 import com.neilturner.arrangethings.model.MetadataConfig
+import com.neilturner.arrangethings.model.MetadataField
 import com.neilturner.arrangethings.model.OverlayConfig
 import com.neilturner.arrangethings.model.OverlayVariant
 import kotlinx.serialization.Serializable
@@ -16,12 +18,23 @@ import kotlinx.serialization.json.Json
 
 private val Context.arrangeThingsStore: DataStore<Preferences> by preferencesDataStore(name = "arrange_things")
 
+/**
+ * The stored form of a metadata configuration.
+ *
+ * Fields are stored by name rather than by enum so that a field can be renamed or removed without
+ * losing the rest of the configuration.
+ */
+@Serializable
+private data class StoredMetadata(
+	val fields: List<String> = emptyList()
+)
+
 @Serializable
 private data class StoredOverlay(
 	val variant: OverlayVariant,
 	val corner: Corner,
 	val order: Int,
-	val metadata: MetadataConfig? = null
+	val metadata: StoredMetadata? = null
 )
 
 /**
@@ -41,7 +54,9 @@ class OverlayStorage(private val context: Context) {
 					variant = it.variant,
 					corner = it.corner,
 					order = it.order,
-					metadata = it.metadata
+					metadata = it.metadata?.let { stored ->
+						metadataConfigFromNames(stored.fields)
+					}
 				)
 			}
 		}.getOrNull()
@@ -54,7 +69,9 @@ class OverlayStorage(private val context: Context) {
 				variant = it.variant,
 				corner = it.corner,
 				order = it.order,
-				metadata = it.metadata
+				metadata = it.metadata?.let { config ->
+					StoredMetadata(fields = config.fields.map(MetadataField::name))
+				}
 			)
 		}
 		context.arrangeThingsStore.edit { preferences ->

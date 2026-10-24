@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,6 +34,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -42,12 +44,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Button
 import androidx.tv.material3.Text
-import com.neilturner.arrangethings.logic.selectedFields
-import com.neilturner.arrangethings.model.MAX_METADATA_FIELDS
-import com.neilturner.arrangethings.model.MetadataCategory
-import com.neilturner.arrangethings.model.MetadataConfig
 import com.neilturner.arrangethings.model.MetadataField
-import com.neilturner.arrangethings.ui.overlays.MetadataContent
+import com.neilturner.arrangethings.ui.overlays.MetadataChip
 
 /** Background of the whole setup screen. */
 private val SetupBackground = Color(0xFF000000)
@@ -64,14 +62,8 @@ private val PanelBorder = Color(0x33FFFFFF)
 /** Colour of secondary text. */
 private val MutedText = Color(0xB3FFFFFF)
 
-/** Colour of a row that cannot be changed. */
-private val DisabledText = Color(0x4DFFFFFF)
-
 /** Background of a focused row. */
 private val RowFocus = Color(0x24FFFFFF)
-
-/** Background of the active category. */
-private val RowActive = Color(0x14FFFFFF)
 
 /** The panel shape used across the screen. */
 private val PanelShape = RoundedCornerShape(12.dp)
@@ -79,26 +71,36 @@ private val PanelShape = RoundedCornerShape(12.dp)
 /** The row shape used across the screen. */
 private val RowShape = RoundedCornerShape(8.dp)
 
+/** Space between two chips in the preview. */
+private val ChipGap = 4.dp
+
 /**
  * The full screen setup of a Metadata overlay.
  *
- * The preview on the left is the exact size the overlay takes in a slot. The middle column picks a
- * category and the right column lists its fields. Done applies the draft to the slot, Back cancels.
+ * The preview on the left is the size the overlay takes in a slot and is also the reorder control:
+ * OK picks a field up, Left and Right move it, and OK drops it again. The list on the right chooses
+ * which fields the overlay shows. Done applies the draft to the slot, Back cancels.
  */
 @Composable
 fun MetadataSetupScreen(
 	editor: MetadataEditorState,
-	onShowCategory: (MetadataCategory) -> Unit,
 	onToggleField: (MetadataField) -> Unit,
-	onToggleCategory: () -> Unit,
+	onTogglePickup: (MetadataField) -> Unit,
+	onMoveField: (MetadataField, Int) -> Unit,
+	onDropPickup: () -> Unit,
 	onDefaults: () -> Unit,
 	onCancel: () -> Unit,
 	onApply: () -> Unit
 ) {
-	val categoryRequester = remember { FocusRequester() }
+	val firstChipRequester = remember { FocusRequester() }
+	val firstFieldRequester = remember { FocusRequester() }
 
 	LaunchedEffect(editor.slot.key) {
-		categoryRequester.requestFocus()
+		if (editor.draft.fields.isEmpty()) {
+			firstFieldRequester.requestFocus()
+		} else {
+			firstChipRequester.requestFocus()
+		}
 	}
 
 	Box(
@@ -113,7 +115,7 @@ fun MetadataSetupScreen(
 		) {
 			SetupHeader(editor)
 
-			Spacer(Modifier.height(16.dp))
+			Spacer(Modifier.height(14.dp))
 
 			Row(
 				modifier = Modifier
@@ -122,27 +124,22 @@ fun MetadataSetupScreen(
 				horizontalArrangement = Arrangement.spacedBy(18.dp)
 			) {
 				PreviewPanel(
-					config = editor.draft,
-					modifier = Modifier
-						.weight(1.25f)
-						.fillMaxHeight()
-				)
-
-				CategoryPanel(
 					editor = editor,
-					requester = categoryRequester,
-					onShowCategory = onShowCategory,
+					firstChipRequester = firstChipRequester,
+					onTogglePickup = onTogglePickup,
+					onMoveField = onMoveField,
+					onDropPickup = onDropPickup,
 					modifier = Modifier
-						.width(190.dp)
+						.weight(1f)
 						.fillMaxHeight()
 				)
 
 				FieldPanel(
 					editor = editor,
+					firstFieldRequester = firstFieldRequester,
 					onToggleField = onToggleField,
-					onToggleCategory = onToggleCategory,
 					modifier = Modifier
-						.weight(1.1f)
+						.width(350.dp)
 						.fillMaxHeight()
 				)
 			}
@@ -158,32 +155,56 @@ fun MetadataSetupScreen(
 	}
 }
 
-/** The title and the count of the selected fields. */
+/** The title, the slot and the number of selected fields, on one line. */
 @Composable
 private fun SetupHeader(editor: MetadataEditorState) {
-	Column(modifier = Modifier.fillMaxWidth()) {
-		Text(text = "Metadata", color = Color.White, fontSize = 28.sp)
+	Row(
+		modifier = Modifier.fillMaxWidth(),
+		verticalAlignment = Alignment.CenterVertically
+	) {
+		Text(text = "Metadata", color = Color.White, fontSize = 26.sp)
 
-		Spacer(Modifier.height(2.dp))
+		Spacer(Modifier.width(16.dp))
 
 		Text(
-			text = buildString {
-				append(editor.slot.displayName)
-				append("   -   ")
-				append("${editor.selectedCount} of $MAX_METADATA_FIELDS fields")
-				if (editor.isFull) append("   -   limit reached")
-			},
+			text = "${editor.slot.displayName}   -   " +
+				"${editor.selectedCount} of ${MetadataField.entries.size} fields",
 			color = MutedText,
 			fontSize = 12.sp
 		)
 	}
 }
 
-/** The live copy of the overlay, drawn at the size it takes in a slot. */
+/** The live copy of the overlay, with a focusable chip for every selected field. */
 @Composable
-private fun PreviewPanel(config: MetadataConfig, modifier: Modifier = Modifier) {
+private fun PreviewPanel(
+	editor: MetadataEditorState,
+	firstChipRequester: FocusRequester,
+	onTogglePickup: (MetadataField) -> Unit,
+	onMoveField: (MetadataField, Int) -> Unit,
+	onDropPickup: () -> Unit,
+	modifier: Modifier = Modifier
+) {
+	val pickedUp = editor.pickedUp
+
 	Panel(modifier = modifier) {
-		SectionLabel("LIVE PREVIEW")
+		Row(
+			modifier = Modifier.fillMaxWidth(),
+			verticalAlignment = Alignment.CenterVertically
+		) {
+			SectionLabel("LIVE PREVIEW")
+
+			Spacer(Modifier.weight(1f))
+
+			if (pickedUp != null) {
+				Text(
+					text = "MOVING",
+					color = Color.White,
+					fontSize = 10.sp,
+					letterSpacing = 1.sp
+				)
+			}
+		}
 
 		Spacer(Modifier.height(8.dp))
 
@@ -202,169 +223,177 @@ private fun PreviewPanel(config: MetadataConfig, modifier: Modifier = Modifier) 
 					.border(1.dp, PanelBorder, PanelShape)
 					.padding(horizontal = 8.dp, vertical = 6.dp)
 			) {
-				MetadataContent(config = config, modifier = Modifier.fillMaxSize())
+				if (editor.draft.fields.isEmpty()) {
+					Text(
+						text = "No fields selected",
+						color = MutedText,
+						fontSize = 12.sp,
+						modifier = Modifier.align(Alignment.Center)
+					)
+				} else {
+					Row(
+						modifier = Modifier.fillMaxSize(),
+						horizontalArrangement = Arrangement.spacedBy(ChipGap),
+						verticalAlignment = Alignment.CenterVertically
+					) {
+						editor.draft.fields.forEachIndexed { index, field ->
+							key(field) {
+								PreviewChip(
+									field = field,
+									pickedUp = pickedUp == field,
+									modifier = if (index == 0) {
+										Modifier.focusRequester(firstChipRequester)
+									} else {
+										Modifier
+									},
+									onTogglePickup = { onTogglePickup(field) },
+									onMove = { delta -> onMoveField(field, delta) },
+									onDropPickup = onDropPickup
+								)
+							}
+						}
+					}
+				}
 			}
 		}
+
+		Spacer(Modifier.height(8.dp))
+
+		Text(
+			text = when {
+				pickedUp != null ->
+					"${pickedUp.title} picked up - Left / Right to move, OK to drop"
+
+				editor.draft.fields.isEmpty() ->
+					"Choose a field on the right to show it in the overlay."
+
+				else ->
+					"OK picks a field up. Left / Right reorders it, OK drops it."
+			},
+			color = if (pickedUp != null) Color.White else MutedText,
+			fontSize = 11.sp,
+			maxLines = 1,
+			overflow = TextOverflow.Ellipsis
+		)
 	}
 }
 
-/** The fixed categories, with the number of fields each one shows. */
+/**
+ * One chip of the preview.
+ *
+ * OK picks the chip up, Left and Right move it while it is held, and OK drops it again. Moving the
+ * focus out of the preview drops it too.
+ */
 @Composable
-private fun CategoryPanel(
-	editor: MetadataEditorState,
-	requester: FocusRequester,
-	onShowCategory: (MetadataCategory) -> Unit,
-	modifier: Modifier = Modifier
-) {
-	Panel(modifier = modifier) {
-		SectionLabel("SECTIONS")
-
-		Spacer(Modifier.height(6.dp))
-
-		MetadataCategory.entries.forEach { category ->
-			val total = fieldsOf(category).size
-			val selected = selectedFields(editor.draft, category).size
-
-			CategoryRow(
-				category = category,
-				selected = selected,
-				total = total,
-				active = category == editor.activeCategory,
-				modifier = if (category == editor.activeCategory) {
-					Modifier.focusRequester(requester)
-				} else {
-					Modifier
-				},
-				onClick = { onShowCategory(category) }
-			)
-
-			if (category != MetadataCategory.entries.last()) Spacer(Modifier.height(4.dp))
-		}
-	}
-}
-
-/** One category in the middle column. */
-@Composable
-private fun CategoryRow(
-	category: MetadataCategory,
-	selected: Int,
-	total: Int,
-	active: Boolean,
+private fun PreviewChip(
+	field: MetadataField,
+	pickedUp: Boolean,
 	modifier: Modifier = Modifier,
-	onClick: () -> Unit
+	onTogglePickup: () -> Unit,
+	onMove: (Int) -> Unit,
+	onDropPickup: () -> Unit
 ) {
 	var isFocused by remember { mutableStateOf(false) }
 
-	SelectableRow(
-		onClick = onClick,
+	Box(
 		modifier = modifier
-			.height(42.dp)
-			.border(
-				width = 1.dp,
-				color = when {
-					isFocused -> Color.White
-					active -> Color(0x66FFFFFF)
-					else -> Color.Transparent
-				},
-				shape = RowShape
-			)
-			.background(
-				color = when {
-					isFocused -> RowFocus
-					active -> RowActive
-					else -> Color.Transparent
-				}
-			)
 			.onFocusChanged { isFocused = it.isFocused }
-	) {
-		Text(
-			text = category.title,
-			color = if (active) Color.White else MutedText,
-			fontSize = 14.sp,
-			modifier = Modifier.weight(1f)
-		)
+			.focusable()
+			.onPreviewKeyEvent { event ->
+				if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
 
-		Text(text = "$selected/$total", color = MutedText, fontSize = 11.sp)
+				when (event.key) {
+					in ACTIVATION_KEYS -> {
+						onTogglePickup()
+						true
+					}
+
+					Key.DirectionLeft -> if (pickedUp) {
+						onMove(-1)
+						true
+					} else {
+						false
+					}
+
+					Key.DirectionRight -> if (pickedUp) {
+						onMove(1)
+						true
+					} else {
+						false
+					}
+
+					Key.DirectionUp, Key.DirectionDown -> {
+						if (pickedUp) onDropPickup()
+						false
+					}
+
+					Key.Back, Key.Escape -> if (pickedUp) {
+						onDropPickup()
+						true
+					} else {
+						false
+					}
+
+					else -> false
+				}
+			}
+	) {
+		MetadataChip(field = field, focused = isFocused, pickedUp = pickedUp)
 	}
 }
 
-/** The fields of the active category. */
+/** The five fields that can be shown, with a tick for each selected one. */
 @Composable
 private fun FieldPanel(
 	editor: MetadataEditorState,
+	firstFieldRequester: FocusRequester,
 	onToggleField: (MetadataField) -> Unit,
-	onToggleCategory: () -> Unit,
 	modifier: Modifier = Modifier
 ) {
-	val fields = fieldsOf(editor.activeCategory)
-	val selected = fields.count { it in editor.draft.fields }
-	val allSelected = selected == fields.size
+	val fields = MetadataField.entries
 
 	Panel(modifier = modifier) {
-		SectionLabel("FIELDS   ${editor.activeCategory.title.uppercase()}")
+		Row(
+			modifier = Modifier.fillMaxWidth(),
+			verticalAlignment = Alignment.CenterVertically
+		) {
+			SectionLabel("FIELDS")
+
+			Spacer(Modifier.weight(1f))
+
+			Text(
+				text = "${editor.selectedCount} of ${fields.size}",
+				color = MutedText,
+				fontSize = 10.sp
+			)
+		}
 
 		Spacer(Modifier.height(6.dp))
 
-		ToggleAllRow(
-			title = "All ${editor.activeCategory.title}",
-			selected = selected,
-			total = fields.size,
-			checked = allSelected,
-			enabled = allSelected || !editor.isFull,
-			onClick = onToggleCategory
-		)
-
-		Spacer(Modifier.height(4.dp))
-
-		fields.forEach { field ->
-			val checked = field in editor.draft.fields
-
+		fields.forEachIndexed { index, field ->
 			FieldRow(
 				field = field,
-				checked = checked,
-				enabled = checked || !editor.isFull,
+				checked = field in editor.draft.fields,
+				modifier = if (index == 0) {
+					Modifier.focusRequester(firstFieldRequester)
+				} else {
+					Modifier
+				},
 				onClick = { onToggleField(field) }
 			)
 
-			if (field != fields.last()) Spacer(Modifier.height(4.dp))
+			if (index != fields.lastIndex) Spacer(Modifier.height(4.dp))
 		}
-	}
-}
 
-/** The row that selects or clears the whole category. */
-@Composable
-private fun ToggleAllRow(
-	title: String,
-	selected: Int,
-	total: Int,
-	checked: Boolean,
-	enabled: Boolean,
-	onClick: () -> Unit
-) {
-	var isFocused by remember { mutableStateOf(false) }
-	val textColor = if (enabled) Color.White else DisabledText
-
-	SelectableRow(
-		onClick = onClick,
-		enabled = enabled,
-		modifier = Modifier
-			.height(38.dp)
-			.border(1.dp, if (isFocused) Color.White else Color.Transparent, RowShape)
-			.background(if (isFocused) RowFocus else Color.Transparent)
-			.onFocusChanged { isFocused = it.isFocused }
-	) {
-		CheckMark(checked = checked, enabled = enabled)
-
-		Spacer(Modifier.width(10.dp))
+		Spacer(Modifier.height(10.dp))
 
 		Text(
-			text = title,
-			color = textColor,
-			fontSize = 12.sp,
-			modifier = Modifier.weight(1f)
+			text = "A selected field is added to the end of the preview. " +
+				"Use the preview above to change the order.",
+			color = MutedText,
+			fontSize = 10.sp,
+			maxLines = 2
 		)
-
-		Text(text = "$selected/$total", color = MutedText, fontSize = 11.sp)
 	}
 }
 
@@ -373,38 +402,35 @@ private fun ToggleAllRow(
 private fun FieldRow(
 	field: MetadataField,
 	checked: Boolean,
-	enabled: Boolean,
+	modifier: Modifier = Modifier,
 	onClick: () -> Unit
 ) {
 	var isFocused by remember { mutableStateOf(false) }
-	val textColor = if (enabled) Color.White else DisabledText
-	val valueColor = if (enabled) MutedText else DisabledText
 
 	SelectableRow(
 		onClick = onClick,
-		enabled = enabled,
-		modifier = Modifier
-			.height(38.dp)
+		modifier = modifier
+			.height(40.dp)
 			.border(1.dp, if (isFocused) Color.White else Color.Transparent, RowShape)
 			.background(if (isFocused) RowFocus else Color.Transparent)
 			.onFocusChanged { isFocused = it.isFocused }
 	) {
-		CheckMark(checked = checked, enabled = enabled)
+		CheckMark(checked = checked)
 
 		Spacer(Modifier.width(10.dp))
 
 		Text(
-			text = field.label,
-			color = textColor,
-			fontSize = 12.sp,
+			text = field.title,
+			color = Color.White,
+			fontSize = 13.sp,
 			maxLines = 1,
-			modifier = Modifier.width(78.dp)
+			modifier = Modifier.width(120.dp)
 		)
 
 		Text(
 			text = field.demoValue,
-			color = valueColor,
-			fontSize = 13.sp,
+			color = MutedText,
+			fontSize = 12.sp,
 			maxLines = 1,
 			overflow = TextOverflow.Ellipsis,
 			modifier = Modifier.weight(1f)
@@ -473,16 +499,15 @@ private fun SectionLabel(text: String) {
 private fun SelectableRow(
 	onClick: () -> Unit,
 	modifier: Modifier = Modifier,
-	enabled: Boolean = true,
 	content: @Composable RowScope.() -> Unit
 ) {
 	Row(
 		modifier = modifier
 			.fillMaxWidth()
 			.clip(RowShape)
-			.focusable(enabled = enabled)
+			.focusable()
 			.onPreviewKeyEvent { event ->
-				if (enabled && event.type == KeyEventType.KeyDown && event.key in ACTIVATION_KEYS) {
+				if (event.type == KeyEventType.KeyDown && event.key in ACTIVATION_KEYS) {
 					onClick()
 					true
 				} else {
@@ -497,16 +522,15 @@ private fun SelectableRow(
 
 /** A square tick box, drawn rather than typed so it stays black and white. */
 @Composable
-private fun CheckMark(checked: Boolean, enabled: Boolean) {
-	val color = if (enabled) Color.White else DisabledText
+private fun CheckMark(checked: Boolean) {
 	val shape = RoundedCornerShape(4.dp)
 
 	Box(
 		modifier = Modifier
 			.size(18.dp)
 			.clip(shape)
-			.background(if (checked) color else Color.Transparent)
-			.border(1.dp, color, shape),
+			.background(if (checked) Color.White else Color.Transparent)
+			.border(1.dp, Color.White, shape),
 		contentAlignment = Alignment.Center
 	) {
 		if (checked) {
@@ -514,7 +538,3 @@ private fun CheckMark(checked: Boolean, enabled: Boolean) {
 		}
 	}
 }
-
-/** The fields of a category, in canonical order. */
-private fun fieldsOf(category: MetadataCategory): List<MetadataField> =
-	MetadataField.entries.filter { it.category == category }

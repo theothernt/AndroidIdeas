@@ -1,8 +1,7 @@
 package com.neilturner.arrangethings.ui.editor
 
-import com.neilturner.arrangethings.model.MAX_METADATA_FIELDS
-import com.neilturner.arrangethings.model.MetadataCategory
 import com.neilturner.arrangethings.model.MetadataConfig
+import com.neilturner.arrangethings.model.MetadataField
 import com.neilturner.arrangethings.model.OverlayConfig
 import com.neilturner.arrangethings.model.OverlaySlot
 
@@ -10,16 +9,13 @@ import com.neilturner.arrangethings.model.OverlaySlot
 data class MetadataEditorState(
 	/** The slot the metadata will be applied to. */
 	val slot: OverlaySlot,
-	/** The field selection that Done applies. */
+	/** The ordered field selection that Done applies. */
 	val draft: MetadataConfig,
-	/** The category whose fields are listed on the right. */
-	val activeCategory: MetadataCategory = MetadataCategory.Camera
+	/** The field that has been picked up in the preview, or null when none is held. */
+	val pickedUp: MetadataField? = null
 ) {
 	/** The number of fields in the draft. */
 	val selectedCount: Int get() = draft.fields.size
-
-	/** True when no more fields can be added. */
-	val isFull: Boolean get() = selectedCount >= MAX_METADATA_FIELDS
 }
 
 /** The whole state of the layout editor. */
