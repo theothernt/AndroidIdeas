@@ -2,10 +2,11 @@ package com.neilturner.arrangethings.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+// The palette is black and white only.
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+val MonochromeWhite = Color(0xFFFFFFFF)
+val MonochromeBlack = Color(0xFF000000)
+val MonochromeSurface = Color(0xFF101010)
+val MonochromeSurfaceVariant = Color(0xFF1A1A1A)
+val MonochromeOnSurfaceVariant = Color(0xFFC7C7C7)
+val MonochromeOutline = Color(0xFF3A3A3A)

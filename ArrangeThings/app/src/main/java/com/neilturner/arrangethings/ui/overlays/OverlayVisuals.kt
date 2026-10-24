@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -24,24 +25,29 @@ import androidx.tv.material3.Text
 import com.neilturner.arrangethings.model.OverlayHeight
 import com.neilturner.arrangethings.model.OverlayVariant
 import com.neilturner.arrangethings.model.OverlayWidth
+import com.neilturner.arrangethings.model.MetadataConfig
 
 /** Accent colour used for the small type label of every overlay. */
-val OverlayAccent = Color(0xFF7FD1FF)
+val OverlayAccent = Color(0xFFFFFFFF)
 
 /** Colour of the overlay content. */
-val OverlayContent = Color(0xFFF2F2F5)
+val OverlayContent = Color(0xFFFFFFFF)
 
 /** Colour of the secondary line of a two line overlay. */
-val OverlaySecondary = Color(0xB3F2F2F5)
+val OverlaySecondary = Color(0xB3FFFFFF)
+
+/** Colour of a metadata label. */
+val OverlayLabel = Color(0x99FFFFFF)
 
 /** Colour of the album art placeholder. */
-val AlbumArtBackground = Color(0xFF3A4453)
+val AlbumArtBackground = Color(0xFF3A3A3A)
 
 /** The width an overlay of this class takes in its slot. */
 val OverlayWidth.size: Dp
 	get() = when (this) {
 		OverlayWidth.Narrow -> 170.dp
 		OverlayWidth.Wide -> 240.dp
+		OverlayWidth.ExtraWide -> 300.dp
 	}
 
 /** The height an overlay of this class takes in its slot. */
@@ -50,6 +56,7 @@ val OverlayHeight.size: Dp
 		OverlayHeight.SingleLine -> 36.dp
 		OverlayHeight.TwoLines -> 52.dp
 		OverlayHeight.Block -> 60.dp
+		OverlayHeight.Tall -> 128.dp
 	}
 
 /**
@@ -59,7 +66,11 @@ val OverlayHeight.size: Dp
  * measuring anything.
  */
 @Composable
-fun OverlayContent(variant: OverlayVariant, modifier: Modifier = Modifier) {
+fun OverlayContent(
+	variant: OverlayVariant,
+	metadata: MetadataConfig? = null,
+	modifier: Modifier = Modifier
+) {
 	when (variant) {
 		OverlayVariant.Clock -> LabelValue("TIME", "21:45", modifier)
 		OverlayVariant.Date -> LabelValue("DATE", "Mon 19 Oct", modifier)
@@ -69,6 +80,7 @@ fun OverlayContent(variant: OverlayVariant, modifier: Modifier = Modifier) {
 		OverlayVariant.NowPlayingText -> StackedText("Fleetwood Mac", "Rumours", modifier)
 		OverlayVariant.NowPlayingAlbumArt -> AlbumArtRow(modifier)
 		OverlayVariant.CustomText -> LabelValue("TEXT", "Overlay text", modifier)
+		OverlayVariant.Metadata -> MetadataContent(metadata ?: MetadataConfig.Default, modifier)
 	}
 }
 
@@ -121,7 +133,7 @@ private fun AlbumArtRow(modifier: Modifier = Modifier) {
 	}
 }
 
-/** Three days of weather, each an icon above a temperature. */
+/** Three days of weather, each a day label above a temperature. */
 @Composable
 private fun ForecastRow(modifier: Modifier = Modifier) {
 	Row(
@@ -129,20 +141,20 @@ private fun ForecastRow(modifier: Modifier = Modifier) {
 		horizontalArrangement = Arrangement.SpaceEvenly,
 		verticalAlignment = Alignment.CenterVertically
 	) {
-		ForecastDay("☀", "18°")
-		ForecastDay("⛅", "17°")
-		ForecastDay("☂", "15°")
+		ForecastDay("Mon", "18°")
+		ForecastDay("Tue", "17°")
+		ForecastDay("Wed", "15°")
 	}
 }
 
 /** One day of the forecast. */
 @Composable
-private fun ForecastDay(icon: String, temperature: String) {
+private fun ForecastDay(day: String, temperature: String) {
 	Column(
 		horizontalAlignment = Alignment.CenterHorizontally,
 		verticalArrangement = Arrangement.Center
 	) {
-		Text(text = icon, color = OverlayContent, fontSize = 24.sp, maxLines = 1)
+		Text(text = day, color = OverlayAccent, fontSize = 11.sp, maxLines = 1)
 		Text(text = temperature, color = OverlaySecondary, fontSize = 13.sp, maxLines = 1)
 	}
 }
@@ -151,8 +163,11 @@ private fun ForecastDay(icon: String, temperature: String) {
 @Composable
 private fun OverlayContentPreview() {
 	Column {
-		OverlayVariant.Clock.let { OverlayContent(it, Modifier.width(it.width.size)) }
-		OverlayVariant.Weather3Day.let { OverlayContent(it, Modifier.width(it.width.size)) }
-		OverlayVariant.NowPlayingAlbumArt.let { OverlayContent(it, Modifier.width(it.width.size)) }
+		OverlayVariant.Clock.let { OverlayContent(it, modifier = Modifier.width(it.width.size)) }
+		OverlayVariant.Weather3Day.let { OverlayContent(it, modifier = Modifier.width(it.width.size)) }
+		OverlayVariant.NowPlayingAlbumArt.let { OverlayContent(it, modifier = Modifier.width(it.width.size)) }
+		OverlayVariant.Metadata.let {
+			OverlayContent(it, modifier = Modifier.width(it.width.size).height(it.height.size))
+		}
 	}
 }

@@ -1,6 +1,8 @@
 package com.neilturner.arrangethings.logic
 
 import com.neilturner.arrangethings.model.Corner
+import com.neilturner.arrangethings.model.MetadataConfig
+import com.neilturner.arrangethings.model.MetadataField
 import com.neilturner.arrangethings.model.OverlayConfig
 import com.neilturner.arrangethings.model.OverlayHeight
 import com.neilturner.arrangethings.model.OverlaySlot
@@ -105,6 +107,64 @@ class OverlayLogicTest {
 			assertTrue(variant.width in OverlayWidth.entries)
 			assertTrue(variant.height in OverlayHeight.entries)
 		}
+	}
+
+	// --- metadata ----------------------------------------------------------------------------
+
+	@Test
+	fun `metadata keeps the configuration it was given`() {
+		val config = MetadataConfig(setOf(MetadataField.Iso, MetadataField.Place))
+		val overlays = setSlot(emptyList(), Corner.TopStart, 0, OverlayVariant.Metadata, config)
+
+		assertEquals(config, slotOverlay(overlays, Corner.TopStart, 0)?.metadata)
+		assertValid(overlays)
+	}
+
+	@Test
+	fun `metadata without a configuration gets the defaults`() {
+		val overlays = setSlot(emptyList(), Corner.TopStart, 0, OverlayVariant.Metadata)
+
+		assertEquals(MetadataConfig.Default, slotOverlay(overlays, Corner.TopStart, 0)?.metadata)
+	}
+
+	@Test
+	fun `replacing metadata with another variant clears the configuration`() {
+		var overlays = setSlot(
+			emptyList(),
+			Corner.TopStart,
+			0,
+			OverlayVariant.Metadata,
+			MetadataConfig(setOf(MetadataField.Iso))
+		)
+		overlays = setSlot(overlays, Corner.TopStart, 0, OverlayVariant.Clock)
+
+		assertNull(slotOverlay(overlays, Corner.TopStart, 0)?.metadata)
+	}
+
+	@Test
+	fun `other variants ignore a configuration they are given`() {
+		val overlays = setSlot(
+			emptyList(),
+			Corner.TopStart,
+			0,
+			OverlayVariant.Clock,
+			MetadataConfig(setOf(MetadataField.Iso))
+		)
+
+		assertNull(slotOverlay(overlays, Corner.TopStart, 0)?.metadata)
+	}
+
+	@Test
+	fun `per slot metadata is independent`() {
+		val first = MetadataConfig(setOf(MetadataField.CameraMake))
+		val second = MetadataConfig(setOf(MetadataField.Place))
+
+		var overlays = setSlot(emptyList(), Corner.TopStart, 0, OverlayVariant.Metadata, first)
+		overlays = setSlot(overlays, Corner.TopStart, 1, OverlayVariant.Metadata, second)
+
+		assertEquals(first, slotOverlay(overlays, Corner.TopStart, 0)?.metadata)
+		assertEquals(second, slotOverlay(overlays, Corner.TopStart, 1)?.metadata)
+		assertValid(overlays)
 	}
 
 	// --- invariants --------------------------------------------------------------------------

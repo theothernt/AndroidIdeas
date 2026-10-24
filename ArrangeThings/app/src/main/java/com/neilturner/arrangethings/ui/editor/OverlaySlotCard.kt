@@ -38,14 +38,15 @@ import com.neilturner.arrangethings.model.OverlayHeight
 import com.neilturner.arrangethings.model.OverlaySlot
 import com.neilturner.arrangethings.model.OverlayVariant
 import com.neilturner.arrangethings.model.OverlayWidth
+import com.neilturner.arrangethings.model.MetadataConfig
 import com.neilturner.arrangethings.ui.overlays.OverlayContent
 import com.neilturner.arrangethings.ui.overlays.size
 
 /** Colour of the ring around the focused slot. */
-val FocusedRing = Color(0xFF7FD1FF)
+val FocusedRing = Color(0xFFFFFFFF)
 
 /** Background of a slot that holds an overlay. */
-val SlotBackground = Color(0xE6101014)
+val SlotBackground = Color(0xE6101010)
 
 /** Background of a slot that is empty. */
 val EmptySlotBackground = Color(0x14FFFFFF)
@@ -62,6 +63,7 @@ private val EmptyHeight = OverlayHeight.SingleLine
 @Composable
 fun OverlaySlotContent(
 	variant: OverlayVariant?,
+	metadata: MetadataConfig? = null,
 	modifier: Modifier = Modifier,
 	chevronColor: Color = Color(0x66FFFFFF)
 ) {
@@ -78,7 +80,7 @@ fun OverlaySlotContent(
 					maxLines = 1
 				)
 			} else {
-				OverlayContent(variant)
+				OverlayContent(variant, metadata)
 			}
 		}
 		Spacer(Modifier.width(6.dp))
@@ -150,6 +152,7 @@ fun OverlaySlotCard(
 	) {
 		OverlaySlotContent(
 			variant = variant,
+			metadata = overlay?.metadata,
 			modifier = Modifier.fillMaxSize(),
 			chevronColor = if (isFocused) FocusedRing else Color(0x66FFFFFF)
 		)

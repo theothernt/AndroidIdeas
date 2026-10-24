@@ -11,14 +11,16 @@ enum class Corner {
 /** How wide an overlay is in its slot. */
 enum class OverlayWidth {
 	Narrow,
-	Wide
+	Wide,
+	ExtraWide
 }
 
 /** How tall an overlay is in its slot. */
 enum class OverlayHeight {
 	SingleLine,
 	TwoLines,
-	Block
+	Block,
+	Tall
 }
 
 /**
@@ -39,14 +41,17 @@ enum class OverlayVariant(
 	Weather3Day("Weather - 3 day forecast", OverlayWidth.Wide, OverlayHeight.Block),
 	NowPlayingText("Now playing - text", OverlayWidth.Narrow, OverlayHeight.TwoLines),
 	NowPlayingAlbumArt("Now playing - album art", OverlayWidth.Wide, OverlayHeight.TwoLines),
-	CustomText("Custom text", OverlayWidth.Narrow, OverlayHeight.SingleLine)
+	CustomText("Custom text", OverlayWidth.Narrow, OverlayHeight.SingleLine),
+	Metadata("Metadata", OverlayWidth.ExtraWide, OverlayHeight.Tall)
 }
 
 /** An overlay sitting in one of the slots. */
 data class OverlayConfig(
 	val variant: OverlayVariant,
 	val corner: Corner,
-	val order: Int
+	val order: Int,
+	/** The fields of a Metadata overlay. Null for every other variant. */
+	val metadata: MetadataConfig? = null
 )
 
 /** The number of slots in every corner. */

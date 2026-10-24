@@ -31,10 +31,10 @@ import com.neilturner.arrangethings.model.OverlayVariant
 import com.neilturner.arrangethings.model.SLOTS_PER_CORNER
 
 /** Colour of the area outside the safe area. */
-val StageBackground = Color(0xFF05070C)
+val StageBackground = Color(0xFF000000)
 
 /** Colour of the safe area. */
-val SafeAreaBackground = Color(0xFF10141C)
+val SafeAreaBackground = Color(0xFF101010)
 
 /** Colour of the safe area outline. */
 val SafeAreaBorder = Color(0x33FFFFFF)
@@ -54,7 +54,7 @@ fun PreviewStage(
 	modifier: Modifier = Modifier
 ) {
 	val safeAreaShape = RoundedCornerShape(10.dp)
-	val menuOpen = state.isMenuOpen
+	val slotsEnabled = !state.isDialogOpen
 
 	Box(
 		modifier = modifier
@@ -83,7 +83,7 @@ fun PreviewStage(
 					CornerCell(
 						corner = Corner.TopStart,
 						state = state,
-						enabled = !menuOpen,
+						enabled = slotsEnabled,
 						onSlotFocused = onSlotFocused,
 						onFocusTargetAchieved = onFocusTargetAchieved,
 						onOpenMenu = onOpenMenu,
@@ -94,7 +94,7 @@ fun PreviewStage(
 					CornerCell(
 						corner = Corner.TopEnd,
 						state = state,
-						enabled = !menuOpen,
+						enabled = slotsEnabled,
 						onSlotFocused = onSlotFocused,
 						onFocusTargetAchieved = onFocusTargetAchieved,
 						onOpenMenu = onOpenMenu,
@@ -111,7 +111,7 @@ fun PreviewStage(
 					CornerCell(
 						corner = Corner.BottomStart,
 						state = state,
-						enabled = !menuOpen,
+						enabled = slotsEnabled,
 						onSlotFocused = onSlotFocused,
 						onFocusTargetAchieved = onFocusTargetAchieved,
 						onOpenMenu = onOpenMenu,
@@ -122,7 +122,7 @@ fun PreviewStage(
 					CornerCell(
 						corner = Corner.BottomEnd,
 						state = state,
-						enabled = !menuOpen,
+						enabled = slotsEnabled,
 						onSlotFocused = onSlotFocused,
 						onFocusTargetAchieved = onFocusTargetAchieved,
 						onOpenMenu = onOpenMenu,

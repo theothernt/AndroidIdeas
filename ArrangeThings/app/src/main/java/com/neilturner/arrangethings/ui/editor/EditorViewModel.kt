@@ -4,8 +4,15 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.neilturner.arrangethings.data.OverlayStorage
+import com.neilturner.arrangethings.logic.metadataSections
 import com.neilturner.arrangethings.logic.setSlot
+import com.neilturner.arrangethings.logic.slotOverlay
+import com.neilturner.arrangethings.logic.toggleCategory
+import com.neilturner.arrangethings.logic.toggleField
 import com.neilturner.arrangethings.model.Corner
+import com.neilturner.arrangethings.model.MetadataCategory
+import com.neilturner.arrangethings.model.MetadataConfig
+import com.neilturner.arrangethings.model.MetadataField
 import com.neilturner.arrangethings.model.OverlayConfig
 import com.neilturner.arrangethings.model.OverlaySlot
 import com.neilturner.arrangethings.model.OverlayVariant
@@ -54,23 +61,108 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 
 	/**
 	 * Puts the given overlay in the open slot. A null variant empties the slot.
+	 *
+	 * Metadata opens its setup screen instead, with the configuration the slot already has.
 	 */
 	fun chooseVariant(variant: OverlayVariant?) {
 		val slot = _state.value.menuSlot ?: return
+
+		if (variant == OverlayVariant.Metadata) {
+			openMetadataEditor(slot)
+			return
+		}
+
 		val updated = setSlot(_state.value.overlays, slot.corner, slot.order, variant)
 
 		_state.update {
 			it.copy(
 				overlays = updated,
 				menuSlot = null,
-				focusTargetKey = slot.key,
-				statusMessage = if (variant == null) {
-					"${slot.corner.displayName()} slot ${slot.order + 1} cleared"
-				} else {
-					"${slot.corner.displayName()} slot ${slot.order + 1} set to ${variant.title}"
-				}
+				focusTargetKey = slot.key
 			)
 		}
+	}
+
+	// --- metadata setup ----------------------------------------------------------------------
+
+	/** Opens the metadata setup with the configuration of the slot, or the default fields. */
+	private fun openMetadataEditor(slot: OverlaySlot) {
+		val existing = slotOverlay(_state.value.overlays, slot.corner, slot.order)?.metadata
+			?: MetadataConfig.Default
+		val category = metadataSections(existing).firstOrNull()?.category ?: MetadataCategory.Camera
+
+		_state.update {
+			it.copy(
+				menuSlot = null,
+				metadataEditor = MetadataEditorState(
+					slot = slot,
+					draft = existing,
+					activeCategory = category
+				)
+			)
+		}
+	}
+
+	/** Shows the fields of a category on the right of the setup screen. */
+	fun showMetadataCategory(category: MetadataCategory) {
+		_state.update { state ->
+			val editor = state.metadataEditor ?: return@update state
+			state.copy(metadataEditor = editor.copy(activeCategory = category))
+		}
+	}
+
+	/** Adds or removes one field of the draft. */
+	fun toggleMetadataField(field: MetadataField) {
+		_state.update { state ->
+			val editor = state.metadataEditor ?: return@update state
+			state.copy(metadataEditor = editor.copy(draft = toggleField(editor.draft, field)))
+		}
+	}
+
+	/** Selects or clears every field of the active category. */
+	fun toggleMetadataCategory() {
+		_state.update { state ->
+			val editor = state.metadataEditor ?: return@update state
+			state.copy(
+				metadataEditor = editor.copy(
+					draft = toggleCategory(editor.draft, editor.activeCategory)
+				)
+			)
+		}
+	}
+
+	/** Puts the default field selection in the draft. */
+	fun resetMetadataDraft() {
+		_state.update { state ->
+			val editor = state.metadataEditor ?: return@update state
+			state.copy(metadataEditor = editor.copy(draft = MetadataConfig.Default))
+		}
+	}
+
+	/** Applies the draft to the slot and closes the setup. */
+	fun applyMetadata() {
+		val editor = _state.value.metadataEditor ?: return
+		val updated = setSlot(
+			overlays = _state.value.overlays,
+			corner = editor.slot.corner,
+			order = editor.slot.order,
+			variant = OverlayVariant.Metadata,
+			metadata = editor.draft
+		)
+
+		_state.update {
+			it.copy(
+				overlays = updated,
+				metadataEditor = null,
+				focusTargetKey = editor.slot.key
+			)
+		}
+	}
+
+	/** Closes the setup without touching the slot. */
+	fun cancelMetadata() {
+		val editor = _state.value.metadataEditor ?: return
+		_state.update { it.copy(metadataEditor = null, focusTargetKey = editor.slot.key) }
 	}
 
 	// --- actions -----------------------------------------------------------------------------
@@ -81,8 +173,8 @@ class EditorViewModel(application: Application) : AndroidViewModel(application) 
 			it.copy(
 				overlays = seed(),
 				menuSlot = null,
-				focusTargetKey = null,
-				statusMessage = "Layout reset"
+				metadataEditor = null,
+				focusTargetKey = null
 			)
 		}
 	}

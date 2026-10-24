@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredHeight
 import androidx.compose.foundation.layout.requiredWidth
@@ -37,12 +36,13 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
+import com.neilturner.arrangethings.model.MetadataConfig
 import com.neilturner.arrangethings.model.OverlaySlot
 import com.neilturner.arrangethings.model.OverlayVariant
 import com.neilturner.arrangethings.ui.overlays.size
 
 /** Background of the menu panel. */
-val MenuBackground = Color(0xF21A2029)
+val MenuBackground = Color(0xF21A1A1A)
 
 /** Colour of the scrim behind the menu. */
 val MenuScrim = Color(0xCC000000)
@@ -51,7 +51,7 @@ val MenuScrim = Color(0xCC000000)
 private val PreviewWidth = 116.dp
 
 /** Height of the little preview in a menu row. */
-private val PreviewHeight = 42.dp
+private val PreviewHeight = 36.dp
 
 /**
  * The overlay menu of a slot.
@@ -63,12 +63,13 @@ private val PreviewHeight = 42.dp
 fun OverlayMenu(
 	slot: OverlaySlot,
 	currentVariant: OverlayVariant?,
+	metadata: MetadataConfig?,
 	onChoose: (OverlayVariant?) -> Unit,
 	onDismiss: () -> Unit,
 	modifier: Modifier = Modifier
 ) {
 	val variants = OverlayVariant.entries
-	val startIndex = variants.indexOf(currentVariant).let { if (it < 0) variants.lastIndex else it }
+	val startIndex = variants.indexOf(currentVariant).let { if (it < 0) 0 else it }
 	val requester = remember { FocusRequester() }
 
 	LaunchedEffect(Unit) {
@@ -87,7 +88,7 @@ fun OverlayMenu(
 				.clip(RoundedCornerShape(16.dp))
 				.background(MenuBackground)
 				.border(1.dp, Color(0x33FFFFFF), RoundedCornerShape(16.dp))
-				.padding(vertical = 12.dp)
+				.padding(vertical = 10.dp)
 		) {
 			Text(
 				text = slot.displayName,
@@ -100,6 +101,7 @@ fun OverlayMenu(
 				MenuRow(
 					variant = variant,
 					selected = variant == currentVariant,
+					metadata = metadata,
 					modifier = if (index == startIndex) {
 						Modifier.focusRequester(requester)
 					} else {
@@ -118,6 +120,7 @@ fun OverlayMenu(
 private fun MenuRow(
 	variant: OverlayVariant,
 	selected: Boolean,
+	metadata: MetadataConfig?,
 	modifier: Modifier = Modifier,
 	onChoose: () -> Unit,
 	onDismiss: () -> Unit
@@ -127,7 +130,7 @@ private fun MenuRow(
 
 	Row(
 		modifier = modifier
-			.padding(horizontal = 10.dp, vertical = 2.dp)
+			.padding(horizontal = 10.dp, vertical = 1.dp)
 			.clip(shape)
 			.background(if (isFocused) FocusedRing.copy(alpha = 0.22f) else Color.Transparent)
 			.border(1.dp, if (isFocused) FocusedRing else Color.Transparent, shape)
@@ -149,19 +152,28 @@ private fun MenuRow(
 					else -> false
 				}
 			}
-			.padding(horizontal = 10.dp, vertical = 5.dp),
+			.padding(horizontal = 10.dp, vertical = 4.dp),
 		verticalAlignment = Alignment.CenterVertically
 	) {
-		VariantPreview(variant)
+		VariantPreview(variant, metadata)
 
 		Text(
 			text = variant.title,
-			color = Color(0xFFF2F2F5),
+			color = Color(0xFFFFFFFF),
 			fontSize = 15.sp,
 			modifier = Modifier
 				.weight(1f)
 				.padding(start = 14.dp)
 		)
+
+		if (variant == OverlayVariant.Metadata) {
+			Text(
+				text = "FIELDS",
+				color = Color(0x99FFFFFF),
+				fontSize = 10.sp,
+				modifier = Modifier.padding(end = 10.dp)
+			)
+		}
 
 		Text(
 			text = if (selected) "✓" else "",
@@ -178,8 +190,11 @@ private fun MenuRow(
  * proportions.
  */
 @Composable
-private fun VariantPreview(variant: OverlayVariant) {
-	val scale = (PreviewWidth / variant.width.size).coerceIn(0.3f, 0.8f)
+private fun VariantPreview(variant: OverlayVariant, metadata: MetadataConfig?) {
+	val scale = minOf(
+		PreviewWidth / variant.width.size,
+		PreviewHeight / variant.height.size
+	).coerceAtMost(0.8f)
 
 	Box(
 		modifier = Modifier
@@ -190,6 +205,7 @@ private fun VariantPreview(variant: OverlayVariant) {
 		Box(Modifier.scale(scale)) {
 			OverlaySlotContent(
 				variant = variant,
+				metadata = metadata,
 				modifier = Modifier
 					// The preview box is smaller than the slot, so the size has to be forced.
 					.requiredWidth(variant.width.size)

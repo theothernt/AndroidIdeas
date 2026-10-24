@@ -13,7 +13,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -31,7 +30,11 @@ import com.neilturner.arrangethings.logic.slotOverlay
 fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 	val state by viewModel.state.collectAsStateWithLifecycle()
 
-	// Back closes the overlay menu instead of leaving the app.
+	// Back closes the metadata setup or the overlay menu instead of leaving the app.
+	BackHandler(enabled = state.isMetadataEditorOpen) {
+		viewModel.cancelMetadata()
+	}
+
 	BackHandler(enabled = state.isMenuOpen) {
 		viewModel.closeMenu()
 	}
@@ -52,7 +55,7 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 
 				Button(
 					onClick = viewModel::reset,
-					enabled = !state.isMenuOpen
+					enabled = !state.isDialogOpen
 				) {
 					Text(text = "Reset")
 				}
@@ -76,19 +79,7 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 
 			Spacer(Modifier.height(12.dp))
 
-			Text(
-				text = state.statusMessage ?: "Select a slot to choose the overlay it shows",
-				fontSize = 15.sp,
-				color = Color(0xCCFFFFFF)
-			)
-
-			Spacer(Modifier.height(4.dp))
-
-			Text(
-				text = "D-pad: choose an overlay   -   Select: pick it   -   Back: close the menu",
-				fontSize = 13.sp,
-				color = Color(0x88FFFFFF)
-			)
+			ActiveOverlayBar(overlays = state.overlays)
 		}
 
 		val menuSlot = state.menuSlot
@@ -96,8 +87,22 @@ fun EditorScreen(viewModel: EditorViewModel = viewModel()) {
 			OverlayMenu(
 				slot = menuSlot,
 				currentVariant = slotOverlay(state.overlays, menuSlot.corner, menuSlot.order)?.variant,
+				metadata = slotOverlay(state.overlays, menuSlot.corner, menuSlot.order)?.metadata,
 				onChoose = viewModel::chooseVariant,
 				onDismiss = viewModel::closeMenu
+			)
+		}
+
+		val metadataEditor = state.metadataEditor
+		if (metadataEditor != null) {
+			MetadataSetupScreen(
+				editor = metadataEditor,
+				onShowCategory = viewModel::showMetadataCategory,
+				onToggleField = viewModel::toggleMetadataField,
+				onToggleCategory = viewModel::toggleMetadataCategory,
+				onDefaults = viewModel::resetMetadataDraft,
+				onCancel = viewModel::cancelMetadata,
+				onApply = viewModel::applyMetadata
 			)
 		}
 	}

@@ -1,6 +1,7 @@
 package com.neilturner.arrangethings.logic
 
 import com.neilturner.arrangethings.model.Corner
+import com.neilturner.arrangethings.model.MetadataConfig
 import com.neilturner.arrangethings.model.OverlayConfig
 import com.neilturner.arrangethings.model.OverlayVariant
 import com.neilturner.arrangethings.model.SLOTS_PER_CORNER
@@ -16,17 +17,27 @@ fun slotOverlay(overlays: List<OverlayConfig>, corner: Corner, order: Int): Over
 /**
  * Puts an overlay of the given variant in a slot.
  *
- * A null variant empties the slot. Any overlay that was in the slot is replaced.
+ * A null variant empties the slot. Any overlay that was in the slot is replaced. The metadata
+ * configuration only belongs to a Metadata overlay, so it is kept for that variant and dropped for
+ * every other one.
  */
 fun setSlot(
 	overlays: List<OverlayConfig>,
 	corner: Corner,
 	order: Int,
-	variant: OverlayVariant?
+	variant: OverlayVariant?,
+	metadata: MetadataConfig? = null
 ): List<OverlayConfig> {
 	val without = overlays.filterNot { it.corner == corner && it.order == order }
 	if (variant == null) return without
-	return without + OverlayConfig(variant = variant, corner = corner, order = order)
+
+	val config = if (variant == OverlayVariant.Metadata) metadata ?: MetadataConfig.Default else null
+	return without + OverlayConfig(
+		variant = variant,
+		corner = corner,
+		order = order,
+		metadata = config
+	)
 }
 
 /**
