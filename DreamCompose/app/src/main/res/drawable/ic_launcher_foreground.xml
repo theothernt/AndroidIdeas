@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Launcher icon foreground for Dream Compose. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.7"
+        android:scaleY="0.7">
+        <path
+            android:pathData="M69.571,26.044 A32,32 0 1 0 69.571,81.956 A28,28 0 0 1 69.571,26.044 z"
+            android:fillColor="#FFFFFFFF" />
+        <path
+            android:pathData="M76,27.5 Q76.99,32.01 81.5,33 Q76.99,33.99 76,38.5 Q75.01,33.99 70.5,33 Q75.01,32.01 76,27.5 z"
+            android:fillColor="#FFFFFFFF"
+            android:fillAlpha="0.95" />
+        <path
+            android:pathData="M81,58 Q81.72,61.28 85,62 Q81.72,62.72 81,66 Q80.28,62.72 77,62 Q80.28,61.28 81,58 z"
+            android:fillColor="#FFFFFFFF"
+            android:fillAlpha="0.7" />
+    </group>
+</vector>
