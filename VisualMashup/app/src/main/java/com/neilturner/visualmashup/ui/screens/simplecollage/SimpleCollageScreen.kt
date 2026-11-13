@@ -1,4 +1,4 @@
-package com.neilturner.visualmashup.ui.screens.collagepreview
+package com.neilturner.visualmashup.ui.screens.simplecollage
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,12 +26,10 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
@@ -39,6 +37,7 @@ import coil3.size.Size
 import com.neilturner.visualmashup.data.CollageMetrics
 import com.neilturner.visualmashup.data.CollagePlacement
 import com.neilturner.visualmashup.data.maxImageSize
+import com.neilturner.visualmashup.ui.components.OverlayChip
 import com.neilturner.visualmashup.ui.theme.VisualMashupTheme
 import kotlin.math.roundToInt
 
@@ -51,8 +50,8 @@ private val CELL_BORDER_COLOR = Color.White
  * gutter. Left/right on the D-pad cycles through the sample groups.
  */
 @Composable
-fun CollagePreviewScreen(modifier: Modifier = Modifier) {
-    val viewModel: CollagePreviewViewModel = viewModel()
+fun SimpleCollageScreen(modifier: Modifier = Modifier) {
+    val viewModel: SimpleCollageViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val focusRequester = remember { FocusRequester() }
 
@@ -90,18 +89,14 @@ fun CollagePreviewScreen(modifier: Modifier = Modifier) {
         )
 
         val cropPercent = ((1f - uiState.placement.visibleAreaFraction) * 100).roundToInt()
-        Text(
+        OverlayChip(
             text = "${uiState.placement.template.name}  •  " +
                 uiState.placement.images.joinToString(" ") { it.orientation.name.first().toString() } +
                 "  •  ${uiState.groupIndex + 1}/${uiState.groupCount}" +
                 "  •  crop $cropPercent%",
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(24.dp)
-                .background(Color.Black.copy(alpha = 0.6f))
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(16.dp),
         )
     }
 }
@@ -160,8 +155,8 @@ private fun FullBleedCollage(
 
 @Preview(showBackground = true, widthDp = 960, heightDp = 540)
 @Composable
-private fun CollagePreviewScreenPreview() {
+private fun SimpleCollageScreenPreview() {
     VisualMashupTheme {
-        CollagePreviewScreen()
+        SimpleCollageScreen()
     }
 }

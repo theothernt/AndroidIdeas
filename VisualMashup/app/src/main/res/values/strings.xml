@@ -1,8 +1,8 @@
 <resources>
     <string name="app_name">Visual Mashup</string>
     <string name="menu_title">Visual Mashup</string>
-    <string name="open_collage">Open Collage</string>
-    <string name="collage_preview">Collage Preview</string>
+    <string name="simple_collage">Simple Collage</string>
+    <string name="scrolling_collage">Scrolling Collage</string>
     <string name="effects">Effects</string>
     <string name="speed">Speed</string>
     <string name="transition">Transition</string>

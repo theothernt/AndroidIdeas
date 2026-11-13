@@ -18,8 +18,8 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import com.neilturner.visualmashup.ui.screens.collage.CollageScreen
-import com.neilturner.visualmashup.ui.screens.collagepreview.CollagePreviewScreen
+import com.neilturner.visualmashup.ui.screens.scrollingcollage.ScrollingCollageScreen
+import com.neilturner.visualmashup.ui.screens.simplecollage.SimpleCollageScreen
 import com.neilturner.visualmashup.ui.screens.effect.EffectScreen
 import com.neilturner.visualmashup.ui.screens.menu.MenuScreen
 
@@ -66,16 +66,16 @@ fun AppNavigation(
         entryProvider = entryProvider {
             entry<MenuScreen> {
                 MenuScreen(
-                    onNavigateToCollage = { backStack.add(CollageScreen) },
-                    onNavigateToCollagePreview = { backStack.add(CollagePreviewScreen) },
+                    onNavigateToSimpleCollage = { backStack.add(SimpleCollageScreen) },
+                    onNavigateToScrollingCollage = { backStack.add(ScrollingCollageScreen) },
                     onNavigateToEffects = { backStack.add(EffectScreen) },
                 )
             }
-            entry<CollageScreen> {
-                CollageScreen()
+            entry<SimpleCollageScreen> {
+                SimpleCollageScreen()
             }
-            entry<CollagePreviewScreen> {
-                CollagePreviewScreen()
+            entry<ScrollingCollageScreen> {
+                ScrollingCollageScreen()
             }
             entry<EffectScreen> {
                 EffectScreen()

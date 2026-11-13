@@ -1,4 +1,4 @@
-package com.neilturner.visualmashup.ui.screens.collagepreview
+package com.neilturner.visualmashup.ui.screens.simplecollage
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -19,7 +19,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlin.math.roundToInt
 
-data class CollagePreviewUiState(
+data class SimpleCollageUiState(
     val placement: CollagePlacement,
     val groupIndex: Int,
     val groupCount: Int,
@@ -31,7 +31,7 @@ data class CollagePreviewUiState(
  * A collage always uses at least two photos. While a group is on screen, the next group's images are
  * preloaded at the exact size each cell will render at, so advancing to it is a memory-cache hit.
  */
-class CollagePreviewViewModel(application: Application) : AndroidViewModel(application) {
+class SimpleCollageViewModel(application: Application) : AndroidViewModel(application) {
 
     private val imageLoader: ImageLoader = SingletonImageLoader.get(application)
 
@@ -52,7 +52,7 @@ class CollagePreviewViewModel(application: Application) : AndroidViewModel(appli
     )
 
     private val _uiState = MutableStateFlow(stateFor(0))
-    val uiState: StateFlow<CollagePreviewUiState> = _uiState.asStateFlow()
+    val uiState: StateFlow<SimpleCollageUiState> = _uiState.asStateFlow()
 
     fun next() = step(1)
 
@@ -65,14 +65,14 @@ class CollagePreviewViewModel(application: Application) : AndroidViewModel(appli
         }
     }
 
-    private fun stateFor(index: Int): CollagePreviewUiState {
+    private fun stateFor(index: Int): SimpleCollageUiState {
         val images = groups[index]
         val placement = CollageLayouts.bestFor(images)
 
         // Warm the next group while this one is on screen.
         preloadGroupsAhead(index, count = 1)
 
-        return CollagePreviewUiState(
+        return SimpleCollageUiState(
             placement = placement,
             groupIndex = index,
             groupCount = groups.size,

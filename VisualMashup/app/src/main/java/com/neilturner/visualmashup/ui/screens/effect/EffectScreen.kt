@@ -10,11 +10,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.tv.material3.Text
+import com.neilturner.visualmashup.ui.components.OverlayChip
 import com.neilturner.visualmashup.ui.effects.EffectImage
 import com.neilturner.visualmashup.ui.effects.TransitionContainer
 
@@ -57,16 +56,12 @@ fun EffectScreen(modifier: Modifier = Modifier) {
             )
         }
 
-        Text(
+        OverlayChip(
             text = "${effect.displayName}  •  ${speed.displayName}  •  " +
                 "${transition.displayName}  •  ${currentIndex + 1}/${viewModel.images.size}",
-            color = Color.White,
-            fontWeight = FontWeight.Bold,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(24.dp)
-                .background(Color.Black.copy(alpha = 0.6f))
-                .padding(horizontal = 12.dp, vertical = 6.dp),
+                .padding(16.dp),
         )
     }
 }

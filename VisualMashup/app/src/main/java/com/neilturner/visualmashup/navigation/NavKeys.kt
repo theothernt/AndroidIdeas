@@ -7,13 +7,13 @@ import kotlinx.serialization.Serializable
 @Serializable
 data object MenuScreen : NavKey
 
-/** The collage editor. Currently a blank destination. */
+/** Simple collage grid built from full-bleed, orientation-aware cells. */
 @Serializable
-data object CollageScreen : NavKey
+data object SimpleCollageScreen : NavKey
 
-/** Crop-free collage preview using natural-aspect layouts. */
+/** Endless vertical collage that auto-scrolls through the images. */
 @Serializable
-data object CollagePreviewScreen : NavKey
+data object ScrollingCollageScreen : NavKey
 
 /** Slideshow that applies image effects such as Ken Burns. */
 @Serializable

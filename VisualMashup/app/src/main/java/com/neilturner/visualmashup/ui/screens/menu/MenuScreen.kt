@@ -36,15 +36,15 @@ import com.neilturner.visualmashup.ui.effects.TransitionSettings
 import com.neilturner.visualmashup.ui.theme.VisualMashupTheme
 
 /**
- * The app's entry screen. Shows the title, the main actions (two on the first row, the related
- * Effects/Speed/Transition group on the second), and modal pickers.
+ * The app's entry screen. Shows the title, the main action (Simple Collage on the first row,
+ * the related Effects/Speed/Transition group on the second), and modal pickers.
  *
  * The first button is focused on first composition so the D-pad has a clear starting point.
  */
 @Composable
 fun MenuScreen(
-    onNavigateToCollage: () -> Unit,
-    onNavigateToCollagePreview: () -> Unit,
+    onNavigateToSimpleCollage: () -> Unit,
+    onNavigateToScrollingCollage: () -> Unit,
     onNavigateToEffects: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -106,13 +106,13 @@ fun MenuScreen(
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
-                    onClick = onNavigateToCollage,
+                    onClick = onNavigateToSimpleCollage,
                     modifier = Modifier.focusRequester(focusRequester),
                 ) {
-                    Text(text = stringResource(R.string.open_collage))
+                    Text(text = stringResource(R.string.simple_collage))
                 }
-                Button(onClick = onNavigateToCollagePreview) {
-                    Text(text = stringResource(R.string.collage_preview))
+                Button(onClick = onNavigateToScrollingCollage) {
+                    Text(text = stringResource(R.string.scrolling_collage))
                 }
             }
 
@@ -226,8 +226,8 @@ fun MenuScreen(
 private fun MenuScreenPreview() {
     VisualMashupTheme {
         MenuScreen(
-            onNavigateToCollage = {},
-            onNavigateToCollagePreview = {},
+            onNavigateToSimpleCollage = {},
+            onNavigateToScrollingCollage = {},
             onNavigateToEffects = {},
         )
     }
