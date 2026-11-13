@@ -9,6 +9,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavBackStack
@@ -36,6 +40,10 @@ fun AppNavigation(
         rememberViewModelStoreNavEntryDecorator(),
     )
 
+    // Incremented whenever the back stack returns to the menu so MenuScreen can restore focus to
+    // the item the user last used.
+    var menuFocusRequest by rememberSaveable { mutableIntStateOf(0) }
+
     // NavDisplay only registers a back handler while there is an entry to pop, so back on the root
     // entry would otherwise be swallowed and trap the user on the first screen.
     val activity = LocalActivity.current
@@ -46,7 +54,10 @@ fun AppNavigation(
     NavDisplay(
         modifier = modifier,
         backStack = backStack,
-        onBack = { backStack.removeLastOrNull() },
+        onBack = {
+            backStack.removeLastOrNull()
+            if (backStack.lastOrNull() == MenuScreen) menuFocusRequest++
+        },
         transitionSpec = {
             ContentTransform(
                 targetContentEnter = fadeIn(tween(FADE_MS)) +
@@ -69,6 +80,7 @@ fun AppNavigation(
                     onNavigateToSimpleCollage = { backStack.add(SimpleCollageScreen) },
                     onNavigateToScrollingCollage = { backStack.add(ScrollingCollageScreen) },
                     onNavigateToEffects = { backStack.add(EffectScreen) },
+                    focusRequest = menuFocusRequest,
                 )
             }
             entry<SimpleCollageScreen> {

@@ -23,12 +23,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -81,12 +83,16 @@ fun MenuScreen(
     onNavigateToSimpleCollage: () -> Unit,
     onNavigateToScrollingCollage: () -> Unit,
     onNavigateToEffects: () -> Unit,
+    focusRequest: Int = 0,
     modifier: Modifier = Modifier,
 ) {
     val focusRequester = remember { FocusRequester() }
+    val scrollingCardFocus = remember { FocusRequester() }
+    val effectsCardFocus = remember { FocusRequester() }
     val speedButtonFocus = remember { FocusRequester() }
     val transitionButtonFocus = remember { FocusRequester() }
     val imageEffectButtonFocus = remember { FocusRequester() }
+    var lastFocused by rememberSaveable { mutableIntStateOf(0) }
     val speed by EffectSettings.speed.collectAsStateWithLifecycle()
     val transition by TransitionSettings.transition.collectAsStateWithLifecycle()
     val effect by EffectSettings.effect.collectAsStateWithLifecycle()
@@ -102,7 +108,18 @@ fun MenuScreen(
     val scrollingImage = remember { images.first { it.orientation == ImageOrientation.PORTRAIT } }
     val effectsImage = remember { images.first { it.orientation == ImageOrientation.LANDSCAPE } }
 
-    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+    // Restores the last used item on first composition and whenever the back stack returns.
+    LaunchedEffect(focusRequest) {
+        val target = when (lastFocused) {
+            1 -> scrollingCardFocus
+            2 -> effectsCardFocus
+            3 -> imageEffectButtonFocus
+            4 -> speedButtonFocus
+            5 -> transitionButtonFocus
+            else -> focusRequester
+        }
+        target.requestFocus()
+    }
 
     LaunchedEffect(refocusSpeed) {
         if (refocusSpeed) {
@@ -157,19 +174,27 @@ fun MenuScreen(
                     title = stringResource(R.string.simple_collage),
                     subtitle = "Full-bleed layouts",
                     image = collageImage,
-                    modifier = Modifier.focusRequester(focusRequester),
+                    modifier = Modifier
+                        .focusRequester(focusRequester)
+                        .onFocusChanged { if (it.isFocused) lastFocused = 0 },
                     onClick = onNavigateToSimpleCollage,
                 )
                 ActionCard(
                     title = stringResource(R.string.scrolling_collage),
                     subtitle = "Endless auto-scroll",
                     image = scrollingImage,
+                    modifier = Modifier
+                        .focusRequester(scrollingCardFocus)
+                        .onFocusChanged { if (it.isFocused) lastFocused = 1 },
                     onClick = onNavigateToScrollingCollage,
                 )
                 ActionCard(
                     title = stringResource(R.string.image_effects),
                     subtitle = "Ken Burns & transitions",
                     image = effectsImage,
+                    modifier = Modifier
+                        .focusRequester(effectsCardFocus)
+                        .onFocusChanged { if (it.isFocused) lastFocused = 2 },
                     onClick = onNavigateToEffects,
                 )
             }
@@ -179,19 +204,25 @@ fun MenuScreen(
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
                     onClick = { imageEffectDialogVisible = true },
-                    modifier = Modifier.focusRequester(imageEffectButtonFocus),
+                    modifier = Modifier
+                        .focusRequester(imageEffectButtonFocus)
+                        .onFocusChanged { if (it.isFocused) lastFocused = 3 },
                 ) {
                     Text(text = "${stringResource(R.string.image_effect)}: ${effect.displayName}")
                 }
                 Button(
                     onClick = { speedDialogVisible = true },
-                    modifier = Modifier.focusRequester(speedButtonFocus),
+                    modifier = Modifier
+                        .focusRequester(speedButtonFocus)
+                        .onFocusChanged { if (it.isFocused) lastFocused = 4 },
                 ) {
                     Text(text = "${stringResource(R.string.speed)}: ${speed.displayName}")
                 }
                 Button(
                     onClick = { transitionDialogVisible = true },
-                    modifier = Modifier.focusRequester(transitionButtonFocus),
+                    modifier = Modifier
+                        .focusRequester(transitionButtonFocus)
+                        .onFocusChanged { if (it.isFocused) lastFocused = 5 },
                 ) {
                     Text(text = "${stringResource(R.string.transition)}: ${transition.displayName}")
                 }
