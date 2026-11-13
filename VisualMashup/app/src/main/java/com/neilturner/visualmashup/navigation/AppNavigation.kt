@@ -23,7 +23,7 @@ import com.neilturner.visualmashup.ui.screens.simplecollage.SimpleCollageScreen
 import com.neilturner.visualmashup.ui.screens.effect.EffectScreen
 import com.neilturner.visualmashup.ui.screens.menu.MenuScreen
 
-private const val TRANSITION_MS = 400
+private const val TRANSITION_MS = 600
 private const val FADE_MS = TRANSITION_MS / 2
 
 @Composable
