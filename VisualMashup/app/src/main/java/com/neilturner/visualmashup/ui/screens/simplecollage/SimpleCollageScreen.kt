@@ -37,6 +37,7 @@ import coil3.size.Size
 import com.neilturner.visualmashup.data.CollageMetrics
 import com.neilturner.visualmashup.data.CollagePlacement
 import com.neilturner.visualmashup.data.maxImageSize
+import com.neilturner.visualmashup.ui.components.LoadingScreen
 import com.neilturner.visualmashup.ui.components.OverlayChip
 import com.neilturner.visualmashup.ui.theme.VisualMashupTheme
 import kotlin.math.roundToInt
@@ -53,7 +54,13 @@ private val CELL_BORDER_COLOR = Color.White
 fun SimpleCollageScreen(modifier: Modifier = Modifier) {
     val viewModel: SimpleCollageViewModel = viewModel()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val ready by viewModel.ready.collectAsStateWithLifecycle()
     val focusRequester = remember { FocusRequester() }
+
+    if (!ready) {
+        LoadingScreen(modifier)
+        return
+    }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 

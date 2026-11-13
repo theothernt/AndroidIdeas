@@ -9,7 +9,6 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -23,11 +22,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.clipRect
@@ -39,7 +40,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.neilturner.visualmashup.data.SourceImage
 import com.neilturner.visualmashup.data.maxImageSize
+import kotlin.math.PI
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 private const val TRANSITION_MS = 1_200
 private const val FADE_MS = TRANSITION_MS / 2
@@ -73,10 +76,10 @@ fun RandomEffectContainer(
             ParallaxTransition(targetState, modifier, content)
 
         RandomEffect.FLIP ->
-            FlipTransition(targetState, modifier, shadow = false, content)
+            FlipTransition(targetState, modifier, content)
 
         RandomEffect.FOLD ->
-            FlipTransition(targetState, modifier, shadow = true, content)
+            PageFoldTransition(targetState, modifier, content)
 
         RandomEffect.PIXELATE ->
             PixelateTransition(targetState, images, widthPx, heightPx, modifier)
@@ -93,7 +96,7 @@ private fun RevealTransition(
     content: @Composable (Int) -> Unit,
 ) {
     var previousIndex by remember { mutableIntStateOf(targetState) }
-    val progress = remember { Animatable(1f) }
+    val progress = remember(targetState) { Animatable(0f) }
     val irisPath = remember { Path() }
 
     LaunchedEffect(targetState) {
@@ -178,11 +181,10 @@ private fun ParallaxTransition(
 private fun FlipTransition(
     targetState: Int,
     modifier: Modifier = Modifier,
-    shadow: Boolean,
     content: @Composable (Int) -> Unit,
 ) {
     var previousIndex by remember { mutableIntStateOf(targetState) }
-    val progress = remember { Animatable(1f) }
+    val progress = remember(targetState) { Animatable(0f) }
     val density = LocalDensity.current
 
     LaunchedEffect(targetState) {
@@ -198,14 +200,12 @@ private fun FlipTransition(
             index = previousIndex,
             rotationY = -90f * progress.value,
             density = density,
-            shadow = shadow,
             content = content,
         )
         RotatingContent(
             index = targetState,
             rotationY = 90f * (1f - progress.value),
             density = density,
-            shadow = shadow,
             content = content,
         )
     }
@@ -216,7 +216,6 @@ private fun RotatingContent(
     index: Int,
     rotationY: Float,
     density: Density,
-    shadow: Boolean,
     content: @Composable (Int) -> Unit,
 ) {
     Box(
@@ -228,16 +227,157 @@ private fun RotatingContent(
             },
     ) {
         content(index)
-        if (shadow) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.linearGradient(
-                            listOf(Color.Black.copy(alpha = 0.5f), Color.Transparent),
-                        ),
-                    ),
-            )
+    }
+}
+
+/**
+ * A realistic page turn: the screen is split along a vertical centre spine into a static left half
+ * of the current page, a static right half of the next page, and an animated flap.
+ *
+ * The flap shows the right half of the current page rotating 0° → -90° while [progress] goes
+ * 0 → 0.5, then swaps to the left half of the next page rotating +90° → 0° while it goes 0.5 → 1.
+ * Shading on the flap and a cast shadow along the spine give it some physical depth.
+ */
+@Composable
+private fun PageFoldTransition(
+    targetState: Int,
+    modifier: Modifier = Modifier,
+    content: @Composable (Int) -> Unit,
+) {
+    var previousIndex by remember { mutableIntStateOf(targetState) }
+    // Reset during composition (not in an effect) so the frame that first shows a new target is
+    // already at progress 0; otherwise the new image flashes fully drawn for one frame.
+    val progress = remember(targetState) { Animatable(0f) }
+    val density = LocalDensity.current
+
+    LaunchedEffect(targetState) {
+        if (targetState != previousIndex) {
+            progress.snapTo(0f)
+            progress.animateTo(1f, tween(TRANSITION_MS))
+            previousIndex = targetState
+        }
+    }
+
+    Box(modifier) {
+        // 1. Static left half of the current page.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithContent {
+                    val p = progress.value
+                    if (p < 1f) {
+                        clipRect(right = size.width / 2f) {
+                            this@drawWithContent.drawContent()
+                            // Shadow cast onto the left page as the flap closes over it.
+                            if (p > 0.5f) {
+                                val shadowAlpha = ((p - 0.5f) * 2f) * 0.45f
+                                drawRect(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color.Transparent,
+                                            Color.Black.copy(alpha = shadowAlpha),
+                                        ),
+                                        startX = size.width * 0.25f,
+                                        endX = size.width / 2f,
+                                    ),
+                                    size = Size(size.width / 2f, size.height),
+                                )
+                            }
+                        }
+                    }
+                },
+        ) {
+            content(previousIndex)
+        }
+
+        // 2. Static right half of the next page.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawWithContent {
+                    val p = progress.value
+                    if (p > 0f) {
+                        clipRect(left = size.width / 2f) {
+                            this@drawWithContent.drawContent()
+                            // Shadow cast onto the newly exposed right page while the flap is lifted.
+                            if (p < 0.5f) {
+                                val shadowAlpha = (1f - (p * 2f)) * 0.45f
+                                drawRect(
+                                    brush = Brush.horizontalGradient(
+                                        colors = listOf(
+                                            Color.Black.copy(alpha = shadowAlpha),
+                                            Color.Transparent,
+                                        ),
+                                        startX = size.width / 2f,
+                                        endX = size.width * 0.75f,
+                                    ),
+                                    topLeft = Offset(size.width / 2f, 0f),
+                                    size = Size(size.width / 2f, size.height),
+                                )
+                            }
+                        }
+                    }
+                },
+        ) {
+            content(targetState)
+        }
+
+        // 3A. Turning flap, first half: right half of the current page lifting up.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val p = progress.value.coerceIn(0f, 1f)
+                    alpha = if (p <= 0.5f) 1f else 0f
+                    transformOrigin = TransformOrigin(0.5f, 0.5f)
+                    rotationY = -180f * p
+                    cameraDistance = 24f * density.density
+                }
+                .drawWithContent {
+                    val p = progress.value.coerceIn(0f, 1f)
+                    if (p <= 0.5f) {
+                        clipRect(left = size.width / 2f) {
+                            this@drawWithContent.drawContent()
+                            // Darken the flap as it angles toward 90 degrees.
+                            val foldShade = sin(p * PI).toFloat() * 0.30f
+                            drawRect(
+                                color = Color.Black.copy(alpha = foldShade),
+                                topLeft = Offset(size.width / 2f, 0f),
+                                size = Size(size.width / 2f, size.height),
+                            )
+                        }
+                    }
+                },
+        ) {
+            content(previousIndex)
+        }
+
+        // 3B. Turning flap, second half: left half of the next page settling down.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer {
+                    val p = progress.value.coerceIn(0f, 1f)
+                    alpha = if (p > 0.5f) 1f else 0f
+                    transformOrigin = TransformOrigin(0.5f, 0.5f)
+                    rotationY = 180f * (1f - p)
+                    cameraDistance = 24f * density.density
+                }
+                .drawWithContent {
+                    val p = progress.value.coerceIn(0f, 1f)
+                    if (p > 0.5f) {
+                        clipRect(right = size.width / 2f) {
+                            this@drawWithContent.drawContent()
+                            val foldShade = sin(p * PI).toFloat() * 0.30f
+                            drawRect(
+                                color = Color.Black.copy(alpha = foldShade),
+                                size = Size(size.width / 2f, size.height),
+                            )
+                        }
+                    }
+                },
+        ) {
+            content(targetState)
         }
     }
 }
@@ -285,19 +425,46 @@ private fun PixelateTransition(
             val p = progress.value
             val oldIndex = (p * (old.size - 1)).roundToInt()
             val newIndex = ((1f - p) * (new.size - 1)).roundToInt()
-            drawLevel(old[oldIndex], alpha = 1f - p, fullWidth, fullHeight)
-            drawLevel(new[newIndex], alpha = p, fullWidth, fullHeight)
+            drawLevel(
+                level = old[oldIndex],
+                alpha = 1f - p,
+                fullWidth = fullWidth,
+                fullHeight = fullHeight,
+                filterQuality = filterFor(oldIndex),
+            )
+            drawLevel(
+                level = new[newIndex],
+                alpha = p,
+                fullWidth = fullWidth,
+                fullHeight = fullHeight,
+                filterQuality = filterFor(newIndex),
+            )
         } else if (new.isNotEmpty()) {
-            drawLevel(new.last(), alpha = 1f, fullWidth, fullHeight)
+            // No transition yet: show the full-resolution level.
+            drawLevel(
+                level = new.first(),
+                alpha = 1f,
+                fullWidth = fullWidth,
+                fullHeight = fullHeight,
+                filterQuality = FilterQuality.Low,
+            )
         }
     }
 }
+
+/**
+ * Level 0 is the full-resolution image, so it is filtered like any other image (bilinear). The
+ * lower levels are deliberately blocky, so they keep nearest-neighbour sampling.
+ */
+private fun filterFor(levelIndex: Int): FilterQuality =
+    if (levelIndex == 0) FilterQuality.Low else FilterQuality.None
 
 private fun DrawScope.drawLevel(
     level: PixelationLevel,
     alpha: Float,
     fullWidth: Int,
     fullHeight: Int,
+    filterQuality: FilterQuality,
 ) {
     drawImage(
         image = level.image,
@@ -306,6 +473,6 @@ private fun DrawScope.drawLevel(
         dstOffset = IntOffset.Zero,
         dstSize = IntSize(fullWidth, fullHeight),
         alpha = alpha,
-        filterQuality = FilterQuality.None,
+        filterQuality = filterQuality,
     )
 }

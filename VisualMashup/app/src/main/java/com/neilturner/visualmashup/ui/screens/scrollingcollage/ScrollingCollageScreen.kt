@@ -50,8 +50,10 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.neilturner.visualmashup.data.CollageMetrics
 import com.neilturner.visualmashup.data.ImageSource
+import com.neilturner.visualmashup.data.ScrollingCollageLayout
 import com.neilturner.visualmashup.data.SourceImage
 import com.neilturner.visualmashup.data.maxImageSize
+import com.neilturner.visualmashup.ui.components.LoadingScreen
 import com.neilturner.visualmashup.ui.components.OverlayChip
 import com.neilturner.visualmashup.ui.theme.VisualMashupTheme
 import kotlinx.coroutines.launch
@@ -61,17 +63,11 @@ private val CELL_GUTTER = CollageMetrics.GUTTER_DP.dp
 private val CELL_BORDER_WIDTH = CollageMetrics.BORDER_WIDTH_DP.dp
 private val CELL_BORDER_COLOR = Color.White
 
-private const val COLUMNS = 3
-
 /** The auto-scroll speed. */
 private val SCROLL_SPEED = 28.dp
 
 /** How far the D-pad scrolls per press, as a fraction of the viewport. */
 private const val PAGE_SCROLL_FRACTION = 0.8f
-
-/** Tiles are cropped to fill a tidy height range instead of following every extreme panorama. */
-private const val MIN_TILE_ASPECT = 0.65f
-private const val MAX_TILE_ASPECT = 1.5f
 
 /**
  * An endless vertical collage: images are laid out in a staggered grid that scrolls down slowly on
@@ -84,12 +80,18 @@ private const val MAX_TILE_ASPECT = 1.5f
 fun ScrollingCollageScreen(modifier: Modifier = Modifier) {
     val viewModel: ScrollingCollageViewModel = viewModel()
     val items by viewModel.items.collectAsStateWithLifecycle()
+    val ready by viewModel.ready.collectAsStateWithLifecycle()
     val gridState = rememberLazyStaggeredGridState()
     val density = LocalDensity.current
     val scope = rememberCoroutineScope()
     val focusRequester = remember { FocusRequester() }
 
     var autoScroll by rememberSaveable { mutableStateOf(true) }
+
+    if (!ready) {
+        LoadingScreen(modifier)
+        return
+    }
 
     LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
@@ -187,13 +189,14 @@ private fun ScrollingGrid(
     val context = LocalContext.current
 
     BoxWithConstraints(modifier = modifier) {
-        val columnWidth = (maxWidth - CELL_GUTTER * (COLUMNS + 1)) / COLUMNS
+        val columnWidth = (maxWidth - CELL_GUTTER * (ScrollingCollageLayout.COLUMNS + 1)) /
+            ScrollingCollageLayout.COLUMNS
         val imageWidthPx = with(density) {
             (columnWidth - CELL_BORDER_WIDTH * 2).toPx().roundToInt()
         }
 
         LazyVerticalStaggeredGrid(
-            columns = StaggeredGridCells.Fixed(COLUMNS),
+            columns = StaggeredGridCells.Fixed(ScrollingCollageLayout.COLUMNS),
             state = gridState,
             contentPadding = PaddingValues(CELL_GUTTER),
             horizontalArrangement = Arrangement.spacedBy(CELL_GUTTER),
@@ -204,10 +207,7 @@ private fun ScrollingGrid(
                 items = images,
                 key = { index, _ -> index },
             ) { _, image ->
-                val aspect = (image.height.toFloat() / image.width).coerceIn(
-                    MIN_TILE_ASPECT,
-                    MAX_TILE_ASPECT,
-                )
+                val aspect = ScrollingCollageLayout.tileAspect(image)
                 val tileHeight = columnWidth * aspect
                 val imageHeightPx = (imageWidthPx * aspect).roundToInt()
 

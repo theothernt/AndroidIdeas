@@ -13,6 +13,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.neilturner.visualmashup.ui.components.LoadingScreen
 import com.neilturner.visualmashup.ui.components.OverlayChip
 import com.neilturner.visualmashup.ui.effects.EffectImage
 import com.neilturner.visualmashup.ui.effects.TransitionContainer
@@ -28,7 +29,13 @@ fun EffectScreen(modifier: Modifier = Modifier) {
     val effect by viewModel.effect.collectAsStateWithLifecycle()
     val speed by viewModel.speed.collectAsStateWithLifecycle()
     val transition by viewModel.transition.collectAsStateWithLifecycle()
+    val ready by viewModel.ready.collectAsStateWithLifecycle()
     val density = LocalDensity.current
+
+    if (!ready) {
+        LoadingScreen(modifier)
+        return
+    }
 
     BoxWithConstraints(
         modifier = modifier

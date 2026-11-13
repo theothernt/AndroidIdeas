@@ -2,6 +2,7 @@ package com.neilturner.visualmashup.ui.screens.simplecollage
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import com.neilturner.visualmashup.data.CollageLayouts
 import com.neilturner.visualmashup.data.CollageMetrics
 import com.neilturner.visualmashup.data.CollagePlacement
@@ -12,11 +13,11 @@ import com.neilturner.visualmashup.data.maxImageSize
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
-import coil3.size.Size
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 data class SimpleCollageUiState(
@@ -54,6 +55,18 @@ class SimpleCollageViewModel(application: Application) : AndroidViewModel(applic
     private val _uiState = MutableStateFlow(stateFor(0))
     val uiState: StateFlow<SimpleCollageUiState> = _uiState.asStateFlow()
 
+    private val _ready = MutableStateFlow(false)
+
+    /** True once the first placement's images have been decoded, so the screen can be shown. */
+    val ready: StateFlow<Boolean> = _ready.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            requestsForGroup(0).forEach { imageLoader.execute(it) }
+            _ready.value = true
+        }
+    }
+
     fun next() = step(1)
 
     fun previous() = step(-1)
@@ -84,31 +97,34 @@ class SimpleCollageViewModel(application: Application) : AndroidViewModel(applic
      * request is an exact memory-cache hit.
      */
     private fun preloadGroupsAhead(currentIndex: Int, count: Int) {
+        for (ahead in 1..count) {
+            val nextIndex = (currentIndex + ahead + groups.size) % groups.size
+            requestsForGroup(nextIndex).forEach { imageLoader.enqueue(it) }
+        }
+    }
+
+    /** The requests for every cell of [groupIndex], sized exactly as the screen draws them. */
+    private fun requestsForGroup(groupIndex: Int): List<ImageRequest> {
         val app = getApplication<Application>()
         val metrics = app.resources.displayMetrics
         val gutterPx = (CollageMetrics.GUTTER_DP * metrics.density).roundToInt()
         val borderPx = (CollageMetrics.BORDER_WIDTH_DP * metrics.density).roundToInt()
 
-        for (ahead in 1..count) {
-            val nextIndex = (currentIndex + ahead + groups.size) % groups.size
-            val placement = CollageLayouts.bestFor(groups[nextIndex])
+        val placement = CollageLayouts.bestFor(groups[groupIndex])
 
-            placement.images.forEachIndexed { cellIndex, image ->
-                val cell = placement.template.cells[cellIndex]
-                val width = (cell.width * metrics.widthPixels - gutterPx - 2 * borderPx)
-                    .roundToInt()
-                    .coerceAtLeast(1)
-                val height = (cell.height * metrics.heightPixels - gutterPx - 2 * borderPx)
-                    .roundToInt()
-                    .coerceAtLeast(1)
+        return placement.images.mapIndexed { cellIndex, image ->
+            val cell = placement.template.cells[cellIndex]
+            val width = (cell.width * metrics.widthPixels - gutterPx - 2 * borderPx)
+                .roundToInt()
+                .coerceAtLeast(1)
+            val height = (cell.height * metrics.heightPixels - gutterPx - 2 * borderPx)
+                .roundToInt()
+                .coerceAtLeast(1)
 
-                imageLoader.enqueue(
-                    ImageRequest.Builder(app)
-                        .data(image.url)
-                        .size(maxImageSize(width, height))
-                        .build(),
-                )
-            }
+            ImageRequest.Builder(app)
+                .data(image.url)
+                .size(maxImageSize(width, height))
+                .build()
         }
     }
 }

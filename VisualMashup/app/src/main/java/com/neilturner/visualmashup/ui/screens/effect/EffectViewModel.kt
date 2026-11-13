@@ -39,15 +39,29 @@ class EffectViewModel(application: Application) : AndroidViewModel(application) 
     private val _currentIndex = MutableStateFlow(0)
     val currentIndex: StateFlow<Int> = _currentIndex.asStateFlow()
 
+    private val _ready = MutableStateFlow(false)
+
+    /** True once the first image has been decoded, so the screen can be shown. */
+    val ready: StateFlow<Boolean> = _ready.asStateFlow()
+
     private val imageLoader: ImageLoader = SingletonImageLoader.get(application)
 
     init {
+        viewModelScope.launch {
+            warm(0)
+            _ready.value = true
+        }
         preloadNext()
         // Warm the pixelation levels while the Pixelate transition is selected, so the
         // decode/downscale doesn't happen during the transition.
         viewModelScope.launch {
             TransitionSettings.transition.collect { transition ->
-                if (transition == Transition.PIXELATE) preloadPixelation()
+                if (transition == Transition.PIXELATE) {
+                    preloadPixelation()
+                } else {
+                    // The pre-rendered levels are only useful for Pixelate; don't hold on to them.
+                    PixelationCache.clear()
+                }
             }
         }
         viewModelScope.launch {
@@ -84,5 +98,23 @@ class EffectViewModel(application: Application) : AndroidViewModel(application) 
                     .build(),
             )
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        PixelationCache.clear()
+    }
+
+    /** Decodes [index] at the full display size and waits for it, so the screen can be revealed. */
+    private suspend fun warm(index: Int) {
+        val app = getApplication<Application>()
+        val metrics = app.resources.displayMetrics
+
+        imageLoader.execute(
+            ImageRequest.Builder(app)
+                .data(images[index].url)
+                .size(maxImageSize(metrics.widthPixels, metrics.heightPixels))
+                .build(),
+        )
     }
 }

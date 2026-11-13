@@ -16,26 +16,23 @@ private const val UPDATE_INTERVAL_MS = 1_000L
  * A small always-on overlay showing the app's current RAM usage.
  *
  * `totalPss` is the same proportional-set-size metric Android uses for a process, so it is the best
- * single "how much RAM is this app using" number. The Java heap figure is the live managed heap.
+ * single "how much RAM is this app using" number.
  */
 @Composable
 fun RamUsageOverlay(modifier: Modifier = Modifier) {
     var pssKb by remember { mutableIntStateOf(0) }
-    var heapMb by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(Unit) {
         val memoryInfo = Debug.MemoryInfo()
-        val runtime = Runtime.getRuntime()
         while (true) {
             Debug.getMemoryInfo(memoryInfo)
             pssKb = memoryInfo.totalPss
-            heapMb = ((runtime.totalMemory() - runtime.freeMemory()) / (1024L * 1024L)).toInt()
             delay(UPDATE_INTERVAL_MS)
         }
     }
 
     OverlayChip(
-        text = "RAM %d MB  •  heap %d MB".format(pssKb / 1024, heapMb),
+        text = "RAM usage %d MB".format(pssKb / 1024),
         modifier = modifier,
     )
 }
