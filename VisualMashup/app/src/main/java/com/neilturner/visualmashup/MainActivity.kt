@@ -1,5 +1,6 @@
 package com.neilturner.visualmashup
 
+import android.content.pm.ApplicationInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,6 +10,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Surface
@@ -28,11 +30,17 @@ class MainActivity : ComponentActivity() {
 				) {
 					Box(modifier = Modifier.fillMaxSize()) {
 						AppNavigation()
-						RamUsageOverlay(
-							modifier = Modifier
-								.align(Alignment.TopEnd)
-								.padding(16.dp),
-						)
+						// Debug builds only: the chip's Debug.getMemoryInfo poll blocks the UI
+						// thread (~100 ms here) and stalls every animated screen once a second.
+						if (LocalContext.current.applicationInfo.flags and
+							ApplicationInfo.FLAG_DEBUGGABLE != 0
+						) {
+							RamUsageOverlay(
+								modifier = Modifier
+									.align(Alignment.TopEnd)
+									.padding(16.dp),
+							)
+						}
 					}
 				}
 			}
