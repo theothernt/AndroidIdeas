@@ -3,4 +3,8 @@
     <string name="menu_title">Visual Mashup</string>
     <string name="open_collage">Open Collage</string>
     <string name="collage_preview">Collage Preview</string>
+    <string name="effects">Effects</string>
+    <string name="speed">Speed</string>
+    <string name="transition">Transition</string>
+    <string name="image_effect">Image Effect</string>
 </resources>

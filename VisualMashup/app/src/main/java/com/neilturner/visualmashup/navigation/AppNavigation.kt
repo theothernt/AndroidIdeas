@@ -20,6 +20,7 @@ import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
 import com.neilturner.visualmashup.ui.screens.CollagePreviewScreen
 import com.neilturner.visualmashup.ui.screens.CollageScreen
+import com.neilturner.visualmashup.ui.screens.EffectScreen
 import com.neilturner.visualmashup.ui.screens.MenuScreen
 
 private const val TRANSITION_MS = 400
@@ -67,6 +68,7 @@ fun AppNavigation(
                 MenuScreen(
                     onNavigateToCollage = { backStack.add(CollageScreen) },
                     onNavigateToCollagePreview = { backStack.add(CollagePreviewScreen) },
+                    onNavigateToEffects = { backStack.add(EffectScreen) },
                 )
             }
             entry<CollageScreen> {
@@ -74,6 +76,9 @@ fun AppNavigation(
             }
             entry<CollagePreviewScreen> {
                 CollagePreviewScreen()
+            }
+            entry<EffectScreen> {
+                EffectScreen()
             }
         },
         entryDecorators = entryDecorators,

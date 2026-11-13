@@ -14,3 +14,7 @@ data object CollageScreen : NavKey
 /** Crop-free collage preview using natural-aspect layouts. */
 @Serializable
 data object CollagePreviewScreen : NavKey
+
+/** Slideshow that applies image effects such as Ken Burns. */
+@Serializable
+data object EffectScreen : NavKey
