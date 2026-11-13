@@ -38,6 +38,7 @@ import coil3.request.crossfade
 import coil3.size.Size
 import com.neilturner.visualmashup.data.CollageMetrics
 import com.neilturner.visualmashup.data.CollagePlacement
+import com.neilturner.visualmashup.data.maxImageSize
 import com.neilturner.visualmashup.ui.theme.VisualMashupTheme
 import kotlin.math.roundToInt
 
@@ -145,7 +146,7 @@ private fun FullBleedCollage(
                 AsyncImage(
                     model = ImageRequest.Builder(context)
                         .data(image.url)
-                        .size(Size(cellWidthPx, cellHeightPx))
+                        .size(maxImageSize(cellWidthPx, cellHeightPx))
                         .crossfade(true)
                         .build(),
                     contentDescription = "Collage image ${image.id}",

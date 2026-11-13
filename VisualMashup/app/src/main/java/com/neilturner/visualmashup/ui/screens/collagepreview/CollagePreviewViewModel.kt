@@ -8,6 +8,7 @@ import com.neilturner.visualmashup.data.CollagePlacement
 import com.neilturner.visualmashup.data.ImageOrientation
 import com.neilturner.visualmashup.data.ImageSource
 import com.neilturner.visualmashup.data.SourceImage
+import com.neilturner.visualmashup.data.maxImageSize
 import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.request.ImageRequest
@@ -104,7 +105,7 @@ class CollagePreviewViewModel(application: Application) : AndroidViewModel(appli
                 imageLoader.enqueue(
                     ImageRequest.Builder(app)
                         .data(image.url)
-                        .size(Size(width, height))
+                        .size(maxImageSize(width, height))
                         .build(),
                 )
             }

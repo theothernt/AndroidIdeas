@@ -9,6 +9,7 @@ import coil3.request.ImageRequest
 import coil3.size.Size
 import com.neilturner.visualmashup.data.ImageSource
 import com.neilturner.visualmashup.data.SourceImage
+import com.neilturner.visualmashup.data.maxImageSize
 import com.neilturner.visualmashup.ui.effects.EffectSettings
 import com.neilturner.visualmashup.ui.effects.EffectSpeed
 import com.neilturner.visualmashup.ui.effects.ImageEffect
@@ -79,7 +80,7 @@ class EffectViewModel(application: Application) : AndroidViewModel(application) 
             imageLoader.enqueue(
                 ImageRequest.Builder(app)
                     .data(next.url)
-                    .size(Size(metrics.widthPixels, metrics.heightPixels))
+                    .size(maxImageSize(metrics.widthPixels, metrics.heightPixels))
                     .build(),
             )
         }

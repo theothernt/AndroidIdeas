@@ -14,6 +14,7 @@ import coil3.request.ImageRequest
 import coil3.request.SuccessResult
 import coil3.size.Size
 import com.neilturner.visualmashup.data.SourceImage
+import com.neilturner.visualmashup.data.maxImageSize
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -55,7 +56,7 @@ object PixelationCache {
             val levels = withContext(Dispatchers.Default) {
                 val request = ImageRequest.Builder(context)
                     .data(image.url)
-                    .size(Size(widthPx, heightPx))
+                    .size(maxImageSize(widthPx, heightPx))
                     .build()
                 val result = SingletonImageLoader.get(context).execute(request)
                 if (result !is SuccessResult) return@withContext emptyList()

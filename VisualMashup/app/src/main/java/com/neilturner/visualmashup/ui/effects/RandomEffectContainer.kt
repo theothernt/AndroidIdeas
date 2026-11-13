@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import com.neilturner.visualmashup.data.SourceImage
+import com.neilturner.visualmashup.data.maxImageSize
 import kotlin.math.roundToInt
 
 private const val TRANSITION_MS = 1_200

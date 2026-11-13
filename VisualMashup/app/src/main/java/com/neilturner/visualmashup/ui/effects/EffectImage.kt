@@ -21,6 +21,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size
 import com.neilturner.visualmashup.data.SourceImage
+import com.neilturner.visualmashup.data.maxImageSize
 
 /**
  * Renders [image] with the selected [effect].
@@ -87,7 +88,7 @@ private fun StaticImage(
     AsyncImage(
         model = ImageRequest.Builder(context)
             .data(image.url)
-            .size(Size(widthPx, heightPx))
+            .size(maxImageSize(widthPx, heightPx))
             .crossfade(false)
             .build(),
         contentDescription = "Effect image ${image.id}",
@@ -141,7 +142,7 @@ private fun KenBurnsImage(
     AsyncImage(
         model = ImageRequest.Builder(context)
             .data(image.url)
-            .size(Size(widthPx, heightPx))
+            .size(maxImageSize(widthPx, heightPx))
             .crossfade(false)
             .build(),
         contentDescription = "Effect image ${image.id}",
@@ -196,7 +197,7 @@ private fun GentleDriftImage(
     AsyncImage(
         model = ImageRequest.Builder(context)
             .data(image.url)
-                .size(Size(widthPx, heightPx))
+                .size(maxImageSize(widthPx, heightPx))
                 .crossfade(false)
                 .build(),
         contentDescription = "Effect image ${image.id}",
@@ -230,7 +231,7 @@ private fun ParallaxImage(
     val model = remember(image.id, widthPx, heightPx) {
         ImageRequest.Builder(context)
             .data(image.url)
-            .size(Size(widthPx, heightPx))
+            .size(maxImageSize(widthPx, heightPx))
             .crossfade(false)
             .build()
     }

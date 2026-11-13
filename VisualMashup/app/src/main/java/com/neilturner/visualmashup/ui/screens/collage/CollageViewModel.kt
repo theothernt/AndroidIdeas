@@ -9,6 +9,7 @@ import coil3.request.ImageRequest
 import coil3.size.Size
 import com.neilturner.visualmashup.data.ImageSource
 import com.neilturner.visualmashup.data.SourceImage
+import com.neilturner.visualmashup.data.maxImageSize
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -55,7 +56,7 @@ class CollageViewModel(application: Application) : AndroidViewModel(application)
             imageLoader.enqueue(
                 ImageRequest.Builder(app)
                     .data(next.url)
-                    .size(Size(metrics.widthPixels, metrics.heightPixels))
+                    .size(maxImageSize(metrics.widthPixels, metrics.heightPixels))
                     .build(),
             )
         }

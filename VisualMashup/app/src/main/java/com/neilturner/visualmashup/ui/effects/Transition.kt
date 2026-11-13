@@ -15,4 +15,5 @@ enum class Transition(val displayName: String) {
     FLIP("3D flip"),
     FOLD("Page fold"),
     PIXELATE("Pixelate"),
+    FEATHERED_WIPE("Feathered wipe"),
 }

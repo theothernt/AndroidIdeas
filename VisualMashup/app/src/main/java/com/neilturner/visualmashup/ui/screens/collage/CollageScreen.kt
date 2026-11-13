@@ -19,6 +19,7 @@ import coil3.request.crossfade
 import coil3.size.Size
 import com.neilturner.visualmashup.data.ImageSource
 import com.neilturner.visualmashup.data.SourceImage
+import com.neilturner.visualmashup.data.maxImageSize
 import com.neilturner.visualmashup.ui.theme.VisualMashupTheme
 
 private const val FADE_DURATION_MS = 500
@@ -61,7 +62,7 @@ private fun CollageSlideshow(
             AsyncImage(
                 model = ImageRequest.Builder(context)
                     .data(image.url)
-                    .size(Size(widthPx, heightPx))
+                    .size(maxImageSize(widthPx, heightPx))
                     .crossfade(false) // Crossfade owns the transition between images
                     .build(),
                 contentDescription = "Collage image ${image.id}",

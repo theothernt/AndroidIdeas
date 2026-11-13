@@ -1,5 +1,11 @@
 package com.neilturner.visualmashup.data
 
+import coil3.size.Size
+import kotlin.math.min
+
+/** Coil decode is capped at 1080p; larger displays upscale the decoded bitmap. */
+fun maxImageSize(width: Int, height: Int): Size = Size(min(width, 1920), min(height, 1080))
+
 /** The orientation of a [SourceImage], derived from its dimensions. */
 enum class ImageOrientation {
     LANDSCAPE,
