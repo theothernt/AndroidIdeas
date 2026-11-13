@@ -37,7 +37,7 @@ data class PixelationLevel(
  */
 object PixelationCache {
 
-    private const val LEVELS = 7
+    private const val LEVELS = 14
     private const val CACHE_ENTRIES = 8
 
     private val cache = LruCache<String, List<PixelationLevel>>(CACHE_ENTRIES)

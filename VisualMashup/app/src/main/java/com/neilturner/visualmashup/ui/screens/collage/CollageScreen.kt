@@ -1,4 +1,4 @@
-package com.neilturner.visualmashup.ui.screens
+package com.neilturner.visualmashup.ui.screens.collage
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween

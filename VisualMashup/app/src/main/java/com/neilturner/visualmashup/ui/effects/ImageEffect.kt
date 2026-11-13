@@ -6,5 +6,4 @@ enum class ImageEffect(val displayName: String) {
     KEN_BURNS("Ken Burns"),
     GENTLE_DRIFT("Gentle Drift"),
     PARALLAX_2_5D("Cinematic Photo"),
-    BREATHING("Breathing"),
 }

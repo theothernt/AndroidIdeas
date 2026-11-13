@@ -1,4 +1,4 @@
-package com.neilturner.visualmashup.ui.screens
+package com.neilturner.visualmashup.ui.screens.collagepreview
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

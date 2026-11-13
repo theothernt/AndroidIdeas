@@ -1,4 +1,4 @@
-package com.neilturner.visualmashup.ui.screens
+package com.neilturner.visualmashup.ui.screens.effect
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
@@ -12,6 +12,7 @@ import com.neilturner.visualmashup.data.SourceImage
 import com.neilturner.visualmashup.ui.effects.EffectSettings
 import com.neilturner.visualmashup.ui.effects.EffectSpeed
 import com.neilturner.visualmashup.ui.effects.ImageEffect
+import com.neilturner.visualmashup.ui.effects.PixelationCache
 import com.neilturner.visualmashup.ui.effects.Transition
 import com.neilturner.visualmashup.ui.effects.TransitionSettings
 import kotlinx.coroutines.delay
@@ -41,11 +42,30 @@ class EffectViewModel(application: Application) : AndroidViewModel(application) 
 
     init {
         preloadNext()
+        // Warm the pixelation levels while the Pixelate transition is selected, so the
+        // decode/downscale doesn't happen during the transition.
+        viewModelScope.launch {
+            TransitionSettings.transition.collect { transition ->
+                if (transition == Transition.PIXELATE) preloadPixelation()
+            }
+        }
         viewModelScope.launch {
             while (true) {
                 delay(EFFECT_IMAGE_INTERVAL_MS)
                 _currentIndex.value = (_currentIndex.value + 1) % images.size
                 preloadNext()
+                if (TransitionSettings.transition.value == Transition.PIXELATE) preloadPixelation()
+            }
+        }
+    }
+
+    private fun preloadPixelation() {
+        val app = getApplication<Application>()
+        val metrics = app.resources.displayMetrics
+        viewModelScope.launch {
+            for (ahead in 0..1) {
+                val image = images[(_currentIndex.value + ahead) % images.size]
+                PixelationCache.getLevels(app, image, metrics.widthPixels, metrics.heightPixels)
             }
         }
     }

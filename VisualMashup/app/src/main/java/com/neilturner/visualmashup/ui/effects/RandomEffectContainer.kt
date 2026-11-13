@@ -93,6 +93,7 @@ private fun RevealTransition(
 ) {
     var previousIndex by remember { mutableIntStateOf(targetState) }
     val progress = remember { Animatable(1f) }
+    val irisPath = remember { Path() }
 
     LaunchedEffect(targetState) {
         if (targetState != previousIndex) {
@@ -115,28 +116,29 @@ private fun RevealTransition(
                         }
                         RevealKind.IRIS -> {
                             val radius = p * maxOf(size.width, size.height)
-                            clipPath(
-                                Path().apply {
-                                    addOval(
-                                        Rect(
-                                            size.width / 2f - radius,
-                                            size.height / 2f - radius,
-                                            size.width / 2f + radius,
-                                            size.height / 2f + radius,
-                                        ),
-                                    )
-                                },
-                            ) {
+                            irisPath.reset()
+                            irisPath.addOval(
+                                Rect(
+                                    size.width / 2f - radius,
+                                    size.height / 2f - radius,
+                                    size.width / 2f + radius,
+                                    size.height / 2f + radius,
+                                ),
+                            )
+                            clipPath(irisPath) {
                                 this@drawWithContent.drawContent()
                             }
                         }
                         RevealKind.GRADIENT -> {
                             this@drawWithContent.drawContent()
+                            // Opaque up to the wipe front, then a short soft edge. The middle
+                            // color stop keeps the revealed side fully opaque at the end.
+                            val feather = size.width * 0.08f
                             drawRect(
                                 brush = Brush.linearGradient(
-                                    colors = listOf(Color.Black, Color.Transparent),
-                                    start = Offset.Zero,
-                                    end = Offset(size.width * p, 0f),
+                                    colors = listOf(Color.Black, Color.Black, Color.Transparent),
+                                    start = Offset(size.width * p - feather, 0f),
+                                    end = Offset(size.width * p + feather, 0f),
                                 ),
                                 blendMode = BlendMode.DstIn,
                             )

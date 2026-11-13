@@ -18,10 +18,10 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import com.neilturner.visualmashup.ui.screens.CollagePreviewScreen
-import com.neilturner.visualmashup.ui.screens.CollageScreen
-import com.neilturner.visualmashup.ui.screens.EffectScreen
-import com.neilturner.visualmashup.ui.screens.MenuScreen
+import com.neilturner.visualmashup.ui.screens.collage.CollageScreen
+import com.neilturner.visualmashup.ui.screens.collagepreview.CollagePreviewScreen
+import com.neilturner.visualmashup.ui.screens.effect.EffectScreen
+import com.neilturner.visualmashup.ui.screens.menu.MenuScreen
 
 private const val TRANSITION_MS = 400
 private const val FADE_MS = TRANSITION_MS / 2

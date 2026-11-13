@@ -21,8 +21,6 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size
 import com.neilturner.visualmashup.data.SourceImage
-import kotlin.math.PI
-import kotlin.math.cos
 
 /**
  * Renders [image] with the selected [effect].
@@ -73,15 +71,6 @@ fun EffectImage(
             widthPx = widthPx,
             heightPx = heightPx,
             modifier = modifier,
-        )
-
-        ImageEffect.BREATHING -> BreathingImage(
-            image = image,
-            durationMillis = durationMillis,
-            widthPx = widthPx,
-            heightPx = heightPx,
-            modifier = modifier,
-            contentScale = contentScale,
         )
     }
 }
@@ -219,45 +208,6 @@ private fun GentleDriftImage(
             scaleY = 1.1f
             translationX = (spec.startX + (spec.endX - spec.startX) * t) * size.width
             translationY = (spec.startY + (spec.endY - spec.startY) * t) * size.height
-        },
-    )
-}
-
-/** A slow sine "breath": zoom in and back out, so the motion never feels linear. */
-@Composable
-private fun BreathingImage(
-    image: SourceImage,
-    durationMillis: Int,
-    widthPx: Int,
-    heightPx: Int,
-    modifier: Modifier = Modifier,
-    contentScale: ContentScale = ContentScale.Crop,
-) {
-    val context = LocalContext.current
-    val animation = remember(image.id) { Animatable(0f) }
-
-    LaunchedEffect(image.id, durationMillis) {
-        animation.snapTo(0f)
-        animation.animateTo(
-            targetValue = 1f,
-            animationSpec = tween(durationMillis, easing = LinearEasing),
-        )
-    }
-
-    AsyncImage(
-        model = ImageRequest.Builder(context)
-            .data(image.url)
-            .size(Size(widthPx, heightPx))
-            .crossfade(false)
-            .build(),
-        contentDescription = "Effect image ${image.id}",
-        contentScale = contentScale,
-        modifier = modifier.graphicsLayer {
-            val t = animation.value
-            // 1.05 -> 1.10 -> 1.05 across the shot (a full breath).
-            val scale = 1.05f + 0.05f * (1f - cos(2 * PI * t).toFloat()) / 2f
-            scaleX = scale
-            scaleY = scale
         },
     )
 }

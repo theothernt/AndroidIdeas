@@ -1,4 +1,4 @@
-package com.neilturner.visualmashup.ui.screens
+package com.neilturner.visualmashup.ui.screens.collagepreview
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel

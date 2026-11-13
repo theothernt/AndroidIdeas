@@ -13,10 +13,14 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.graphicsLayer
@@ -25,7 +29,6 @@ import com.neilturner.visualmashup.data.SourceImage
 
 private const val TRANSITION_MS = 1_200
 private const val FADE_MS = TRANSITION_MS / 2
-private const val MAX_BLUR = 12f
 
 /**
  * Renders the current [targetState] and animates to it using [transition].
@@ -138,23 +141,37 @@ private fun BlurCrossfade(
     modifier: Modifier = Modifier,
     content: @Composable (Int) -> Unit,
 ) {
-    val blur = remember { Animatable(0f) }
-
-    LaunchedEffect(targetState) {
-        blur.snapTo(0f)
-        blur.animateTo(1f, tween(TRANSITION_MS / 2))
-        blur.animateTo(0f, tween(TRANSITION_MS / 2))
-    }
-
-    Crossfade(
-        targetState = targetState,
-        animationSpec = tween(TRANSITION_MS),
-        modifier = modifier.graphicsLayer {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                val radius = (blur.value * MAX_BLUR).dp.toPx()
-                renderEffect = BlurEffect(radius, radius)
+    Box(modifier) {
+        // Low-res blurred backdrop (1/16 the pixels of a full-screen blur).
+        Crossfade(
+            targetState = targetState,
+            animationSpec = tween(TRANSITION_MS),
+            modifier = Modifier.fillMaxSize(),
+        ) { index ->
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val scale = maxWidth / 64.dp
+                Box(
+                    modifier = Modifier
+                        .size(64.dp, 36.dp)
+                        .align(Alignment.Center)
+                        .graphicsLayer {
+                            scaleX = scale
+                            scaleY = scale
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                renderEffect = BlurEffect(8f, 8f)
+                            }
+                        },
+                ) {
+                    content(index)
+                }
             }
-        },
-        content = content,
-    )
+        }
+        // Sharp crossfade on top.
+        Crossfade(
+            targetState = targetState,
+            animationSpec = tween(TRANSITION_MS),
+            modifier = Modifier.fillMaxSize(),
+            content = content,
+        )
+    }
 }
