@@ -4,13 +4,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.tv.material3.Text
-import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Surface
+import com.neilturner.musicfun.data.listener.NotificationListenerPermission
+import com.neilturner.musicfun.navigation.AppNavigation
 import com.neilturner.musicfun.ui.theme.MusicFunTheme
 
 class MainActivity : ComponentActivity() {
@@ -23,25 +22,13 @@ class MainActivity : ComponentActivity() {
 					modifier = Modifier.fillMaxSize(),
 					shape = RectangleShape
 				) {
-					Greeting("Android")
+					AppNavigation(
+						onRequestNotificationAccess = {
+							NotificationListenerPermission.openSettings(this@MainActivity)
+						},
+					)
 				}
 			}
 		}
-	}
-}
-
-@Composable
-fun Greeting(name: String, modifier: Modifier = Modifier) {
-	Text(
-		text = "Hello $name!",
-		modifier = modifier
-	)
-}
-
-@Preview(showBackground = true)
-@Composable
-fun GreetingPreview() {
-	MusicFunTheme {
-		Greeting("Android")
 	}
 }

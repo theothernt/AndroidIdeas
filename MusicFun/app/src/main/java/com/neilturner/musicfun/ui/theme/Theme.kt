@@ -28,6 +28,7 @@ fun MusicFunTheme(
 	}
 	MaterialTheme(
 		colorScheme = colorScheme,
+		shapes = ExpressiveShapes,
 		typography = Typography,
 		content = content
 	)
