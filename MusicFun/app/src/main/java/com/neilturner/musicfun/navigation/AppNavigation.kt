@@ -10,16 +10,14 @@ import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
-import com.neilturner.musicfun.ui.screens.MenuScreen
 import com.neilturner.musicfun.ui.screens.MusicScreen
 
 @Composable
 fun AppNavigation(
 	onRequestNotificationAccess: () -> Unit = {},
 ) {
-	// The menu is always the root; it checks notification access off the main thread and replaces
-	// itself with the music screen once access is granted.
-	val backStack: NavBackStack<NavKey> = rememberNavBackStack(Menu)
+	// The now-playing screen is the whole app; notification access is requested from it.
+	val backStack: NavBackStack<NavKey> = rememberNavBackStack(Music)
 
 	// NavDisplay only handles back while there is an entry to pop, so finish the activity at the root.
 	val activity = LocalActivity.current
@@ -31,20 +29,11 @@ fun AppNavigation(
 		backStack = backStack,
 		onBack = { backStack.removeLastOrNull() },
 		entryProvider = entryProvider {
-			entry<Menu> {
-				MenuScreen(
+			entry<Music> {
+				MusicScreen(
 					modifier = Modifier.fillMaxSize(),
 					onRequestNotificationAccess = onRequestNotificationAccess,
-					onOpenMusic = {
-						// The menu is only a permission gate; replace it so it can't stay drawn
-						// underneath (or over) the music screen.
-						backStack.remove(Menu)
-						backStack.add(Music)
-					},
 				)
-			}
-			entry<Music> {
-				MusicScreen(modifier = Modifier.fillMaxSize())
 			}
 		},
 	)

@@ -14,6 +14,7 @@ import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import com.neilturner.musicfun.data.MusicMetadata
 import com.neilturner.musicfun.data.MusicMetadataRepository
+import com.neilturner.musicfun.data.PlaybackStatus
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,8 +37,16 @@ class MusicNotificationListenerService : NotificationListenerService() {
 	private class Session(
 		val packageName: String,
 		val controller: MediaController,
-		val callback: MediaController.Callback,
-	)
+	) {
+		lateinit var callback: MediaController.Callback
+
+		/** Only this session's own state: another player must never decide what this one reports. */
+		@Volatile
+		var playbackState: PlaybackState? = null
+
+		@Volatile
+		var stateAtElapsed = 0L
+	}
 
 	private val mainHandler = Handler(Looper.getMainLooper())
 	private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -45,12 +54,6 @@ class MusicNotificationListenerService : NotificationListenerService() {
 
 	@Volatile
 	private var currentToken: MediaSession.Token? = null
-
-	@Volatile
-	private var lastPlaybackState: PlaybackState? = null
-
-	@Volatile
-	private var lastStateAtElapsed = 0L
 
 	private var tickerJob: Job? = null
 
@@ -98,19 +101,23 @@ class MusicNotificationListenerService : NotificationListenerService() {
 		val token = controller.sessionToken
 		if (sessions.containsKey(token)) return
 
-		val callback = object : MediaController.Callback() {
+		val session = Session(controller.packageName, controller)
+		session.callback = object : MediaController.Callback() {
 			override fun onMetadataChanged(metadata: MediaMetadata?) {
 				if (currentToken == token) publish(controller.packageName, metadata)
 			}
 
 			override fun onPlaybackStateChanged(state: PlaybackState?) {
-				lastPlaybackState = state
-				lastStateAtElapsed = SystemClock.elapsedRealtime()
+				session.playbackState = state
+				session.stateAtElapsed = SystemClock.elapsedRealtime()
+				// Publish straight away rather than waiting for the ticker, so pausing hides the
+				// now-playing info promptly. Binder reads happen on the IO scope, not here.
+				if (currentToken == token) ioScope.launch { updatePlayback() }
 			}
 		}
 
-		controller.registerCallback(callback, mainHandler)
-		sessions[token] = Session(controller.packageName, controller, callback)
+		controller.registerCallback(session.callback, mainHandler)
+		sessions[token] = session
 		if (currentToken == null) currentToken = token
 	}
 
@@ -145,29 +152,48 @@ class MusicNotificationListenerService : NotificationListenerService() {
 	private fun stopTicker() {
 		tickerJob?.cancel()
 		tickerJob = null
-		MusicMetadataRepository.updatePlayback(false, 0L)
+		MusicMetadataRepository.updatePlayback(PlaybackStatus.Stopped, 0L)
 		if (screenWakeLock.isHeld) screenWakeLock.release()
 	}
 
 	private fun updatePlayback() {
-		val session = sessions[currentToken] ?: return
+		val session = sessions[currentToken]
+		if (session == null) {
+			// The media app is gone: don't leave the last "playing" state behind.
+			MusicMetadataRepository.updatePlayback(PlaybackStatus.Stopped, 0L)
+			if (screenWakeLock.isHeld) screenWakeLock.release()
+			return
+		}
+
 		val controller = session.controller
 
 		val metadata = controller.metadata
 		if (metadata != null) publish(session.packageName, metadata)
 
-		val state = lastPlaybackState ?: controller.playbackState ?: return
-		val playing = state.state == PlaybackState.STATE_PLAYING
-		val elapsed = SystemClock.elapsedRealtime() - lastStateAtElapsed
+		val state = session.playbackState ?: controller.playbackState
+		if (state == null) {
+			MusicMetadataRepository.updatePlayback(PlaybackStatus.Stopped, 0L)
+			if (screenWakeLock.isHeld) screenWakeLock.release()
+			return
+		}
+
+		val status = when (state.state) {
+			// Buffering counts as playing so a skip doesn't blank the info for a beat.
+			PlaybackState.STATE_PLAYING, PlaybackState.STATE_BUFFERING -> PlaybackStatus.Playing
+			PlaybackState.STATE_PAUSED -> PlaybackStatus.Paused
+			else -> PlaybackStatus.Stopped
+		}
+
+		val elapsed = SystemClock.elapsedRealtime() - session.stateAtElapsed
 		val interpolated = state.position + (elapsed * state.playbackSpeed).toLong()
-		val position = if (playing && state.playbackSpeed > 0f && elapsed in 0..5_000) {
+		val position = if (status == PlaybackStatus.Playing && state.playbackSpeed > 0f && elapsed in 0..5_000) {
 			interpolated
 		} else {
 			state.position
 		}
-		MusicMetadataRepository.updatePlayback(playing, position)
+		MusicMetadataRepository.updatePlayback(status, position)
 
-		if (playing) {
+		if (status == PlaybackStatus.Playing) {
 			if (!screenWakeLock.isHeld) screenWakeLock.acquire()
 		} else if (screenWakeLock.isHeld) {
 			screenWakeLock.release()

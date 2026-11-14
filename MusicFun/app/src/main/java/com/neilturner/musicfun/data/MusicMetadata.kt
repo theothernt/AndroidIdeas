@@ -18,3 +18,10 @@ data class MusicMetadata(
 	val artworkUri: String? = null,
 	val durationMs: Long? = null,
 )
+
+/**
+ * Identity of a track. The listener republishes metadata every tick for position updates, so the
+ * UI and the lyrics lookup compare tracks with this rather than with the whole object.
+ */
+val MusicMetadata.trackKey: String
+	get() = "${artist.orEmpty()}|${title.orEmpty()}|${album.orEmpty()}"

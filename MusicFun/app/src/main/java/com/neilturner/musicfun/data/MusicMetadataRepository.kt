@@ -4,6 +4,13 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
+/** What the current media session is doing. Anything that is not playable reads as [Stopped]. */
+enum class PlaybackStatus {
+	Playing,
+	Paused,
+	Stopped,
+}
+
 /**
  * Process wide holder for the currently playing track and its playback position.
  *
@@ -17,19 +24,21 @@ object MusicMetadataRepository {
 	private val _positionMs = MutableStateFlow(0L)
 	val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
 
-	private val _isPlaying = MutableStateFlow(false)
-	val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+	private val _playbackStatus = MutableStateFlow(PlaybackStatus.Stopped)
+	val playbackStatus: StateFlow<PlaybackStatus> = _playbackStatus.asStateFlow()
 
 	fun update(metadata: MusicMetadata?) {
 		_metadata.value = metadata
 	}
 
-	fun updatePlayback(isPlaying: Boolean, positionMs: Long) {
-		_isPlaying.value = isPlaying
+	fun updatePlayback(status: PlaybackStatus, positionMs: Long) {
+		_playbackStatus.value = status
 		_positionMs.value = positionMs.coerceAtLeast(0)
 	}
 
 	fun clear() {
 		_metadata.value = null
+		_positionMs.value = 0L
+		_playbackStatus.value = PlaybackStatus.Stopped
 	}
 }
