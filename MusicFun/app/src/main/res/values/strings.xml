@@ -10,8 +10,5 @@
     <string name="nothing_playing">Nothing playing</string>
     <string name="album_art">Album art</string>
     <string name="no_album_art">No art</string>
-    <string name="loading_lyrics">Loading lyrics…</string>
-    <string name="no_lyrics">No lyrics found</string>
-    <string name="instrumental">Instrumental</string>
     <string name="unknown_title">Unknown title</string>
 </resources>

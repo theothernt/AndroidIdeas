@@ -69,6 +69,7 @@ private fun MenuScreenContent(
 ) {
 	val focusRequester = remember { FocusRequester() }
 	LaunchedEffect(state.hasNotificationListenerAccess) {
+		android.util.Log.d("AppState", "menu granted=${state.hasNotificationListenerAccess}")
 		focusRequester.requestFocus()
 	}
 

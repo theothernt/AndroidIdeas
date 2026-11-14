@@ -29,7 +29,10 @@ object LrcParser {
 			val stamps = timestamp.findAll(line).toList()
 			if (stamps.isEmpty()) continue
 
-			val text = line.substring(stamps.last().range.last + 1).trim()
+			val text = line.substring(stamps.last().range.last + 1)
+				.replace(Regex("<\\d{1,3}:\\d{2}(?:[.:]\\d{1,3})?>"), "")
+				.replace(Regex("\\s+"), " ")
+				.trim()
 			for (stamp in stamps) {
 				val minutes = stamp.groupValues[1].toLong()
 				val seconds = stamp.groupValues[2].toLong()

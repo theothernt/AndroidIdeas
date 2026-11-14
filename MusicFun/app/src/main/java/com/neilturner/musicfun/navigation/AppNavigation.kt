@@ -4,17 +4,12 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.LocalActivity
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
-import androidx.navigation3.runtime.NavEntryDecorator
+import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
-import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import com.neilturner.musicfun.data.listener.NotificationListenerPermission
 import com.neilturner.musicfun.ui.screens.MenuScreen
 import com.neilturner.musicfun.ui.screens.MusicScreen
 
@@ -22,18 +17,9 @@ import com.neilturner.musicfun.ui.screens.MusicScreen
 fun AppNavigation(
 	onRequestNotificationAccess: () -> Unit = {},
 ) {
-	// With access already granted the music screen is the root, so back exits the app. Otherwise
-	// the menu is the root and is the only way to request access.
-	val context = LocalContext.current
-	val initialKey = remember(context) {
-		if (NotificationListenerPermission.isGranted(context)) Music else Menu
-	}
-	val backStack = rememberNavBackStack(initialKey)
-
-	val entryDecorators = listOf<NavEntryDecorator<NavKey>>(
-		rememberSaveableStateHolderNavEntryDecorator(),
-		rememberViewModelStoreNavEntryDecorator(),
-	)
+	// The menu is always the root; it checks notification access off the main thread and replaces
+	// itself with the music screen once access is granted.
+	val backStack: NavBackStack<NavKey> = rememberNavBackStack(Menu)
 
 	// NavDisplay only handles back while there is an entry to pop, so finish the activity at the root.
 	val activity = LocalActivity.current
@@ -49,13 +35,17 @@ fun AppNavigation(
 				MenuScreen(
 					modifier = Modifier.fillMaxSize(),
 					onRequestNotificationAccess = onRequestNotificationAccess,
-					onOpenMusic = { backStack.add(Music) },
+					onOpenMusic = {
+						// The menu is only a permission gate; replace it so it can't stay drawn
+						// underneath (or over) the music screen.
+						backStack.remove(Menu)
+						backStack.add(Music)
+					},
 				)
 			}
 			entry<Music> {
 				MusicScreen(modifier = Modifier.fillMaxSize())
 			}
 		},
-		entryDecorators = entryDecorators,
 	)
 }

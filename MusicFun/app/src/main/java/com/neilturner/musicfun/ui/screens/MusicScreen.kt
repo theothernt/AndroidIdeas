@@ -30,11 +30,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -43,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.MaterialTheme
@@ -111,6 +110,9 @@ private fun MusicScreenContent(
 	val uriBitmap = rememberUriBitmap(displayedMetadata?.artworkUri)
 	val artwork = displayedMetadata?.artwork ?: uriBitmap
 	val auroraColors = rememberAuroraColors(artwork)
+	LaunchedEffect(metadata, lyrics) {
+		android.util.Log.d("AppState", "music metadata=${metadata?.title} lyrics=$lyrics")
+	}
 
 	Box(modifier = modifier.fillMaxSize()) {
 		AuroraBackground(
@@ -145,15 +147,15 @@ private fun MusicScreenContent(
 			state = lyrics,
 			positionMs = positionMs,
 			modifier = Modifier
-				.align(Alignment.TopEnd)
-				.padding(top = 28.dp, end = 32.dp)
+				.align(Alignment.CenterEnd)
+				.padding(end = 64.dp)
 				.size(width = 420.dp, height = 370.dp),
 		)
 
 		Box(
 			modifier = Modifier
 				.matchParentSize()
-				.padding(horizontal = 64.dp, vertical = 56.dp),
+				.padding(horizontal = 24.dp, vertical = 14.dp),
 		) {
 			val displayed = displayedMetadata
 			if (displayed == null) {
@@ -168,18 +170,18 @@ private fun MusicScreenContent(
 
 			Row(
 				modifier = Modifier.align(Alignment.BottomStart),
-				horizontalArrangement = Arrangement.spacedBy(32.dp),
+				horizontalArrangement = Arrangement.spacedBy(9.6.dp),
 				verticalAlignment = Alignment.Bottom,
 			) {
 				AlbumArt(
 					bitmap = artwork,
-					modifier = Modifier.size(66.dp),
+					modifier = Modifier.size(52.8.dp),
 				)
 
-				Column(modifier = Modifier.padding(bottom = 6.dp)) {
+				Column(modifier = Modifier.padding(bottom = 2.dp)) {
 					Text(
 						text = displayed.title ?: stringResource(R.string.unknown_title),
-						style = MaterialTheme.typography.displaySmall,
+						style = MaterialTheme.typography.displaySmall.copy(fontSize = 28.8.sp, lineHeight = 35.2.sp),
 						color = Color.White,
 					)
 					displayed.artist?.let { artist ->
@@ -274,37 +276,26 @@ private fun LyricsPanel(
 	positionMs: Long,
 	modifier: Modifier = Modifier,
 ) {
-	Box(modifier = modifier, contentAlignment = Alignment.Center) {
-		when (state) {
-			is LyricsUiState.Synced -> ScrollingLyrics(
-				lines = state.lines,
-				positionMs = positionMs,
-				modifier = Modifier.matchParentSize(),
-			)
+	when (state) {
+		is LyricsUiState.Synced -> ScrollingLyrics(
+			lines = state.lines,
+			positionMs = positionMs,
+			modifier = modifier,
+		)
 
-			is LyricsUiState.Plain -> StaticLyrics(
-				text = state.text,
-				modifier = Modifier.matchParentSize(),
-			)
+		is LyricsUiState.Plain -> StaticLyrics(
+			text = state.text,
+			modifier = modifier,
+		)
 
-			LyricsUiState.Loading -> LyricsMessage(stringResource(R.string.loading_lyrics))
-			LyricsUiState.Instrumental -> LyricsMessage(stringResource(R.string.instrumental))
-			LyricsUiState.None -> LyricsMessage(stringResource(R.string.no_lyrics))
-		}
+		// Nothing to show while loading, instrumental, or when LRCLIB has no lyrics.
+		LyricsUiState.Loading,
+		LyricsUiState.Instrumental,
+		LyricsUiState.None -> Unit
 	}
 }
 
-@Composable
-private fun LyricsMessage(text: String) {
-	Text(
-		text = text,
-		style = MaterialTheme.typography.bodyMedium,
-		color = Color.White.copy(alpha = 0.4f),
-		textAlign = TextAlign.Center,
-	)
-}
-
-/** Karaoke view: the current line is highlighted and the column glides as the track plays. */
+/** Karaoke view: the current line is highlighted and the column scrolls to keep it centred. */
 @Composable
 private fun ScrollingLyrics(
 	lines: List<LrcLine>,
@@ -313,43 +304,42 @@ private fun ScrollingLyrics(
 ) {
 	val lineHeight = 64.dp
 	val lineHeightPx = with(LocalDensity.current) { lineHeight.toPx() }
+	val viewportHeightPx = with(LocalDensity.current) { 370.dp.toPx() }
 	val currentIndex = remember(lines, positionMs) {
 		lines.indexOfLast { it.timeMs <= positionMs }.coerceAtLeast(0)
 	}
-	val targetOffset = currentIndex * lineHeightPx + lineHeightPx / 2
-	val offset by animateFloatAsState(
-		targetValue = targetOffset,
-		animationSpec = tween(durationMillis = 300, easing = LinearEasing),
-		label = "lyricsScroll",
-	)
+	val scrollState = rememberScrollState()
 
-	Box(modifier = modifier.clipToBounds()) {
-		Column(
-			modifier = Modifier
-				.align(Alignment.TopCenter)
-				.graphicsLayer { translationY = -offset }
-				.fillMaxWidth()
-				.padding(vertical = 185.dp),
-			horizontalAlignment = Alignment.CenterHorizontally,
-		) {
-			lines.forEachIndexed { index, line ->
-				val current = index == currentIndex
-				Text(
-					text = line.text,
-					style = if (current) {
-						MaterialTheme.typography.headlineSmall
-					} else {
-						MaterialTheme.typography.titleMedium
-					},
-					color = if (current) Color.White else Color.White.copy(alpha = 0.35f),
-					textAlign = TextAlign.Center,
-					maxLines = 2,
-					overflow = TextOverflow.Ellipsis,
-					modifier = Modifier
-						.fillMaxWidth()
-						.height(lineHeight),
-				)
-			}
+	LaunchedEffect(currentIndex) {
+		val target = (currentIndex * lineHeightPx + lineHeightPx / 2 - viewportHeightPx / 2)
+			.toInt()
+			.coerceAtLeast(0)
+		scrollState.animateScrollTo(target)
+	}
+
+	Column(
+		modifier = modifier
+			.verticalScroll(scrollState)
+			.padding(vertical = 185.dp),
+		horizontalAlignment = Alignment.CenterHorizontally,
+	) {
+		lines.forEachIndexed { index, line ->
+			val current = index == currentIndex
+			Text(
+				text = line.text,
+				style = if (current) {
+					MaterialTheme.typography.headlineSmall
+				} else {
+					MaterialTheme.typography.titleMedium
+				},
+				color = if (current) Color.White else Color.White.copy(alpha = 0.35f),
+				textAlign = TextAlign.Center,
+				maxLines = 2,
+				overflow = TextOverflow.Ellipsis,
+				modifier = Modifier
+					.fillMaxWidth()
+					.height(lineHeight),
+			)
 		}
 	}
 }

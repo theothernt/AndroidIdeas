@@ -8,11 +8,13 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.util.Locale
 import kotlin.math.abs
 
 /**
- * Looks up synced lyrics on LRCLIB (https://lrclib.net). Results are cached per track for the
- * lifetime of the process.
+ * Looks up synced lyrics on LRCLIB (https://lrclib.net). Streaming metadata is messy (feat., remaster
+ * suffixes, multiple artists), so the title/artist are cleaned and every search hit is verified before
+ * it is accepted — otherwise a similarly named song gets shown instead of the one playing.
  */
 object LyricsRepository {
 
@@ -22,77 +24,136 @@ object LyricsRepository {
 	private val cache = mutableMapOf<String, LyricsResult>()
 
 	suspend fun fetch(metadata: MusicMetadata): LyricsResult = withContext(Dispatchers.IO) {
-		val key = listOf(
-			metadata.artist,
-			metadata.title,
-			metadata.album,
-			metadata.durationMs,
-		).joinToString("|")
+		val artist = metadata.artist?.trim().orEmpty()
+		val title = metadata.title?.trim().orEmpty()
+		if (artist.isEmpty() || title.isEmpty()) return@withContext LyricsResult.None
+
+		val seconds = metadata.durationMs?.div(1000)?.toInt() ?: 0
+		val key = "$artist|$title|${metadata.album}|$seconds"
 		cache[key]?.let { return@withContext it }
 
-		val result = runCatching { fetchNetwork(metadata) }
+		val result = runCatching { fetchNetwork(artist, title, metadata.album, seconds) }
 			.getOrElse { LyricsResult.None }
+		android.util.Log.d("LyricsCheck", "fetch $artist - $title => $result")
 		cache[key] = result
 		result
 	}
 
-	private fun fetchNetwork(metadata: MusicMetadata): LyricsResult {
-		val artist = metadata.artist?.trim().orEmpty()
-		val title = metadata.title?.trim().orEmpty()
-		if (artist.isEmpty() || title.isEmpty()) return LyricsResult.None
+	private fun fetchNetwork(artist: String, title: String, album: String?, seconds: Int): LyricsResult {
+		val cleanTitle = cleanTitle(title)
+		val mainArtist = mainArtist(artist)
 
-		val query = buildString {
-			append("artist_name=").append(enc(artist))
-			append("&track_name=").append(enc(title))
-			metadata.album?.takeIf { it.isNotBlank() }?.let {
+		val exactQuery = buildString {
+			append("artist_name=").append(enc(mainArtist))
+			append("&track_name=").append(enc(cleanTitle))
+			album?.takeIf { it.isNotBlank() }?.let {
 				append("&album_name=").append(enc(it))
 			}
-			metadata.durationMs?.takeIf { it > 0 }?.let {
-				append("&duration=").append(it / 1000)
+			if (seconds > 0) append("&duration=").append(seconds)
+		}
+
+		var best: JSONObject? = null
+		getJson("$BaseUrl/get?$exactQuery")?.let { body ->
+			val candidate = runCatching { JSONObject(body) }.getOrNull()
+			if (candidate != null && hasText(candidate) && same(candidate, artist, title, seconds)) {
+				best = candidate
 			}
 		}
-		getJson("$BaseUrl/get?$query")?.let { parse(it) }?.let { return it }
 
-		// The exact lookup needs a close metadata match; fall back to a search and prefer a result
-		// with synced lyrics and a similar duration.
-		val searchJson = getJson("$BaseUrl/search?q=${enc("$artist $title")}")
-			?: return LyricsResult.None
-		val array = runCatching { JSONArray(searchJson) }.getOrNull()
-			?: return LyricsResult.None
+		if (best == null) {
+			val searchJson = getJson(
+				"$BaseUrl/search?artist_name=${enc(mainArtist)}&track_name=${enc(cleanTitle)}"
+			) ?: return LyricsResult.None
+			val array = runCatching { JSONArray(searchJson) }.getOrNull()
+				?: return LyricsResult.None
 
-		val durationSec = metadata.durationMs?.div(1000)
-		var firstSynced: LyricsResult? = null
-		for (index in 0 until array.length()) {
-			val item = array.optJSONObject(index) ?: continue
-			val synced = item.optString("syncedLyrics")
-			if (synced.isNullOrBlank()) continue
-
-			val result = LyricsResult.Synced(LrcParser.parse(synced))
-			if (firstSynced == null) firstSynced = result
-
-			val itemDuration = item.optDouble("duration", 0.0)
-			if (durationSec == null || abs(itemDuration - durationSec) <= 10) {
-				return result
+			for (index in 0 until array.length()) {
+				val candidate = array.optJSONObject(index) ?: continue
+				if (!hasText(candidate) || !same(candidate, artist, title, seconds)) continue
+				val current = best
+				if (current == null || better(candidate, current, seconds)) {
+					best = candidate
+				}
 			}
 		}
-		return firstSynced ?: LyricsResult.None
-	}
 
-	private fun parse(json: String): LyricsResult? {
-		val obj = runCatching { JSONObject(json) }.getOrNull() ?: return null
+		val hit = best ?: return LyricsResult.None
+		if (hit.optBoolean("instrumental")) return LyricsResult.Instrumental
 
-		val synced = obj.optString("syncedLyrics")
-		if (!synced.isNullOrBlank()) {
+		val synced = hit.optString("syncedLyrics")
+		if (synced.isNotBlank()) {
 			val lines = LrcParser.parse(synced)
 			if (lines.isNotEmpty()) return LyricsResult.Synced(lines)
 		}
 
-		val plain = obj.optString("plainLyrics")
-		if (!plain.isNullOrBlank()) return LyricsResult.Plain(plain)
-
-		if (obj.optBoolean("instrumental")) return LyricsResult.Instrumental
+		val plain = hit.optString("plainLyrics")
+		if (plain.isNotBlank()) return LyricsResult.Plain(plain)
 		return LyricsResult.None
 	}
+
+	private fun hasText(obj: JSONObject): Boolean =
+		obj.optString("syncedLyrics").isNotBlank() ||
+			obj.optString("plainLyrics").isNotBlank() ||
+			obj.optBoolean("instrumental")
+
+	/** Same song: cleaned titles match, artists overlap, duration within a few seconds. */
+	private fun same(obj: JSONObject, artist: String, title: String, seconds: Int): Boolean {
+		val candidateTitle = normalize(cleanTitle(obj.optString("trackName")))
+		val wantedTitle = normalize(cleanTitle(title))
+		if (candidateTitle.isEmpty() || candidateTitle != wantedTitle) return false
+
+		val candidateArtist = normalize(obj.optString("artistName"))
+		val wantedArtist = normalize(mainArtist(artist))
+		if (wantedArtist.isEmpty() || !(candidateArtist.contains(wantedArtist) ||
+				wantedArtist.contains(candidateArtist))
+		) {
+			return false
+		}
+
+		val duration = obj.optDouble("duration", 0.0)
+		return seconds <= 0 || duration <= 0 || abs(duration - seconds) <= 3
+	}
+
+	private fun better(obj: JSONObject, than: JSONObject, seconds: Int): Boolean {
+		val durationA = if (seconds > 0) abs(obj.optDouble("duration", 1e9) - seconds) else 0.0
+		val durationB = if (seconds > 0) abs(than.optDouble("duration", 1e9) - seconds) else 0.0
+		val syncedA = obj.optString("syncedLyrics").isNotBlank()
+		val syncedB = than.optString("syncedLyrics").isNotBlank()
+		if (abs(durationA - durationB) <= 1) return syncedA && !syncedB
+		return durationA < durationB
+	}
+
+	/** Removes what streaming services add: "(feat. …)", "[Remastered]", "- Radio Edit", etc. */
+	private fun cleanTitle(title: String): String {
+		val cleaned = title
+			.replace(
+				Regex("(?i)\\s*[(\\[](feat|ft|with)\\.?\\s[^)\\]]*[)\\]]"),
+				"",
+			)
+			.replace(
+				Regex(
+					"(?i)\\s*[(\\[][^)\\]]*(remaster|explicit|clean|edit|version|mono|stereo|live|bonus|deluxe)[^)\\]]*[)\\]]"
+				),
+				"",
+			)
+			.replace(
+				Regex("(?i)\\s+-\\s+.*(remaster|edit|version|mix|live|mono|stereo).*$"),
+				"",
+			)
+			.trim()
+		return cleaned.ifEmpty { title.trim() }
+	}
+
+	/** First artist only: "A, B", "A & B", "A feat. B" become "A". */
+	private fun mainArtist(artist: String): String {
+		val first = artist
+			.split(Regex("(?i)\\s*(,|&| feat\\.? | ft\\.? | x | und | and |;)\\s*"))[0]
+			.trim()
+		return first.ifEmpty { artist.trim() }
+	}
+
+	private fun normalize(value: String): String =
+		value.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]"), "")
 
 	private fun getJson(url: String): String? {
 		val connection = (URL(url).openConnection() as HttpURLConnection).apply {
