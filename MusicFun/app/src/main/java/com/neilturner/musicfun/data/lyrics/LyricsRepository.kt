@@ -34,7 +34,6 @@ object LyricsRepository {
 
 		val result = runCatching { fetchNetwork(artist, title, metadata.album, seconds) }
 			.getOrElse { LyricsResult.None }
-		android.util.Log.d("LyricsCheck", "fetch $artist - $title => $result")
 		cache[key] = result
 		result
 	}

@@ -8,17 +8,22 @@ import android.util.Log
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -30,9 +35,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.RoundRect
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -110,9 +123,6 @@ private fun MusicScreenContent(
 	val uriBitmap = rememberUriBitmap(displayedMetadata?.artworkUri)
 	val artwork = displayedMetadata?.artwork ?: uriBitmap
 	val auroraColors = rememberAuroraColors(artwork)
-	LaunchedEffect(metadata, lyrics) {
-		android.util.Log.d("AppState", "music metadata=${metadata?.title} lyrics=$lyrics")
-	}
 
 	Box(modifier = modifier.fillMaxSize()) {
 		AuroraBackground(
@@ -168,6 +178,11 @@ private fun MusicScreenContent(
 				return@Box
 			}
 
+			val progress = displayedMetadata?.durationMs
+				?.takeIf { it > 0 }
+				?.let { duration -> (positionMs.toFloat() / duration).coerceIn(0f, 1f) }
+				?: 0f
+
 			Row(
 				modifier = Modifier.align(Alignment.BottomStart),
 				horizontalArrangement = Arrangement.spacedBy(9.6.dp),
@@ -175,6 +190,7 @@ private fun MusicScreenContent(
 			) {
 				AlbumArt(
 					bitmap = artwork,
+					progress = progress,
 					modifier = Modifier.size(52.8.dp),
 				)
 
@@ -207,28 +223,75 @@ private fun MusicScreenContent(
 @Composable
 private fun AlbumArt(
 	bitmap: Bitmap?,
+	progress: Float,
 	modifier: Modifier = Modifier,
 ) {
-	Box(
-		modifier = modifier
-			.clip(MaterialTheme.shapes.extraSmall)
-			.background(Color(0xFF121212)),
-		contentAlignment = Alignment.Center,
-	) {
-		val image = bitmap
-		if (image != null) {
-			Image(
-				bitmap = image.asImageBitmap(),
-				contentDescription = stringResource(R.string.album_art),
-				modifier = Modifier.fillMaxSize(),
-				contentScale = ContentScale.Crop,
+	val animatedProgress by animateFloatAsState(
+		targetValue = progress,
+		animationSpec = tween(durationMillis = 250, easing = LinearEasing),
+		label = "artProgress",
+	)
+
+	Box(modifier = modifier, contentAlignment = Alignment.Center) {
+		Canvas(modifier = Modifier.fillMaxSize()) {
+			val stroke = 2.dp.toPx()
+			val inset = stroke / 2
+			val corner = 8.dp.toPx()
+			val rect = RoundRect(
+				left = inset,
+				top = inset,
+				right = size.width - inset,
+				bottom = size.height - inset,
+				topLeftCornerRadius = CornerRadius(corner, corner),
+				topRightCornerRadius = CornerRadius(corner, corner),
+				bottomRightCornerRadius = CornerRadius(corner, corner),
+				bottomLeftCornerRadius = CornerRadius(corner, corner),
 			)
-		} else {
-			Text(
-				text = stringResource(R.string.no_album_art),
-				style = MaterialTheme.typography.labelSmall,
-				color = Color.White.copy(alpha = 0.4f),
+
+			// Track around the exact edge of the artwork.
+			drawRoundRect(
+				color = Color.White.copy(alpha = 0.18f),
+				topLeft = Offset(inset, inset),
+				size = Size(size.width - stroke, size.height - stroke),
+				cornerRadius = CornerRadius(corner, corner),
+				style = Stroke(width = stroke),
 			)
+
+			// Progress segment along the same rounded rectangle.
+			val path = Path().apply { addRoundRect(rect) }
+			val measure = PathMeasure()
+			measure.setPath(path, false)
+			val progressPath = Path()
+			measure.getSegment(0f, measure.length * animatedProgress, progressPath, true)
+			drawPath(
+				path = progressPath,
+				color = Color.White,
+				style = Stroke(width = stroke, cap = StrokeCap.Round),
+			)
+		}
+
+		Box(
+			modifier = Modifier
+				.matchParentSize()
+				.clip(MaterialTheme.shapes.extraSmall)
+				.background(Color(0xFF121212)),
+			contentAlignment = Alignment.Center,
+		) {
+			val image = bitmap
+			if (image != null) {
+				Image(
+					bitmap = image.asImageBitmap(),
+					contentDescription = stringResource(R.string.album_art),
+					modifier = Modifier.fillMaxSize(),
+					contentScale = ContentScale.Crop,
+				)
+			} else {
+				Text(
+					text = stringResource(R.string.no_album_art),
+					style = MaterialTheme.typography.labelSmall,
+					color = Color.White.copy(alpha = 0.4f),
+				)
+			}
 		}
 	}
 }
@@ -295,35 +358,31 @@ private fun LyricsPanel(
 	}
 }
 
-/** Karaoke view: the current line is highlighted and the column scrolls to keep it centred. */
+/** Karaoke view: the current line is highlighted and the list scrolls to keep it centred. */
 @Composable
 private fun ScrollingLyrics(
 	lines: List<LrcLine>,
 	positionMs: Long,
 	modifier: Modifier = Modifier,
 ) {
+	val listState = rememberLazyListState()
 	val lineHeight = 64.dp
-	val lineHeightPx = with(LocalDensity.current) { lineHeight.toPx() }
-	val viewportHeightPx = with(LocalDensity.current) { 370.dp.toPx() }
 	val currentIndex = remember(lines, positionMs) {
 		lines.indexOfLast { it.timeMs <= positionMs }.coerceAtLeast(0)
 	}
-	val scrollState = rememberScrollState()
+	val centerOffset = with(LocalDensity.current) { -(185.dp).roundToPx() }
 
 	LaunchedEffect(currentIndex) {
-		val target = (currentIndex * lineHeightPx + lineHeightPx / 2 - viewportHeightPx / 2)
-			.toInt()
-			.coerceAtLeast(0)
-		scrollState.animateScrollTo(target)
+		listState.animateScrollToItem(currentIndex, centerOffset)
 	}
 
-	Column(
-		modifier = modifier
-			.verticalScroll(scrollState)
-			.padding(vertical = 185.dp),
+	LazyColumn(
+		modifier = modifier,
+		state = listState,
+		contentPadding = PaddingValues(vertical = 185.dp),
 		horizontalAlignment = Alignment.CenterHorizontally,
 	) {
-		lines.forEachIndexed { index, line ->
+		itemsIndexed(lines) { index, line ->
 			val current = index == currentIndex
 			Text(
 				text = line.text,

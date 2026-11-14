@@ -1,18 +1,17 @@
 package com.neilturner.musicfun.data.listener
 
-import android.app.Notification
+import android.content.ComponentName
 import android.content.Context
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSession
+import android.media.session.MediaSessionManager
 import android.media.session.PlaybackState
-import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
 import android.service.notification.NotificationListenerService
-import android.service.notification.StatusBarNotification
 import com.neilturner.musicfun.data.MusicMetadata
 import com.neilturner.musicfun.data.MusicMetadataRepository
 import kotlinx.coroutines.CoroutineScope
@@ -26,13 +25,11 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Reads "now playing" metadata out of the media notifications posted by music apps.
+ * Reads "now playing" metadata from the active media sessions.
  *
- * A media notification carries a [MediaSession.Token]; wrapping it in a [MediaController] gives us
- * the track title/artist/album, both as a snapshot and as updates via [MediaController.Callback].
- *
- * All binder calls (creating controllers, reading metadata/playback state) run on an IO scope: the
- * service shares the app's main thread with the UI, and a blocked binder call here freezes the UI.
+ * Notification listener access is required to call [MediaSessionManager.getActiveSessions], and it is
+ * also what lets us wrap a session token in a [MediaController]. All binder work runs on an IO scope
+ * so the service never blocks the app's main thread.
  */
 class MusicNotificationListenerService : NotificationListenerService() {
 
@@ -49,9 +46,14 @@ class MusicNotificationListenerService : NotificationListenerService() {
 	@Volatile
 	private var currentToken: MediaSession.Token? = null
 
+	@Volatile
+	private var lastPlaybackState: PlaybackState? = null
+
+	@Volatile
+	private var lastStateAtElapsed = 0L
+
 	private var tickerJob: Job? = null
 
-	/** Keeps the screen on while music plays so the system screensaver/dream stays away. */
 	private val screenWakeLock: PowerManager.WakeLock by lazy {
 		val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
 		@Suppress("DEPRECATION")
@@ -60,49 +62,7 @@ class MusicNotificationListenerService : NotificationListenerService() {
 	}
 
 	override fun onListenerConnected() {
-		ioScope.launch {
-			// Catch anything that was already playing before the service was (re)bound.
-			activeNotifications.forEach(::onNotificationPosted)
-		}
-	}
-
-	override fun onNotificationPosted(sbn: StatusBarNotification) {
-		val token = sbn.mediaSessionToken() ?: return
-		if (sessions.containsKey(token)) return
-
-		ioScope.launch {
-			val controller = try {
-				MediaController(this@MusicNotificationListenerService, token)
-			} catch (_: SecurityException) {
-				return@launch
-			}
-
-			val callback = object : MediaController.Callback() {
-				override fun onMetadataChanged(metadata: MediaMetadata?) {
-					if (currentToken == token) publish(sbn.packageName, metadata)
-				}
-			}
-
-			controller.registerCallback(callback, mainHandler)
-			sessions[token] = Session(sbn.packageName, controller, callback)
-			if (currentToken == null) currentToken = token
-			startTicker()
-		}
-	}
-
-	override fun onNotificationRemoved(sbn: StatusBarNotification) {
-		val token = sbn.mediaSessionToken() ?: return
-		val removed = sessions.remove(token) ?: return
-		ioScope.launch { removed.controller.unregisterCallback(removed.callback) }
-
-		if (currentToken == token) {
-			val next = sessions.entries.firstOrNull()
-			currentToken = next?.key
-			if (next == null) {
-				MusicMetadataRepository.clear()
-				stopTicker()
-			}
-		}
+		ioScope.launch { refreshSessions() }
 	}
 
 	override fun onListenerDisconnected() {
@@ -113,6 +73,51 @@ class MusicNotificationListenerService : NotificationListenerService() {
 		clearSessions()
 		ioScope.cancel()
 		super.onDestroy()
+	}
+
+	/** Add/remove sessions to match the system's active list, then make sure we have a ticker. */
+	private fun refreshSessions() {
+		val manager = getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+		val controllers = manager.getActiveSessions(
+			ComponentName(this, MusicNotificationListenerService::class.java)
+		)
+		val tokens = controllers.map { it.sessionToken }.toSet()
+
+		sessions.keys.filter { it !in tokens }.forEach(::removeSession)
+		controllers.forEach(::addSession)
+
+		if (currentToken !in tokens) {
+			currentToken = tokens.firstOrNull()
+			if (currentToken == null) MusicMetadataRepository.clear()
+		}
+
+		startTicker()
+	}
+
+	private fun addSession(controller: MediaController) {
+		val token = controller.sessionToken
+		if (sessions.containsKey(token)) return
+
+		val callback = object : MediaController.Callback() {
+			override fun onMetadataChanged(metadata: MediaMetadata?) {
+				if (currentToken == token) publish(controller.packageName, metadata)
+			}
+
+			override fun onPlaybackStateChanged(state: PlaybackState?) {
+				lastPlaybackState = state
+				lastStateAtElapsed = SystemClock.elapsedRealtime()
+			}
+		}
+
+		controller.registerCallback(callback, mainHandler)
+		sessions[token] = Session(controller.packageName, controller, callback)
+		if (currentToken == null) currentToken = token
+	}
+
+	private fun removeSession(token: MediaSession.Token) {
+		val session = sessions.remove(token) ?: return
+		session.controller.unregisterCallback(session.callback)
+		if (currentToken == token) currentToken = sessions.keys.firstOrNull()
 	}
 
 	private fun clearSessions() {
@@ -127,8 +132,11 @@ class MusicNotificationListenerService : NotificationListenerService() {
 	private fun startTicker() {
 		if (tickerJob?.isActive == true) return
 		tickerJob = ioScope.launch {
+			var tick = 0
 			while (isActive) {
 				updatePlayback()
+				if (tick % 4 == 0) refreshSessions()
+				tick++
 				delay(250)
 			}
 		}
@@ -145,13 +153,12 @@ class MusicNotificationListenerService : NotificationListenerService() {
 		val session = sessions[currentToken] ?: return
 		val controller = session.controller
 
-		// Keep the metadata fresh even if the notification isn't re-posted.
 		val metadata = controller.metadata
 		if (metadata != null) publish(session.packageName, metadata)
 
-		val state = controller.playbackState ?: return
+		val state = lastPlaybackState ?: controller.playbackState ?: return
 		val playing = state.state == PlaybackState.STATE_PLAYING
-		val elapsed = SystemClock.elapsedRealtime() - state.lastPositionUpdateTime
+		val elapsed = SystemClock.elapsedRealtime() - lastStateAtElapsed
 		val interpolated = state.position + (elapsed * state.playbackSpeed).toLong()
 		val position = if (playing && state.playbackSpeed > 0f && elapsed in 0..5_000) {
 			interpolated
@@ -193,15 +200,5 @@ class MusicNotificationListenerService : NotificationListenerService() {
 				durationMs = durationMs,
 			)
 		)
-	}
-
-	private fun StatusBarNotification.mediaSessionToken(): MediaSession.Token? {
-		val extras = notification.extras
-		return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-			extras.getParcelable(Notification.EXTRA_MEDIA_SESSION, MediaSession.Token::class.java)
-		} else {
-			@Suppress("DEPRECATION")
-			extras.getParcelable(Notification.EXTRA_MEDIA_SESSION)
-		}
 	}
 }
