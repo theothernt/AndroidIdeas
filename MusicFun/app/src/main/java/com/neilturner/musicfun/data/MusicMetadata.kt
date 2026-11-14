@@ -16,4 +16,5 @@ data class MusicMetadata(
 	val album: String?,
 	val artwork: Bitmap? = null,
 	val artworkUri: String? = null,
+	val durationMs: Long? = null,
 )

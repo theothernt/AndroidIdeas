@@ -15,8 +15,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -26,12 +30,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -40,9 +49,11 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
 import com.neilturner.musicfun.R
 import com.neilturner.musicfun.data.MusicMetadata
+import com.neilturner.musicfun.data.lyrics.LrcLine
 import com.neilturner.musicfun.ui.background.AuroraBackground
 import com.neilturner.musicfun.ui.background.rememberAuroraColors
 import com.neilturner.musicfun.ui.theme.MusicFunTheme
+import com.neilturner.musicfun.ui.viewmodel.LyricsUiState
 import com.neilturner.musicfun.ui.viewmodel.MusicViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -53,9 +64,13 @@ import java.net.URL
 fun MusicScreen(modifier: Modifier = Modifier) {
 	val viewModel: MusicViewModel = viewModel()
 	val metadata by viewModel.metadata.collectAsStateWithLifecycle()
+	val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
+	val positionMs by viewModel.positionMs.collectAsStateWithLifecycle()
 
 	MusicScreenContent(
 		metadata = metadata,
+		lyrics = lyrics,
+		positionMs = positionMs,
 		modifier = modifier,
 	)
 }
@@ -63,6 +78,8 @@ fun MusicScreen(modifier: Modifier = Modifier) {
 @Composable
 private fun MusicScreenContent(
 	metadata: MusicMetadata?,
+	lyrics: LyricsUiState,
+	positionMs: Long,
 	modifier: Modifier = Modifier,
 ) {
 	// The displayed track only changes while the screen is black, so the swap is hidden.
@@ -122,6 +139,15 @@ private fun MusicScreenContent(
 						1f to Color.Black.copy(alpha = 0.92f),
 					)
 				)
+		)
+
+		LyricsPanel(
+			state = lyrics,
+			positionMs = positionMs,
+			modifier = Modifier
+				.align(Alignment.TopEnd)
+				.padding(top = 28.dp, end = 32.dp)
+				.size(width = 420.dp, height = 370.dp),
 		)
 
 		Box(
@@ -242,12 +268,123 @@ private fun decodeArtUri(context: Context, uri: String, maxSize: Int = 512): Bit
 	}
 }
 
+@Composable
+private fun LyricsPanel(
+	state: LyricsUiState,
+	positionMs: Long,
+	modifier: Modifier = Modifier,
+) {
+	Box(modifier = modifier, contentAlignment = Alignment.Center) {
+		when (state) {
+			is LyricsUiState.Synced -> ScrollingLyrics(
+				lines = state.lines,
+				positionMs = positionMs,
+				modifier = Modifier.matchParentSize(),
+			)
+
+			is LyricsUiState.Plain -> StaticLyrics(
+				text = state.text,
+				modifier = Modifier.matchParentSize(),
+			)
+
+			LyricsUiState.Loading -> LyricsMessage(stringResource(R.string.loading_lyrics))
+			LyricsUiState.Instrumental -> LyricsMessage(stringResource(R.string.instrumental))
+			LyricsUiState.None -> LyricsMessage(stringResource(R.string.no_lyrics))
+		}
+	}
+}
+
+@Composable
+private fun LyricsMessage(text: String) {
+	Text(
+		text = text,
+		style = MaterialTheme.typography.bodyMedium,
+		color = Color.White.copy(alpha = 0.4f),
+		textAlign = TextAlign.Center,
+	)
+}
+
+/** Karaoke view: the current line is highlighted and the column glides as the track plays. */
+@Composable
+private fun ScrollingLyrics(
+	lines: List<LrcLine>,
+	positionMs: Long,
+	modifier: Modifier = Modifier,
+) {
+	val lineHeight = 64.dp
+	val lineHeightPx = with(LocalDensity.current) { lineHeight.toPx() }
+	val currentIndex = remember(lines, positionMs) {
+		lines.indexOfLast { it.timeMs <= positionMs }.coerceAtLeast(0)
+	}
+	val targetOffset = currentIndex * lineHeightPx + lineHeightPx / 2
+	val offset by animateFloatAsState(
+		targetValue = targetOffset,
+		animationSpec = tween(durationMillis = 300, easing = LinearEasing),
+		label = "lyricsScroll",
+	)
+
+	Box(modifier = modifier.clipToBounds()) {
+		Column(
+			modifier = Modifier
+				.align(Alignment.TopCenter)
+				.graphicsLayer { translationY = -offset }
+				.fillMaxWidth()
+				.padding(vertical = 185.dp),
+			horizontalAlignment = Alignment.CenterHorizontally,
+		) {
+			lines.forEachIndexed { index, line ->
+				val current = index == currentIndex
+				Text(
+					text = line.text,
+					style = if (current) {
+						MaterialTheme.typography.headlineSmall
+					} else {
+						MaterialTheme.typography.titleMedium
+					},
+					color = if (current) Color.White else Color.White.copy(alpha = 0.35f),
+					textAlign = TextAlign.Center,
+					maxLines = 2,
+					overflow = TextOverflow.Ellipsis,
+					modifier = Modifier
+						.fillMaxWidth()
+						.height(lineHeight),
+				)
+			}
+		}
+	}
+}
+
+/** Plain (unsynced) lyrics: no auto-scroll, just readable text. */
+@Composable
+private fun StaticLyrics(text: String, modifier: Modifier = Modifier) {
+	Column(
+		modifier = modifier
+			.verticalScroll(rememberScrollState())
+			.padding(vertical = 24.dp),
+		horizontalAlignment = Alignment.CenterHorizontally,
+	) {
+		text.lines().forEach { line ->
+			Text(
+				text = line,
+				style = MaterialTheme.typography.bodyLarge,
+				color = Color.White.copy(alpha = 0.7f),
+				textAlign = TextAlign.Center,
+				modifier = Modifier
+					.fillMaxWidth()
+					.padding(vertical = 4.dp),
+			)
+		}
+	}
+}
+
 @Preview(showBackground = true, widthDp = 960, heightDp = 540)
 @Composable
 private fun MusicScreenPreview() {
 	MusicFunTheme {
 		MusicScreenContent(
 			metadata = null,
+			lyrics = LyricsUiState.None,
+			positionMs = 0L,
 			modifier = Modifier.fillMaxSize(),
 		)
 	}
@@ -264,6 +401,16 @@ private fun MusicScreenPlayingPreview() {
 				artist = "Artist Name",
 				album = "Album Name",
 			),
+			lyrics = LyricsUiState.Synced(
+				lines = listOf(
+					LrcLine(0L, "First line of the song"),
+					LrcLine(5_000L, "Second line of the song"),
+					LrcLine(10_000L, "Third line of the song"),
+					LrcLine(15_000L, "Fourth line of the song"),
+					LrcLine(20_000L, "Fifth line of the song"),
+				)
+			),
+			positionMs = 6_000L,
 			modifier = Modifier.fillMaxSize(),
 		)
 	}
