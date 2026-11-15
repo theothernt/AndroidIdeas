@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.neilturner.musicfun.data.MusicMetadata
 import com.neilturner.musicfun.data.MusicMetadataRepository
 import com.neilturner.musicfun.data.PlaybackStatus
+import com.neilturner.musicfun.data.facts.ReleaseDate
+import com.neilturner.musicfun.data.facts.ReleaseDateRepository
 import com.neilturner.musicfun.data.listener.NotificationListenerPermission
 import com.neilturner.musicfun.data.lyrics.LrcLine
 import com.neilturner.musicfun.data.lyrics.LyricsRepository
@@ -25,17 +27,20 @@ import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Calendar
+import java.util.TimeZone
 
 sealed interface LyricsUiState {
-	data object Loading : LyricsUiState
 	data object None : LyricsUiState
-	data object Instrumental : LyricsUiState
 	data class Synced(val lines: List<LrcLine>) : LyricsUiState
 	data class Plain(val text: String) : LyricsUiState
 }
 
 /** Lyrics and the track they belong to, so the UI never shows one track's lines with another. */
 data class LyricsUi(val trackKey: String, val state: LyricsUiState)
+
+/** "Released 40 years ago" and the track it describes; text is null when nothing was found. */
+data class ReleaseUi(val trackKey: String, val text: String?)
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -116,15 +121,72 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 		}
 		.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+	private val lastRelease = MutableStateFlow<ReleaseUi?>(null)
+
+	/**
+	 * When the settled track was first released, looked up on MusicBrainz. Same one-lookup-per-track
+	 * rule as the lyrics; the previous text stays on screen while the info fades out.
+	 */
+	@OptIn(ExperimentalCoroutinesApi::class)
+	val release: StateFlow<ReleaseUi?> = nowPlaying
+		.mapLatest { metadata ->
+			if (metadata == null) {
+				lastRelease.value
+			} else {
+				ReleaseUi(metadata.trackKey, releaseText(metadata)).also { lastRelease.value = it }
+			}
+		}
+		.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+	private suspend fun releaseText(metadata: MusicMetadata): String? {
+		val date = ReleaseDateRepository.fetch(metadata) ?: return null
+		return relativeTime(date)?.let { "Released $it" }
+	}
+
+	/**
+	 * "40 years ago", "6 months ago", "12 days ago". Calendar arithmetic rather than java.time,
+	 * which would need API 26 or desugaring at this minSdk.
+	 */
+	private fun relativeTime(date: ReleaseDate): String? {
+		val zone = TimeZone.getTimeZone("UTC")
+		val released = Calendar.getInstance(zone).apply {
+			clear()
+			set(date.year, date.month - 1, date.day)
+		}
+		val now = Calendar.getInstance(zone)
+		if (released.after(now)) return null
+
+		var months = (now.get(Calendar.YEAR) - released.get(Calendar.YEAR)) * 12 +
+			(now.get(Calendar.MONTH) - released.get(Calendar.MONTH))
+		if (now.get(Calendar.DAY_OF_MONTH) < released.get(Calendar.DAY_OF_MONTH)) months -= 1
+
+		return when {
+			months >= 24 -> "${months / 12} years ago"
+			months >= 12 -> "1 year ago"
+			months >= 2 -> "$months months ago"
+			months == 1 -> "1 month ago"
+			else -> {
+				val days = ((now.timeInMillis - released.timeInMillis) / DayMs).toInt()
+				when {
+					days <= 0 -> "today"
+					days == 1 -> "1 day ago"
+					else -> "$days days ago"
+				}
+			}
+		}
+	}
+
 	private suspend fun resolveLyrics(metadata: MusicMetadata): LyricsUiState =
 		when (val result = LyricsRepository.fetch(metadata)) {
 			is LyricsResult.Synced -> LyricsUiState.Synced(result.lines)
 			is LyricsResult.Plain -> LyricsUiState.Plain(result.text)
-			LyricsResult.Instrumental -> LyricsUiState.Instrumental
+			// An instrumental has nothing to show, same as a miss.
+			LyricsResult.Instrumental,
 			LyricsResult.None -> LyricsUiState.None
 		}
 
 	private companion object {
 		const val TrackSettleMs = 500L
+		const val DayMs = 86_400_000L
 	}
 }

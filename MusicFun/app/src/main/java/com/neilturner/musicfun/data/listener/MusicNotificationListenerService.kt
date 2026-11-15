@@ -39,13 +39,6 @@ class MusicNotificationListenerService : NotificationListenerService() {
 		val controller: MediaController,
 	) {
 		lateinit var callback: MediaController.Callback
-
-		/** Only this session's own state: another player must never decide what this one reports. */
-		@Volatile
-		var playbackState: PlaybackState? = null
-
-		@Volatile
-		var stateAtElapsed = 0L
 	}
 
 	private val mainHandler = Handler(Looper.getMainLooper())
@@ -107,11 +100,9 @@ class MusicNotificationListenerService : NotificationListenerService() {
 				if (currentToken == token) publish(controller.packageName, metadata)
 			}
 
+			// Publish straight away rather than waiting for the ticker, so pausing hides the
+			// now-playing info promptly. Binder reads happen on the IO scope, not here.
 			override fun onPlaybackStateChanged(state: PlaybackState?) {
-				session.playbackState = state
-				session.stateAtElapsed = SystemClock.elapsedRealtime()
-				// Publish straight away rather than waiting for the ticker, so pausing hides the
-				// now-playing info promptly. Binder reads happen on the IO scope, not here.
 				if (currentToken == token) ioScope.launch { updatePlayback() }
 			}
 		}
@@ -170,7 +161,9 @@ class MusicNotificationListenerService : NotificationListenerService() {
 		val metadata = controller.metadata
 		if (metadata != null) publish(session.packageName, metadata)
 
-		val state = session.playbackState ?: controller.playbackState
+		// Read the live state rather than caching callbacks: a missed callback would otherwise pin
+		// the UI to a stale "playing" position.
+		val state = controller.playbackState
 		if (state == null) {
 			MusicMetadataRepository.updatePlayback(PlaybackStatus.Stopped, 0L)
 			if (screenWakeLock.isHeld) screenWakeLock.release()
@@ -184,20 +177,36 @@ class MusicNotificationListenerService : NotificationListenerService() {
 			else -> PlaybackStatus.Stopped
 		}
 
-		val elapsed = SystemClock.elapsedRealtime() - session.stateAtElapsed
-		val interpolated = state.position + (elapsed * state.playbackSpeed).toLong()
-		val position = if (status == PlaybackStatus.Playing && state.playbackSpeed > 0f && elapsed in 0..5_000) {
-			interpolated
+		// Players such as Spotify TV only publish a state when it changes, so the position keeps
+		// running from that last report; the old five-second cap froze the lyrics mid-track. The
+		// track duration is where a stale session stops: it can never outrun its own track.
+		val durationMs = metadata?.getLong(MediaMetadata.METADATA_KEY_DURATION)?.takeIf { it > 0 }
+		val position = if (status == PlaybackStatus.Playing && state.playbackSpeed > 0f) {
+			positionAt(state)
 		} else {
 			state.position
 		}
-		MusicMetadataRepository.updatePlayback(status, position)
+		MusicMetadataRepository.updatePlayback(
+			status,
+			position.coerceIn(0L, durationMs ?: Long.MAX_VALUE),
+		)
 
 		if (status == PlaybackStatus.Playing) {
 			if (!screenWakeLock.isHeld) screenWakeLock.acquire()
 		} else if (screenWakeLock.isHeld) {
 			screenWakeLock.release()
 		}
+	}
+
+	/**
+	 * Position right now for a reported state: media apps only publish one when it changes, so the
+	 * time since that report is added on. A state without a report time is used unchanged.
+	 */
+	private fun positionAt(state: PlaybackState): Long {
+		val reportedAt = state.lastPositionUpdateTime
+		if (reportedAt <= 0) return state.position
+		val elapsed = (SystemClock.elapsedRealtime() - reportedAt).coerceAtLeast(0L)
+		return state.position + (elapsed * state.playbackSpeed).toLong()
 	}
 
 	private fun publish(packageName: String, metadata: MediaMetadata?) {

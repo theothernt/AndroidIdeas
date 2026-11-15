@@ -33,6 +33,9 @@ object LrcParser {
 				.replace(Regex("<\\d{1,3}:\\d{2}(?:[.:]\\d{1,3})?>"), "")
 				.replace(Regex("\\s+"), " ")
 				.trim()
+			// Timestamped blank lines (common at instrumental breaks) would otherwise become an
+			// empty "current" line in the karaoke panel.
+			if (text.isEmpty()) continue
 			for (stamp in stamps) {
 				val minutes = stamp.groupValues[1].toLong()
 				val seconds = stamp.groupValues[2].toLong()

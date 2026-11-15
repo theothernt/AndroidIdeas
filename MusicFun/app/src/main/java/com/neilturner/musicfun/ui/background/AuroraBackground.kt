@@ -207,10 +207,12 @@ fun AuroraBackground(
 								height = with(density) { fieldHeightPx.toDp() },
 							)
 							.graphicsLayer {
+								// Every term is a full period of the drift, so the 24-second restart lands on
+								// the same value and velocity it started from and the loop point is invisible.
 								val phase = drift.value * 2f * PI.toFloat()
 								translationX = sin(phase) * driftX
-								translationY = cos(phase * 1.3f) * driftY
-								val scale = 1f + 0.04f * sin(phase * 0.7f)
+								translationY = cos(phase) * driftY
+								val scale = 1f + 0.04f * sin(phase)
 								scaleX = scale
 								scaleY = scale
 							},

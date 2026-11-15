@@ -5,17 +5,30 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.LinearGradient
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffXfermode
 import android.graphics.RadialGradient
+import android.graphics.RectF
 import android.graphics.Shader
 import android.net.Uri
 import android.util.Log
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.InfiniteRepeatableSpec
 import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.StartOffsetType
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Canvas
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -31,6 +44,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -44,21 +58,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathMeasure
-import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -86,9 +92,37 @@ import com.neilturner.musicfun.ui.viewmodel.MusicViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.net.URL
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 private const val FadeMs = 240
+
+/** Highlight each line this much before its timestamp, to cover the audio output latency. */
+private const val LyricsLeadMs = 1_000L
+
+/** A gap this long between lyric timestamps is an instrumental break, not a pause between lines. */
+private const val LongBreakMs = 8_000L
+
+/** Let a line sit for a moment before the break note replaces it. */
+private const val BreakNoteDelayMs = 4_000L
+
+/** One swing of a break note, in milliseconds. */
+private const val NoteSwingMs = 450
+
+/** The second note starts this fraction into its swing, so the pair never mirrors exactly. */
+private const val NoteStagger = 0.25f
+private val ArtCorner = 5.dp
+private val ArtSize = 95.dp
+
+/** One lyric slot. The synced panel is exactly three of these tall: previous, current, next. */
+private val LyricLineHeight = 96.dp
+
+/** How strong the corner cover is, and how far it is scaled down before being smoothed back up. */
+private const val BackdropAlpha = 0.5f
+private const val BackdropDownscale = 40
+
+/** The corner cover is this fraction of the screen's width across (75 % of a 16:9 screen's area). */
+private const val BackdropScreenFraction = 0.75f
 
 @Composable
 fun MusicScreen(
@@ -98,6 +132,7 @@ fun MusicScreen(
 	val viewModel: MusicViewModel = viewModel()
 	val metadata by viewModel.nowPlaying.collectAsStateWithLifecycle()
 	val lyrics by viewModel.lyrics.collectAsStateWithLifecycle()
+	val release by viewModel.release.collectAsStateWithLifecycle()
 	val positionMs by viewModel.positionMs.collectAsStateWithLifecycle()
 	val hasNotificationAccess by viewModel.hasNotificationAccess.collectAsStateWithLifecycle()
 
@@ -109,8 +144,9 @@ fun MusicScreen(
 	MusicScreenContent(
 		metadata = metadata,
 		lyrics = lyrics,
+		releaseText = release?.takeIf { it.trackKey == metadata?.trackKey }?.text,
 		positionMs = positionMs,
-		showPermissionRequest = hasNotificationAccess == false,
+		hasNotificationAccess = hasNotificationAccess,
 		onRequestNotificationAccess = onRequestNotificationAccess,
 		modifier = modifier,
 	)
@@ -120,11 +156,13 @@ fun MusicScreen(
 private fun MusicScreenContent(
 	metadata: MusicMetadata?,
 	lyrics: LyricsUi?,
+	releaseText: String? = null,
 	positionMs: Long,
-	showPermissionRequest: Boolean = false,
+	hasNotificationAccess: Boolean? = null,
 	onRequestNotificationAccess: () -> Unit = {},
 	modifier: Modifier = Modifier,
 ) {
+	val showPermissionRequest = hasNotificationAccess == false
 	val currentArtwork = metadata?.artwork ?: rememberUriBitmap(metadata?.artworkUri)
 
 	// Keep the last cover while the info fades out, so stopping doesn't snap the aurora back to
@@ -135,57 +173,70 @@ private fun MusicScreenContent(
 	}
 	val auroraColors = rememberAuroraColors(if (metadata != null) currentArtwork else retainedArtwork)
 
+	// Keep the cover up while the info fades out, but never carry it over into another track.
+	var backdropArtwork by remember { mutableStateOf<Bitmap?>(null) }
+	LaunchedEffect(metadata?.trackKey, currentArtwork) {
+		when {
+			currentArtwork != null -> backdropArtwork = currentArtwork
+			metadata != null -> backdropArtwork = null
+		}
+	}
+
 	Box(modifier = modifier.fillMaxSize()) {
 		AuroraBackground(
 			colors = auroraColors,
 			modifier = Modifier.matchParentSize(),
 		)
 
+		// The cover, blurred into a soft glow in the top-right corner: a hint of the artwork
+		// underneath the scrim, without competing with the drifting field above it.
+		AnimatedVisibility(
+			visible = metadata != null,
+			enter = fadeIn(tween(durationMillis = FadeMs, easing = LinearEasing)),
+			exit = fadeOut(tween(durationMillis = FadeMs, easing = LinearEasing)),
+			modifier = Modifier.matchParentSize(),
+			label = "albumArtBackdrop",
+		) {
+			AlbumArtBackdrop(
+				artwork = backdropArtwork,
+				modifier = Modifier.matchParentSize(),
+			)
+		}
+
 		// Vignette and scrim, pre-rendered into a single bitmap: as live Compose gradients they cost
 		// two full-screen shader passes per frame, which on this TV is what held the screen at 30 fps.
 		ScrimOverlay(modifier = Modifier.matchParentSize())
 
-		// One fade for the whole now-playing layer: a track change fades the old row and lyrics
-		// out and the new ones in, and null (paused or stopped) fades the layer away entirely.
+		// One fade for the whole corner, and track -> track.
 		Crossfade(
 			targetState = metadata,
 			modifier = Modifier.matchParentSize(),
 			animationSpec = tween(durationMillis = FadeMs, easing = LinearEasing),
 			label = "nowPlaying",
-		) { displayed ->
-			if (displayed == null) {
-				// Without notification access there is nothing to report; the request button below
-				// takes this corner instead.
-				if (!showPermissionRequest) {
-					Box(
-						modifier = Modifier
-							.fillMaxSize()
-							.padding(horizontal = 24.dp, vertical = 14.dp),
-						contentAlignment = Alignment.BottomStart,
-					) {
-						Text(
-							text = stringResource(R.string.nothing_playing),
-							style = MaterialTheme.typography.titleMedium,
-							color = Color.White.copy(alpha = 0.6f),
-						)
-					}
+		) { track ->
+			Box(modifier = Modifier.fillMaxSize()) {
+				if (track != null) {
+					NowPlayingLayer(
+						metadata = track,
+						lyrics = lyrics?.takeIf { it.trackKey == track.trackKey }?.state
+							?: LyricsUiState.None,
+						releaseText = releaseText,
+						positionMs = positionMs,
+					)
 				}
-			} else {
-				NowPlayingLayer(
-					metadata = displayed,
-					lyrics = lyrics?.takeIf { it.trackKey == displayed.trackKey }?.state
-						?: LyricsUiState.None,
-					positionMs = positionMs,
-				)
 			}
 		}
 
-		if (showPermissionRequest) {
+		AnimatedVisibility(
+			visible = showPermissionRequest,
+			enter = fadeIn(tween(durationMillis = FadeMs, easing = LinearEasing)),
+			exit = fadeOut(tween(durationMillis = FadeMs, easing = LinearEasing)),
+			modifier = Modifier.align(Alignment.BottomStart),
+			label = "permissionRequest",
+		) {
 			NotificationAccessButton(
 				onClick = onRequestNotificationAccess,
-				modifier = Modifier
-					.align(Alignment.BottomStart)
-					.padding(horizontal = 24.dp, vertical = 14.dp),
+				modifier = Modifier.padding(horizontal = 24.dp, vertical = 14.dp),
 			)
 		}
 	}
@@ -207,6 +258,75 @@ private fun NotificationAccessButton(onClick: () -> Unit, modifier: Modifier = M
 	) {
 		Text(text = stringResource(R.string.request_notification_permission))
 	}
+}
+
+/**
+ * The current cover as a soft glow in the top-right corner. The art is rasterised into a
+ * [BackdropDownscale]-times smaller bitmap, masked by a radial fade so its square edges never show,
+ * and scaled back up by [Image]; that is one cheap draw off the main thread instead of a per-frame
+ * render-effect blur, which this TV cannot afford on top of the aurora.
+ */
+@Composable
+private fun AlbumArtBackdrop(artwork: Bitmap?, modifier: Modifier = Modifier) {
+	BoxWithConstraints(modifier = modifier) {
+		val widthPx = constraints.maxWidth
+		val heightPx = constraints.maxHeight
+
+		// Hold the previous wash while a new one is rendered, so tracks don't blink.
+		var wash by remember { mutableStateOf<ImageBitmap?>(null) }
+		LaunchedEffect(artwork, widthPx, heightPx) {
+			if (artwork != null && widthPx > 0 && heightPx > 0) {
+				wash = withContext(Dispatchers.Default) { renderBackdrop(artwork, widthPx, heightPx) }
+			}
+		}
+
+		wash?.let { image ->
+			Image(
+				bitmap = image,
+				contentDescription = null,
+				contentScale = ContentScale.FillBounds,
+				alpha = BackdropAlpha,
+				modifier = Modifier.fillMaxSize(),
+			)
+		}
+	}
+}
+
+private fun renderBackdrop(artwork: Bitmap, widthPx: Int, heightPx: Int): ImageBitmap {
+	val width = (widthPx / BackdropDownscale).coerceAtLeast(8)
+	val height = (heightPx / BackdropDownscale).coerceAtLeast(8)
+	val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+	val canvas = android.graphics.Canvas(bitmap)
+
+	// The cover sits whole in the top-right corner at three quarters of the screen's width, then a
+	// radial mask fades it out from its middle so the square's edges never show, only a soft glow.
+	val side = (width * BackdropScreenFraction).coerceAtLeast(4f)
+	val left = width - side
+	val top = 0f
+	val centreX = left + side / 2f
+	val centreY = top + side / 2f
+	val layer = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
+	canvas.drawBitmap(
+		artwork,
+		null,
+		RectF(left, top, left + side, top + side),
+		Paint(Paint.FILTER_BITMAP_FLAG),
+	)
+	val mask = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+		shader = RadialGradient(
+			centreX,
+			centreY,
+			side * 0.5f,
+			intArrayOf(0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt(), 0x00FFFFFF),
+			floatArrayOf(0f, 0.4f, 1f),
+			Shader.TileMode.CLAMP,
+		)
+		xfermode = PorterDuffXfermode(PorterDuff.Mode.DST_IN)
+	}
+	canvas.drawRect(left, top, left + side, top + side, mask)
+	canvas.restoreToCount(layer)
+
+	return bitmap.asImageBitmap()
 }
 
 /**
@@ -276,15 +396,12 @@ private fun renderScrim(widthPx: Int, heightPx: Int): ImageBitmap {
 private fun NowPlayingLayer(
 	metadata: MusicMetadata,
 	lyrics: LyricsUiState,
+	releaseText: String? = null,
 	positionMs: Long,
 ) {
 	val uriBitmap = rememberUriBitmap(metadata.artworkUri)
 	val artwork = metadata.artwork ?: uriBitmap
-
-	val progress = metadata.durationMs
-		?.takeIf { it > 0 }
-		?.let { duration -> (positionMs.toFloat() / duration).coerceIn(0f, 1f) }
-		?: 0f
+	val lyricsPositionMs = positionMs + LyricsLeadMs
 
 	Box(modifier = Modifier.fillMaxSize()) {
 		// Lyrics usually land a moment after the track, so they fade in on their own. Another
@@ -305,7 +422,7 @@ private fun NowPlayingLayer(
 			if (panelLyrics != null) {
 				LyricsPanel(
 					state = panelLyrics,
-					positionMs = positionMs,
+					positionMs = lyricsPositionMs,
 					modifier = Modifier.fillMaxSize(),
 				)
 			}
@@ -315,26 +432,42 @@ private fun NowPlayingLayer(
 			modifier = Modifier
 				.align(Alignment.BottomStart)
 				.padding(horizontal = 24.dp, vertical = 14.dp),
-			horizontalArrangement = Arrangement.spacedBy(9.6.dp),
+			horizontalArrangement = Arrangement.spacedBy(14.4.dp),
 			verticalAlignment = Alignment.Bottom,
 		) {
 			AlbumArt(
 				bitmap = artwork,
-				progress = progress,
-				modifier = Modifier.size(52.8.dp),
+				modifier = Modifier.size(ArtSize),
 			)
 
 			Column(modifier = Modifier.padding(bottom = 2.dp)) {
+				releaseText?.let { released ->
+					Text(
+						text = released,
+						style = MaterialTheme.typography.titleMedium.copy(fontSize = 12.sp, lineHeight = 16.sp),
+						color = Color.White.copy(alpha = 0.6f),
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
+					)
+				}
 				Text(
 					text = metadata.title ?: stringResource(R.string.unknown_title),
-					style = MaterialTheme.typography.displaySmall.copy(fontSize = 28.8.sp, lineHeight = 35.2.sp),
+					style = MaterialTheme.typography.displaySmall.copy(fontSize = 25.9.sp, lineHeight = 31.7.sp),
 					color = Color.White,
+					maxLines = 1,
+					overflow = TextOverflow.Ellipsis,
 				)
-				metadata.artist?.let { artist ->
+				// Artist, then the album or single it came from: "Genesis - Invisible Touch".
+				val subtitle = listOfNotNull(metadata.artist, metadata.album)
+					.filter { it.isNotBlank() }
+					.joinToString(" - ")
+				if (subtitle.isNotEmpty()) {
 					Text(
-						text = artist,
-						style = MaterialTheme.typography.titleMedium,
+						text = subtitle,
+						style = MaterialTheme.typography.titleMedium.copy(fontSize = 14.4.sp, lineHeight = 21.6.sp),
 						color = Color.White.copy(alpha = 0.7f),
+						maxLines = 1,
+						overflow = TextOverflow.Ellipsis,
 					)
 				}
 			}
@@ -345,75 +478,29 @@ private fun NowPlayingLayer(
 @Composable
 private fun AlbumArt(
 	bitmap: Bitmap?,
-	progress: Float,
 	modifier: Modifier = Modifier,
 ) {
-	val animatedProgress by animateFloatAsState(
-		targetValue = progress,
-		animationSpec = tween(durationMillis = 250, easing = LinearEasing),
-		label = "artProgress",
-	)
-
-	Box(modifier = modifier, contentAlignment = Alignment.Center) {
-		Canvas(modifier = Modifier.fillMaxSize()) {
-			val stroke = 2.dp.toPx()
-			val inset = stroke / 2
-			val corner = 8.dp.toPx()
-			val rect = RoundRect(
-				left = inset,
-				top = inset,
-				right = size.width - inset,
-				bottom = size.height - inset,
-				topLeftCornerRadius = CornerRadius(corner, corner),
-				topRightCornerRadius = CornerRadius(corner, corner),
-				bottomRightCornerRadius = CornerRadius(corner, corner),
-				bottomLeftCornerRadius = CornerRadius(corner, corner),
+	Box(
+		modifier = modifier
+			.border(1.dp, Color.White.copy(alpha = 0.5f), RoundedCornerShape(ArtCorner))
+			.clip(RoundedCornerShape(ArtCorner))
+			.background(Color(0xFF121212)),
+		contentAlignment = Alignment.Center,
+	) {
+		val image = bitmap
+		if (image != null) {
+			Image(
+				bitmap = image.asImageBitmap(),
+				contentDescription = stringResource(R.string.album_art),
+				modifier = Modifier.fillMaxSize(),
+				contentScale = ContentScale.Crop,
 			)
-
-			// Track around the exact edge of the artwork.
-			drawRoundRect(
-				color = Color.White.copy(alpha = 0.18f),
-				topLeft = Offset(inset, inset),
-				size = Size(size.width - stroke, size.height - stroke),
-				cornerRadius = CornerRadius(corner, corner),
-				style = Stroke(width = stroke),
+		} else {
+			Text(
+				text = stringResource(R.string.no_album_art),
+				style = MaterialTheme.typography.labelSmall,
+				color = Color.White.copy(alpha = 0.4f),
 			)
-
-			// Progress segment along the same rounded rectangle.
-			val path = Path().apply { addRoundRect(rect) }
-			val measure = PathMeasure()
-			measure.setPath(path, false)
-			val progressPath = Path()
-			measure.getSegment(0f, measure.length * animatedProgress, progressPath, true)
-			drawPath(
-				path = progressPath,
-				color = Color.White,
-				style = Stroke(width = stroke, cap = StrokeCap.Round),
-			)
-		}
-
-		Box(
-			modifier = Modifier
-				.matchParentSize()
-				.clip(MaterialTheme.shapes.extraSmall)
-				.background(Color(0xFF121212)),
-			contentAlignment = Alignment.Center,
-		) {
-			val image = bitmap
-			if (image != null) {
-				Image(
-					bitmap = image.asImageBitmap(),
-					contentDescription = stringResource(R.string.album_art),
-					modifier = Modifier.fillMaxSize(),
-					contentScale = ContentScale.Crop,
-				)
-			} else {
-				Text(
-					text = stringResource(R.string.no_album_art),
-					style = MaterialTheme.typography.labelSmall,
-					color = Color.White.copy(alpha = 0.4f),
-				)
-			}
 		}
 	}
 }
@@ -473,14 +560,15 @@ private fun LyricsPanel(
 			modifier = modifier,
 		)
 
-		// Nothing to show while loading, instrumental, or when LRCLIB has no lyrics.
-		LyricsUiState.Loading,
-		LyricsUiState.Instrumental,
+		// Nothing to show when LRCLIB has no lyrics for the track.
 		LyricsUiState.None -> Unit
 	}
 }
 
-/** Karaoke view: the current line is highlighted and the list scrolls to keep it centred. */
+/**
+ * Karaoke view: the current line sits in the middle in white, the previous line above it and the
+ * next one below, all at the same size. Every line change glides instead of jumping.
+ */
 @Composable
 private fun ScrollingLyrics(
 	lines: List<LrcLine>,
@@ -488,42 +576,123 @@ private fun ScrollingLyrics(
 	modifier: Modifier = Modifier,
 ) {
 	val listState = rememberLazyListState()
-	val lineHeight = 64.dp
-	val currentIndex = remember(lines, positionMs) {
-		lines.indexOfLast { it.timeMs <= positionMs }.coerceAtLeast(0)
+	val exactIndex = remember(lines, positionMs) { lines.indexOfLast { it.timeMs <= positionMs } }
+	val currentIndex = exactIndex.coerceAtLeast(0)
+	val showBreak = remember(lines, positionMs) { inLongBreak(lines, exactIndex, positionMs) }
+	// Single-line changes glide; a new track, a seek or a restart snap straight to the current
+	// line. Animating across a long jump left the panel scrolling the wrong lines for seconds
+	// after the music had already moved.
+	var positioned by remember(lines) { mutableStateOf(false) }
+	var shownIndex by remember(lines) { mutableStateOf(currentIndex) }
+	LaunchedEffect(currentIndex, lines) {
+		if (!positioned || abs(currentIndex - shownIndex) > 1) {
+			listState.scrollToItem(currentIndex)
+		} else {
+			listState.animateScrollToItem(currentIndex)
+		}
+		shownIndex = currentIndex
+		positioned = true
 	}
-	val centerOffset = with(LocalDensity.current) { -(185.dp).roundToPx() }
 
-	LaunchedEffect(currentIndex) {
-		listState.animateScrollToItem(currentIndex, centerOffset)
+	Box(modifier = modifier, contentAlignment = Alignment.Center) {
+		LazyColumn(
+			modifier = Modifier
+				.fillMaxWidth()
+				.height(LyricLineHeight * 3),
+			state = listState,
+			contentPadding = PaddingValues(vertical = LyricLineHeight),
+			horizontalAlignment = Alignment.CenterHorizontally,
+		) {
+			itemsIndexed(lines) { index, line ->
+				Box(
+					modifier = Modifier
+						.fillMaxWidth()
+						.height(LyricLineHeight),
+					contentAlignment = Alignment.Center,
+				) {
+					if (showBreak && index == currentIndex) {
+						RockingNote()
+					} else {
+						Text(
+							text = line.text,
+							style = MaterialTheme.typography.headlineSmall,
+							color = if (index == currentIndex) {
+								Color.White
+							} else {
+								Color.White.copy(alpha = 0.35f)
+							},
+							textAlign = TextAlign.Center,
+							maxLines = 2,
+							overflow = TextOverflow.Ellipsis,
+						)
+					}
+				}
+			}
+		}
 	}
+}
 
-	LazyColumn(
+/**
+ * True while waiting for the next line across a long gap: a long intro, or an instrumental break
+ * once the last line has had time to be read. The LRC has no break markers, so the gap between
+ * timestamps is the evidence.
+ */
+private fun inLongBreak(lines: List<LrcLine>, index: Int, positionMs: Long): Boolean {
+	val next = lines.getOrNull(index + 1) ?: return false
+	val gapStart = lines.getOrNull(index)?.timeMs ?: 0L
+	return next.timeMs - gapStart >= LongBreakMs &&
+		(index < 0 || positionMs - gapStart >= BreakNoteDelayMs)
+}
+
+/**
+ * Two music notes rocking in opposite directions while a long break waits for the next line. They
+ * turn towards and away from each other, which reads as a quick dance rather than a tick, and the
+ * second one starts a quarter of a swing later so the pair is never a perfect mirror.
+ */
+@Composable
+private fun RockingNote(modifier: Modifier = Modifier) {
+	val transition = rememberInfiniteTransition(label = "lyricBreak")
+	val first = transition.animateFloat(
+		initialValue = -15f,
+		targetValue = 15f,
+		animationSpec = noteSwing(phase = 0f),
+		label = "lyricBreakFirst",
+	)
+	val second = transition.animateFloat(
+		initialValue = -15f,
+		targetValue = 15f,
+		animationSpec = noteSwing(phase = NoteStagger),
+		label = "lyricBreakSecond",
+	)
+
+	Row(
 		modifier = modifier,
-		state = listState,
-		contentPadding = PaddingValues(vertical = 185.dp),
-		horizontalAlignment = Alignment.CenterHorizontally,
+		horizontalArrangement = Arrangement.spacedBy(18.dp),
+		verticalAlignment = Alignment.CenterVertically,
 	) {
-		itemsIndexed(lines) { index, line ->
-			val current = index == currentIndex
+		listOf(first, second).forEachIndexed { index, rock ->
 			Text(
-				text = line.text,
-				style = if (current) {
-					MaterialTheme.typography.headlineSmall
-				} else {
-					MaterialTheme.typography.titleMedium
+				text = "\u266A",
+				style = MaterialTheme.typography.headlineMedium,
+				color = Color.White.copy(alpha = 0.7f),
+				modifier = Modifier.graphicsLayer {
+					rotationZ = rock.value * if (index == 0) 1f else -1f
 				},
-				color = if (current) Color.White else Color.White.copy(alpha = 0.35f),
-				textAlign = TextAlign.Center,
-				maxLines = 2,
-				overflow = TextOverflow.Ellipsis,
-				modifier = Modifier
-					.fillMaxWidth()
-					.height(lineHeight),
 			)
 		}
 	}
 }
+
+/** One note's swing; [phase] skips that fraction into the first swing before it starts. */
+private fun noteSwing(phase: Float): InfiniteRepeatableSpec<Float> = infiniteRepeatable(
+	// Eased at both ends so the notes slow into each turn like a swinging pendulum.
+	animation = tween(durationMillis = NoteSwingMs, easing = FastOutSlowInEasing),
+	repeatMode = RepeatMode.Reverse,
+	initialStartOffset = StartOffset(
+		offsetMillis = (NoteSwingMs * phase).roundToInt(),
+		offsetType = StartOffsetType.FastForward,
+	),
+)
 
 /** Plain (unsynced) lyrics: no auto-scroll, just readable text. */
 @Composable

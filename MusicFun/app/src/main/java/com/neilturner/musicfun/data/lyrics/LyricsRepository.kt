@@ -1,6 +1,7 @@
 package com.neilturner.musicfun.data.lyrics
 
 import com.neilturner.musicfun.data.MusicMetadata
+import com.neilturner.musicfun.data.track.TrackMatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -12,14 +13,19 @@ import java.util.Locale
 import kotlin.math.abs
 
 /**
- * Looks up synced lyrics on LRCLIB (https://lrclib.net). Streaming metadata is messy (feat., remaster
+ * Looks up lyrics on LRCLIB (https://lrclib.net). Streaming metadata is messy (feat., remaster
  * suffixes, multiple artists), so the title/artist are cleaned and every search hit is verified before
- * it is accepted — otherwise a similarly named song gets shown instead of the one playing.
+ * it is accepted — otherwise a similarly named song gets shown instead of the one playing. Synced
+ * lines also need a known, closely matching track duration, and plain lyrics are preferred over a
+ * hit whose timings cannot be trusted.
  */
 object LyricsRepository {
 
 	private const val BaseUrl = "https://lrclib.net/api"
 	private const val UserAgent = "MusicFun/1.0 (Android)"
+
+	/** Seconds a synced hit's duration may differ and still have its timings trusted. */
+	private const val SyncedToleranceSec = 2.0
 
 	private val cache = mutableMapOf<String, LyricsResult>()
 
@@ -39,120 +45,112 @@ object LyricsRepository {
 	}
 
 	private fun fetchNetwork(artist: String, title: String, album: String?, seconds: Int): LyricsResult {
-		val cleanTitle = cleanTitle(title)
-		val mainArtist = mainArtist(artist)
+		val candidates = collectCandidates(artist, title, album, seconds)
 
-		val exactQuery = buildString {
-			append("artist_name=").append(enc(mainArtist))
-			append("&track_name=").append(enc(cleanTitle))
-			album?.takeIf { it.isNotBlank() }?.let {
-				append("&album_name=").append(enc(it))
-			}
-			if (seconds > 0) append("&duration=").append(seconds)
-		}
-
-		var best: JSONObject? = null
-		getJson("$BaseUrl/get?$exactQuery")?.let { body ->
-			val candidate = runCatching { JSONObject(body) }.getOrNull()
-			if (candidate != null && hasText(candidate) && same(candidate, artist, title, seconds)) {
-				best = candidate
-			}
-		}
-
-		if (best == null) {
-			val searchJson = getJson(
-				"$BaseUrl/search?artist_name=${enc(mainArtist)}&track_name=${enc(cleanTitle)}"
-			) ?: return LyricsResult.None
-			val array = runCatching { JSONArray(searchJson) }.getOrNull()
-				?: return LyricsResult.None
-
-			for (index in 0 until array.length()) {
-				val candidate = array.optJSONObject(index) ?: continue
-				if (!hasText(candidate) || !same(candidate, artist, title, seconds)) continue
-				val current = best
-				if (current == null || better(candidate, current, seconds)) {
-					best = candidate
-				}
-			}
-		}
-
-		val hit = best ?: return LyricsResult.None
-		if (hit.optBoolean("instrumental")) return LyricsResult.Instrumental
-
-		val synced = hit.optString("syncedLyrics")
-		if (synced.isNotBlank()) {
-			val lines = LrcParser.parse(synced)
+		// Timings are only trusted when the playing track's duration is known and the hit's own
+		// duration is close, so an album, single or extended version with the same name (and a
+		// different intro) cannot drag the highlighted line out of sync.
+		val synced = candidates
+			.filter { it.isSynced() && fitsSynced(it, seconds) }
+			.closestTo(seconds)
+		if (synced != null) {
+			val lines = LrcParser.parse(synced.text("syncedLyrics").orEmpty())
 			if (lines.isNotEmpty()) return LyricsResult.Synced(lines)
 		}
 
-		val plain = hit.optString("plainLyrics")
-		if (plain.isNotBlank()) return LyricsResult.Plain(plain)
-		return LyricsResult.None
+		// No trustworthy timings: untimed lyrics are better than lines that are visibly out of sync.
+		val plain = candidates.filter { it.text("plainLyrics") != null }.closestTo(seconds)
+		plain?.text("plainLyrics")?.let { return LyricsResult.Plain(it.trim()) }
+
+		return if (candidates.any { it.optBoolean("instrumental") }) {
+			LyricsResult.Instrumental
+		} else {
+			LyricsResult.None
+		}
+	}
+
+	/**
+	 * Same-song hits for this track. The exact lookup is tried first; the search only runs when
+	 * that hit cannot supply trustworthy timings, and it is also where the plain fallback lives.
+	 */
+	private fun collectCandidates(artist: String, title: String, album: String?, seconds: Int): List<JSONObject> {
+		val cleanTitle = cleanTitle(title)
+		val mainArtist = mainArtist(artist)
+
+		val exact = getJson("$BaseUrl/get?${exactQuery(mainArtist, cleanTitle, album, seconds)}")
+			?.let { body -> runCatching { JSONObject(body) }.getOrNull() }
+			?.takeIf { hasText(it) && sameSong(it, artist, title) }
+
+		if (exact != null && exact.isSynced() && fitsSynced(exact, seconds)) return listOf(exact)
+
+		val hits = mutableListOf<JSONObject>()
+		if (exact != null) hits += exact
+
+		val searchJson = getJson(
+			"$BaseUrl/search?artist_name=${enc(mainArtist)}&track_name=${enc(cleanTitle)}"
+		) ?: return hits
+		val array = runCatching { JSONArray(searchJson) }.getOrNull() ?: return hits
+		for (index in 0 until array.length()) {
+			val candidate = array.optJSONObject(index) ?: continue
+			if (hasText(candidate) && sameSong(candidate, artist, title)) hits += candidate
+		}
+		return hits
+	}
+
+	private fun exactQuery(artist: String, title: String, album: String?, seconds: Int): String =
+		buildString {
+			append("artist_name=").append(enc(artist))
+			append("&track_name=").append(enc(title))
+			album?.takeIf { it.isNotBlank() }?.let { append("&album_name=").append(enc(it)) }
+			if (seconds > 0) append("&duration=").append(seconds)
+		}
+
+	private fun JSONObject.isSynced(): Boolean = text("syncedLyrics") != null
+
+	/**
+	 * A lyric string, or null when the field is JSON null or blank. [JSONObject.optString] turns a
+	 * JSON null into the text "null", which would otherwise be accepted as lyrics and shown on screen.
+	 */
+	private fun JSONObject.text(name: String): String? =
+		if (isNull(name)) null else optString(name).takeIf { it.isNotBlank() }
+
+	/**
+	 * Synced lines are only usable when the track's duration is known and the hit's is close: album,
+	 * single and extended versions share a title but not their timings.
+	 */
+	private fun fitsSynced(candidate: JSONObject, seconds: Int): Boolean {
+		if (seconds <= 0) return false
+		val duration = candidate.optDouble("duration", 0.0)
+		return duration > 0 && abs(duration - seconds) <= SyncedToleranceSec
+	}
+
+	/** Closest in duration; hits without a known duration sort last. */
+	private fun List<JSONObject>.closestTo(seconds: Int): JSONObject? = minByOrNull { candidate ->
+		val duration = candidate.optDouble("duration", 0.0)
+		if (seconds > 0 && duration > 0) abs(duration - seconds) else Double.MAX_VALUE
 	}
 
 	private fun hasText(obj: JSONObject): Boolean =
-		obj.optString("syncedLyrics").isNotBlank() ||
-			obj.optString("plainLyrics").isNotBlank() ||
-			obj.optBoolean("instrumental")
+		obj.isSynced() || obj.text("plainLyrics") != null || obj.optBoolean("instrumental")
 
-	/** Same song: cleaned titles match, artists overlap, duration within a few seconds. */
-	private fun same(obj: JSONObject, artist: String, title: String, seconds: Int): Boolean {
-		val candidateTitle = normalize(cleanTitle(obj.optString("trackName")))
-		val wantedTitle = normalize(cleanTitle(title))
-		if (candidateTitle.isEmpty() || candidateTitle != wantedTitle) return false
+	/** Same song by title and artist. Duration is judged per lyric type, not here. */
+	private fun sameSong(obj: JSONObject, artist: String, title: String): Boolean {
+		val candidateTitle = normalize(cleanTitle(obj.text("trackName").orEmpty()))
+		if (candidateTitle.isEmpty() || candidateTitle != normalize(cleanTitle(title))) return false
 
-		val candidateArtist = normalize(obj.optString("artistName"))
+		val candidateArtist = normalize(obj.text("artistName").orEmpty())
 		val wantedArtist = normalize(mainArtist(artist))
-		if (wantedArtist.isEmpty() || !(candidateArtist.contains(wantedArtist) ||
-				wantedArtist.contains(candidateArtist))
-		) {
-			return false
-		}
-
-		val duration = obj.optDouble("duration", 0.0)
-		return seconds <= 0 || duration <= 0 || abs(duration - seconds) <= 3
-	}
-
-	private fun better(obj: JSONObject, than: JSONObject, seconds: Int): Boolean {
-		val durationA = if (seconds > 0) abs(obj.optDouble("duration", 1e9) - seconds) else 0.0
-		val durationB = if (seconds > 0) abs(than.optDouble("duration", 1e9) - seconds) else 0.0
-		val syncedA = obj.optString("syncedLyrics").isNotBlank()
-		val syncedB = than.optString("syncedLyrics").isNotBlank()
-		if (abs(durationA - durationB) <= 1) return syncedA && !syncedB
-		return durationA < durationB
+		return wantedArtist.isNotEmpty() &&
+			(candidateArtist.contains(wantedArtist) || wantedArtist.contains(candidateArtist))
 	}
 
 	/** Removes what streaming services add: "(feat. …)", "[Remastered]", "- Radio Edit", etc. */
-	private fun cleanTitle(title: String): String {
-		val cleaned = title
-			.replace(
-				Regex("(?i)\\s*[(\\[](feat|ft|with)\\.?\\s[^)\\]]*[)\\]]"),
-				"",
-			)
-			.replace(
-				Regex(
-					"(?i)\\s*[(\\[][^)\\]]*(remaster|explicit|clean|edit|version|mono|stereo|live|bonus|deluxe)[^)\\]]*[)\\]]"
-				),
-				"",
-			)
-			.replace(
-				Regex("(?i)\\s+-\\s+.*(remaster|edit|version|mix|live|mono|stereo).*$"),
-				"",
-			)
-			.trim()
-		return cleaned.ifEmpty { title.trim() }
-	}
+	private fun cleanTitle(title: String): String = TrackMatch.cleanTitle(title)
 
 	/** First artist only: "A, B", "A & B", "A feat. B" become "A". */
-	private fun mainArtist(artist: String): String {
-		val first = artist
-			.split(Regex("(?i)\\s*(,|&| feat\\.? | ft\\.? | x | und | and |;)\\s*"))[0]
-			.trim()
-		return first.ifEmpty { artist.trim() }
-	}
+	private fun mainArtist(artist: String): String = TrackMatch.mainArtist(artist)
 
-	private fun normalize(value: String): String =
-		value.lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{N}]"), "")
+	private fun normalize(value: String): String = TrackMatch.normalize(value)
 
 	private fun getJson(url: String): String? {
 		val connection = (URL(url).openConnection() as HttpURLConnection).apply {
