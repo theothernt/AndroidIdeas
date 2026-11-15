@@ -119,7 +119,7 @@ private val LyricLineHeight = 96.dp
 
 /** How strong the corner cover is, and how far it is scaled down before being smoothed back up. */
 private const val BackdropAlpha = 0.5f
-private const val BackdropDownscale = 40
+private const val BackdropDownscale = 60
 
 /** The corner cover is this fraction of the screen's width across (75 % of a 16:9 screen's area). */
 private const val BackdropScreenFraction = 0.75f
@@ -292,6 +292,19 @@ private fun AlbumArtBackdrop(artwork: Bitmap?, modifier: Modifier = Modifier) {
 	}
 }
 
+/** Repeatedly halves the cover down to [target] pixels so the result is smooth, not blocky. */
+private fun scaleForBlur(source: Bitmap, target: Int): Bitmap {
+	var current = source
+	while (current.width / 2 >= target && current.height / 2 >= target) {
+		current = Bitmap.createScaledBitmap(current, current.width / 2, current.height / 2, true)
+	}
+	return if (current.width == target) {
+		current
+	} else {
+		Bitmap.createScaledBitmap(current, target, target, true)
+	}
+}
+
 private fun renderBackdrop(artwork: Bitmap, widthPx: Int, heightPx: Int): ImageBitmap {
 	val width = (widthPx / BackdropDownscale).coerceAtLeast(8)
 	val height = (heightPx / BackdropDownscale).coerceAtLeast(8)
@@ -306,8 +319,9 @@ private fun renderBackdrop(artwork: Bitmap, widthPx: Int, heightPx: Int): ImageB
 	val centreX = left + side / 2f
 	val centreY = top + side / 2f
 	val layer = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
+	// Halving repeatedly box-filters the cover; one big bilinear step would alias into blocks.
 	canvas.drawBitmap(
-		artwork,
+		scaleForBlur(artwork, side.roundToInt().coerceAtLeast(2)),
 		null,
 		RectF(left, top, left + side, top + side),
 		Paint(Paint.FILTER_BITMAP_FLAG),
