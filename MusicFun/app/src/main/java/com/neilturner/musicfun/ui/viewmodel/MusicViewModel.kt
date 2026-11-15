@@ -39,7 +39,7 @@ sealed interface LyricsUiState {
 /** Lyrics and the track they belong to, so the UI never shows one track's lines with another. */
 data class LyricsUi(val trackKey: String, val state: LyricsUiState)
 
-/** "Released 40 years ago" and the track it describes; text is null when nothing was found. */
+/** "Released 40 years ago · Electronic" and the track it describes; text is null when not found. */
 data class ReleaseUi(val trackKey: String, val text: String?)
 
 class MusicViewModel(application: Application) : AndroidViewModel(application) {
@@ -124,8 +124,9 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 	private val lastRelease = MutableStateFlow<ReleaseUi?>(null)
 
 	/**
-	 * When the settled track was first released, looked up on MusicBrainz. Same one-lookup-per-track
-	 * rule as the lyrics; the previous text stays on screen while the info fades out.
+	 * When the settled track was first released and what genre it is filed under. Same
+	 * one-lookup-per-track rule as the lyrics; the previous text stays on screen while the info
+	 * fades out.
 	 */
 	@OptIn(ExperimentalCoroutinesApi::class)
 	val release: StateFlow<ReleaseUi?> = nowPlaying
@@ -138,9 +139,15 @@ class MusicViewModel(application: Application) : AndroidViewModel(application) {
 		}
 		.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
+	/** "Released 40 years ago · Electronic"; either half stands alone when the other is missing. */
 	private suspend fun releaseText(metadata: MusicMetadata): String? {
-		val date = ReleaseDateRepository.fetch(metadata) ?: return null
-		return relativeTime(date)?.let { "Released $it" }
+		val facts = ReleaseDateRepository.fetch(metadata) ?: return null
+		val released = facts.releaseDate?.let(::relativeTime)?.let { "Released $it" }
+		val genre = facts.genre
+		return when {
+			released != null && genre != null -> "$released · $genre"
+			else -> released ?: genre
+		}
 	}
 
 	/**

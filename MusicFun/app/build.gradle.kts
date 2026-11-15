@@ -51,6 +51,7 @@ dependencies {
 	implementation(libs.androidx.navigation3.ui)
 	implementation(libs.androidx.navigationevent)
 	implementation(libs.kotlinx.serialization.core)
+	implementation(libs.kotlinx.serialization.json)
 	implementation(libs.androidx.palette.ktx)
 	implementation(libs.androidx.tv.foundation)
 	implementation(libs.androidx.tv.material)

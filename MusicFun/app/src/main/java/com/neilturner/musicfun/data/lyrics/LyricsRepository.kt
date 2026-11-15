@@ -4,12 +4,11 @@ import com.neilturner.musicfun.data.MusicMetadata
 import com.neilturner.musicfun.data.track.TrackMatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
-import java.util.Locale
 import kotlin.math.abs
 
 /**
@@ -26,6 +25,13 @@ object LyricsRepository {
 
 	/** Seconds a synced hit's duration may differ and still have its timings trusted. */
 	private const val SyncedToleranceSec = 2.0
+
+	/** LRCLIB adds fields over time and omits others per record, so unknown keys and nulls are fine. */
+	private val json = Json {
+		ignoreUnknownKeys = true
+		coerceInputValues = true
+		isLenient = true
+	}
 
 	private val cache = mutableMapOf<String, LyricsResult>()
 
@@ -51,18 +57,18 @@ object LyricsRepository {
 		// duration is close, so an album, single or extended version with the same name (and a
 		// different intro) cannot drag the highlighted line out of sync.
 		val synced = candidates
-			.filter { it.isSynced() && fitsSynced(it, seconds) }
+			.filter { it.hasSynced() && fitsSynced(it, seconds) }
 			.closestTo(seconds)
 		if (synced != null) {
-			val lines = LrcParser.parse(synced.text("syncedLyrics").orEmpty())
+			val lines = LrcParser.parse(synced.syncedLyrics.orEmpty())
 			if (lines.isNotEmpty()) return LyricsResult.Synced(lines)
 		}
 
 		// No trustworthy timings: untimed lyrics are better than lines that are visibly out of sync.
-		val plain = candidates.filter { it.text("plainLyrics") != null }.closestTo(seconds)
-		plain?.text("plainLyrics")?.let { return LyricsResult.Plain(it.trim()) }
+		val plain = candidates.filter { it.hasPlain() }.closestTo(seconds)
+		plain?.plainLyrics?.let { return LyricsResult.Plain(it.trim()) }
 
-		return if (candidates.any { it.optBoolean("instrumental") }) {
+		return if (candidates.any { it.instrumental }) {
 			LyricsResult.Instrumental
 		} else {
 			LyricsResult.None
@@ -73,26 +79,26 @@ object LyricsRepository {
 	 * Same-song hits for this track. The exact lookup is tried first; the search only runs when
 	 * that hit cannot supply trustworthy timings, and it is also where the plain fallback lives.
 	 */
-	private fun collectCandidates(artist: String, title: String, album: String?, seconds: Int): List<JSONObject> {
+	private fun collectCandidates(artist: String, title: String, album: String?, seconds: Int): List<LyricHit> {
 		val cleanTitle = cleanTitle(title)
 		val mainArtist = mainArtist(artist)
 
 		val exact = getJson("$BaseUrl/get?${exactQuery(mainArtist, cleanTitle, album, seconds)}")
-			?.let { body -> runCatching { JSONObject(body) }.getOrNull() }
-			?.takeIf { hasText(it) && sameSong(it, artist, title) }
+			?.let { body -> runCatching { json.decodeFromString<LyricHit>(body) }.getOrNull() }
+			?.takeIf { it.hasText() && sameSong(it, artist, title) }
 
-		if (exact != null && exact.isSynced() && fitsSynced(exact, seconds)) return listOf(exact)
+		if (exact != null && exact.hasSynced() && fitsSynced(exact, seconds)) return listOf(exact)
 
-		val hits = mutableListOf<JSONObject>()
+		val hits = mutableListOf<LyricHit>()
 		if (exact != null) hits += exact
 
 		val searchJson = getJson(
 			"$BaseUrl/search?artist_name=${enc(mainArtist)}&track_name=${enc(cleanTitle)}"
 		) ?: return hits
-		val array = runCatching { JSONArray(searchJson) }.getOrNull() ?: return hits
-		for (index in 0 until array.length()) {
-			val candidate = array.optJSONObject(index) ?: continue
-			if (hasText(candidate) && sameSong(candidate, artist, title)) hits += candidate
+		val results = runCatching { json.decodeFromString<List<LyricHit>>(searchJson) }.getOrNull()
+			?: return hits
+		for (candidate in results) {
+			if (candidate.hasText() && sameSong(candidate, artist, title)) hits += candidate
 		}
 		return hits
 	}
@@ -105,40 +111,34 @@ object LyricsRepository {
 			if (seconds > 0) append("&duration=").append(seconds)
 		}
 
-	private fun JSONObject.isSynced(): Boolean = text("syncedLyrics") != null
+	private fun LyricHit.hasSynced(): Boolean = !syncedLyrics.isNullOrBlank()
 
-	/**
-	 * A lyric string, or null when the field is JSON null or blank. [JSONObject.optString] turns a
-	 * JSON null into the text "null", which would otherwise be accepted as lyrics and shown on screen.
-	 */
-	private fun JSONObject.text(name: String): String? =
-		if (isNull(name)) null else optString(name).takeIf { it.isNotBlank() }
+	private fun LyricHit.hasPlain(): Boolean = !plainLyrics.isNullOrBlank()
+
+	private fun LyricHit.hasText(): Boolean = hasSynced() || hasPlain() || instrumental
 
 	/**
 	 * Synced lines are only usable when the track's duration is known and the hit's is close: album,
 	 * single and extended versions share a title but not their timings.
 	 */
-	private fun fitsSynced(candidate: JSONObject, seconds: Int): Boolean {
+	private fun fitsSynced(hit: LyricHit, seconds: Int): Boolean {
 		if (seconds <= 0) return false
-		val duration = candidate.optDouble("duration", 0.0)
+		val duration = hit.duration ?: return false
 		return duration > 0 && abs(duration - seconds) <= SyncedToleranceSec
 	}
 
 	/** Closest in duration; hits without a known duration sort last. */
-	private fun List<JSONObject>.closestTo(seconds: Int): JSONObject? = minByOrNull { candidate ->
-		val duration = candidate.optDouble("duration", 0.0)
+	private fun List<LyricHit>.closestTo(seconds: Int): LyricHit? = minByOrNull { hit ->
+		val duration = hit.duration ?: 0.0
 		if (seconds > 0 && duration > 0) abs(duration - seconds) else Double.MAX_VALUE
 	}
 
-	private fun hasText(obj: JSONObject): Boolean =
-		obj.isSynced() || obj.text("plainLyrics") != null || obj.optBoolean("instrumental")
-
 	/** Same song by title and artist. Duration is judged per lyric type, not here. */
-	private fun sameSong(obj: JSONObject, artist: String, title: String): Boolean {
-		val candidateTitle = normalize(cleanTitle(obj.text("trackName").orEmpty()))
+	private fun sameSong(hit: LyricHit, artist: String, title: String): Boolean {
+		val candidateTitle = normalize(cleanTitle(hit.trackName))
 		if (candidateTitle.isEmpty() || candidateTitle != normalize(cleanTitle(title))) return false
 
-		val candidateArtist = normalize(obj.text("artistName").orEmpty())
+		val candidateArtist = normalize(hit.artistName)
 		val wantedArtist = normalize(mainArtist(artist))
 		return wantedArtist.isNotEmpty() &&
 			(candidateArtist.contains(wantedArtist) || wantedArtist.contains(candidateArtist))
@@ -175,3 +175,17 @@ object LyricsRepository {
 
 	private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8")
 }
+
+/**
+ * One LRCLIB lyric record. Everything has a default because the API nulls or omits fields per
+ * record: an instrumental hit carries no lyric text, and a search row may have no duration.
+ */
+@Serializable
+private data class LyricHit(
+	val trackName: String = "",
+	val artistName: String = "",
+	val syncedLyrics: String? = null,
+	val plainLyrics: String? = null,
+	val duration: Double? = null,
+	val instrumental: Boolean = false,
+)

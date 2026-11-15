@@ -7,7 +7,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import org.json.JSONObject
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
@@ -15,12 +17,17 @@ import java.net.URLEncoder
 /** A calendar date at whatever precision MusicBrainz has; month and day default to 1. */
 data class ReleaseDate(val year: Int, val month: Int = 1, val day: Int = 1)
 
+/** What the catalogs know about the track: when it came out, and the genre Apple files it under. */
+data class SongFacts(val releaseDate: ReleaseDate? = null, val genre: String? = null)
+
 /**
- * Finds when a track was first released.
+ * Finds when a track was first released, and the genre Apple files it under.
  *
  * Apple's catalog is asked first: its dates survive remasters and compilations ("Greatest Hits" still
  * carries the original year), which MusicBrainz's release data often misses. MusicBrainz is the
  * fallback when Apple has no match, and its recording/release-group dates are used the same way.
+ * The genre rides along in the Apple response this already fetches, so it costs no extra request;
+ * MusicBrainz is never asked for one.
  * Lookups are rate-limited, serialised and cached by artist/title/album; titles and artists are
  * cleaned with [TrackMatch] so a "- 2007 Remaster" suffix still matches the original.
  */
@@ -33,16 +40,23 @@ object ReleaseDateRepository {
 	private const val TimeoutMs = 8_000
 	private const val RetryDelayMs = 1_500L
 
+	/** Both catalogs grow fields and null optional ones, so unknown keys and nulls are tolerated. */
+	private val json = Json {
+		ignoreUnknownKeys = true
+		coerceInputValues = true
+		isLenient = true
+	}
+
 	/** "Greatest Hits", "The Collection", "Best Of …": the release group is not the song's date. */
 	private val CompilationWords = Regex(
 		"(?i)\\b(greatest hits|best of|the best|very best|essential|collection|anthology|hits|compilation)\\b"
 	)
 
-	private val cache = mutableMapOf<String, ReleaseDate?>()
+	private val cache = mutableMapOf<String, SongFacts?>()
 	private val rateLock = Mutex()
 	private var lastRequestAt = 0L
 
-	suspend fun fetch(metadata: MusicMetadata): ReleaseDate? = withContext(Dispatchers.IO) {
+	suspend fun fetch(metadata: MusicMetadata): SongFacts? = withContext(Dispatchers.IO) {
 		val artist = metadata.artist?.trim().orEmpty()
 		val title = metadata.title?.trim().orEmpty()
 		if (artist.isEmpty() || title.isEmpty()) return@withContext null
@@ -59,32 +73,47 @@ object ReleaseDateRepository {
 		result
 	}
 
-	private suspend fun fetchNetwork(artist: String, title: String, album: String): ReleaseDate? =
-		itunesDate(artist, title) ?: musicBrainzDate(artist, title, album)
+	private suspend fun fetchNetwork(artist: String, title: String, album: String): SongFacts {
+		val apple = itunesFacts(artist, title)
+		// MusicBrainz can only improve the date; it would need another request for a genre.
+		if (apple.releaseDate != null) return apple
+		return apple.copy(releaseDate = musicBrainzDate(artist, title, album))
+	}
 
 	/**
 	 * Apple keeps the original date on remasters and hits collections, where a release-based source
 	 * would report the reissue. Its search returns one row per album/single the track appears on, so
 	 * the earliest match is the song's first release; live versions and remixes are always later.
+	 *
+	 * The genre comes from that same row, so the fact describes the release the date came from; when
+	 * no row has a usable date, the first matched row's genre is still worth showing.
 	 */
-	private suspend fun itunesDate(artist: String, title: String): ReleaseDate? {
+	private suspend fun itunesFacts(artist: String, title: String): SongFacts {
 		awaitRateSlot()
 
 		val term = TrackMatch.mainArtist(artist) + " " + TrackMatch.cleanTitle(title)
-		val json = getJson("$ItunesUrl?term=${enc(term)}&entity=song&media=music&limit=25")
-			?: return null
-		val results = JSONObject(json).optJSONArray("results") ?: return null
+		val body = getJson("$ItunesUrl?term=${enc(term)}&entity=song&media=music&limit=25")
+			?: return SongFacts()
+		val response = runCatching { json.decodeFromString<ItunesSearch>(body) }.getOrNull()
+			?: return SongFacts()
+
 		val wantedArtist = TrackMatch.normalize(TrackMatch.mainArtist(artist))
 		var earliest: ReleaseDate? = null
-		for (index in 0 until results.length()) {
-			val row = results.optJSONObject(index) ?: continue
-			val rowArtist = TrackMatch.normalize(row.optString("artistName"))
+		var earliestGenre: String? = null
+		var anyGenre: String? = null
+		for (row in response.results) {
+			val rowArtist = TrackMatch.normalize(row.artistName)
 			if (!rowArtist.contains(wantedArtist)) continue
-			if (!titlesMatch(title, row.optString("trackName"))) continue
-			val date = parseDate(row.optString("releaseDate").take(10)) ?: continue
-			earliest = earlierOf(earliest, date)
+			if (!titlesMatch(title, row.trackName)) continue
+			val genre = row.primaryGenreName.takeIf { it.isNotBlank() }
+			if (anyGenre == null) anyGenre = genre
+			val date = parseDate(row.releaseDate?.take(10).orEmpty()) ?: continue
+			if (earliest == null || date.sortKey() < earliest.sortKey()) {
+				earliest = date
+				earliestGenre = genre
+			}
 		}
-		return earliest
+		return SongFacts(earliest, earliestGenre ?: anyGenre)
 	}
 
 	/** Apple spells the same song differently ("- Original Instrumental", "APT."), so be lenient. */
@@ -116,28 +145,23 @@ object ReleaseDateRepository {
 		val cleanedTitle = TrackMatch.cleanTitle(title)
 		val mainArtist = TrackMatch.mainArtist(artist)
 		val query = "recording:\"$cleanedTitle\" AND artist:\"$mainArtist\""
-		val json = getJson("$BaseUrl/recording/?query=${enc(query)}&fmt=json&limit=10")
+		val body = getJson("$BaseUrl/recording/?query=${enc(query)}&fmt=json&limit=10")
 			?: return null
-		val recordings = JSONObject(json).optJSONArray("recordings") ?: return null
+		val response = runCatching { json.decodeFromString<RecordingSearch>(body) }.getOrNull()
+			?: return null
 
 		val wantedTitle = TrackMatch.normalize(cleanedTitle)
 		val wantedArtist = TrackMatch.normalize(mainArtist)
 		var earliest: ReleaseDate? = null
 
-		for (index in 0 until recordings.length()) {
-			val recording = recordings.optJSONObject(index) ?: continue
-			val candidateTitle = TrackMatch.normalize(TrackMatch.cleanTitle(recording.optString("title")))
+		for (recording in response.recordings) {
+			val candidateTitle = TrackMatch.normalize(TrackMatch.cleanTitle(recording.title))
 			if (candidateTitle != wantedTitle) continue
 			if (!hasArtist(recording, wantedArtist)) continue
 
-			val releases = recording.optJSONArray("releases") ?: continue
-			for (releaseIndex in 0 until releases.length()) {
-				val release = releases.optJSONObject(releaseIndex) ?: continue
-				earliest = earlierOf(earliest, parseDate(release.optString("date")))
-				val groupDate = release.optJSONObject("release-group")
-					?.optString("first-release-date")
-					.orEmpty()
-				earliest = earlierOf(earliest, parseDate(groupDate))
+			for (release in recording.releases) {
+				earliest = earlierOf(earliest, parseDate(release.date))
+				earliest = earlierOf(earliest, parseDate(release.releaseGroup?.firstReleaseDate.orEmpty()))
 			}
 		}
 
@@ -151,32 +175,31 @@ object ReleaseDateRepository {
 		val cleanedAlbum = TrackMatch.cleanTitle(album)
 		val mainArtist = TrackMatch.mainArtist(artist)
 		val query = "releasegroup:\"$cleanedAlbum\" AND artist:\"$mainArtist\""
-		val json = getJson("$BaseUrl/release-group/?query=${enc(query)}&fmt=json&limit=10")
+		val body = getJson("$BaseUrl/release-group/?query=${enc(query)}&fmt=json&limit=10")
 			?: return null
-		val groups = JSONObject(json).optJSONArray("release-groups") ?: return null
+		val response = runCatching { json.decodeFromString<ReleaseGroupSearch>(body) }.getOrNull()
+			?: return null
 
 		val wantedAlbum = TrackMatch.normalize(cleanedAlbum)
 		val wantedArtist = TrackMatch.normalize(mainArtist)
 		var earliest: ReleaseDate? = null
-		for (index in 0 until groups.length()) {
-			val group = groups.optJSONObject(index) ?: continue
-			if (TrackMatch.normalize(group.optString("title")) != wantedAlbum) continue
-			if (!hasArtist(group, wantedArtist)) continue
-			earliest = earlierOf(earliest, parseDate(group.optString("first-release-date")))
+		for (group in response.releaseGroups) {
+			if (TrackMatch.normalize(group.title) != wantedAlbum) continue
+			if (!hasArtist(group.artistCredit, wantedArtist)) continue
+			earliest = earlierOf(earliest, parseDate(group.firstReleaseDate))
 		}
 		return earliest
 	}
 
-	private fun hasArtist(recording: JSONObject, wantedArtist: String): Boolean {
+	private fun hasArtist(recording: MbRecording, wantedArtist: String): Boolean =
+		hasArtist(recording.artistCredit, wantedArtist)
+
+	private fun hasArtist(credit: List<MbArtistCredit>, wantedArtist: String): Boolean {
 		if (wantedArtist.isEmpty()) return false
-		val credit = recording.optJSONArray("artist-credit") ?: return false
-		for (index in 0 until credit.length()) {
-			val name = TrackMatch.normalize(credit.optJSONObject(index)?.optString("name").orEmpty())
-			if (name.isNotEmpty() && (name.contains(wantedArtist) || wantedArtist.contains(name))) {
-				return true
-			}
+		return credit.any { entry ->
+			val name = TrackMatch.normalize(entry.name)
+			name.isNotEmpty() && (name.contains(wantedArtist) || wantedArtist.contains(name))
 		}
-		return false
 	}
 
 	/** MusicBrainz dates come as YYYY, YYYY-MM or YYYY-MM-DD. */
@@ -239,3 +262,49 @@ object ReleaseDateRepository {
 
 	private fun enc(value: String): String = URLEncoder.encode(value, "UTF-8")
 }
+
+/** Apple's search response: one row per album or single the track appears on. */
+@Serializable
+private data class ItunesSearch(val results: List<ItunesSong> = emptyList())
+
+@Serializable
+private data class ItunesSong(
+	val artistName: String = "",
+	val trackName: String = "",
+	/** Missing on some rows; only the date part is used ("2019-11-29T08:00:00Z"). */
+	val releaseDate: String? = null,
+	/** Apple's own classification, e.g. "Electronic"; blank on a few rows. */
+	val primaryGenreName: String = "",
+)
+
+@Serializable
+private data class RecordingSearch(val recordings: List<MbRecording> = emptyList())
+
+@Serializable
+private data class MbRecording(
+	val title: String = "",
+	@SerialName("artist-credit") val artistCredit: List<MbArtistCredit> = emptyList(),
+	val releases: List<MbRelease> = emptyList(),
+)
+
+@Serializable
+private data class MbRelease(
+	val date: String = "",
+	@SerialName("release-group") val releaseGroup: MbReleaseGroup? = null,
+)
+
+@Serializable
+private data class MbReleaseGroup(
+	val title: String = "",
+	@SerialName("first-release-date") val firstReleaseDate: String = "",
+	/** Present on release-group search rows; the nested one inside a release has no credits. */
+	@SerialName("artist-credit") val artistCredit: List<MbArtistCredit> = emptyList(),
+)
+
+@Serializable
+private data class ReleaseGroupSearch(
+	@SerialName("release-groups") val releaseGroups: List<MbReleaseGroup> = emptyList(),
+)
+
+@Serializable
+private data class MbArtistCredit(val name: String = "")
