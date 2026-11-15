@@ -124,6 +124,12 @@ private const val BackdropDownscale = 60
 /** The corner cover is this fraction of the screen's width across (75 % of a 16:9 screen's area). */
 private const val BackdropScreenFraction = 0.75f
 
+/** Working size of the cover before it is blurred and shrunk into the corner glow. */
+private const val BackdropBlurSize = 256
+
+/** Box-blur radius at [BackdropBlurSize]; three passes approximate a Gaussian. */
+private const val BackdropBlurRadius = 32
+
 @Composable
 fun MusicScreen(
 	modifier: Modifier = Modifier,
@@ -311,25 +317,23 @@ private fun renderBackdrop(artwork: Bitmap, widthPx: Int, heightPx: Int): ImageB
 	val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
 	val canvas = android.graphics.Canvas(bitmap)
 
-	// The cover sits whole in the top-right corner at three quarters of the screen's width, then a
-	// radial mask fades it out from its middle so the square's edges never show, only a soft glow.
+	// The cover sits whole in the top-right at three quarters of the screen's width, then a radial
+	// mask fades it out from its middle so the square's edges never show, only a soft glow.
 	val side = (width * BackdropScreenFraction).coerceAtLeast(4f)
 	val left = width - side
 	val top = 0f
-	val centreX = left + side / 2f
-	val centreY = top + side / 2f
 	val layer = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
-	// Halving repeatedly box-filters the cover; one big bilinear step would alias into blocks.
+	// A real Gaussian-ish blur at 256 px: shrinking the cover alone left the outlines of shapes.
 	canvas.drawBitmap(
-		scaleForBlur(artwork, side.roundToInt().coerceAtLeast(2)),
+		stackBlur(scaleForBlur(artwork, BackdropBlurSize), BackdropBlurRadius),
 		null,
 		RectF(left, top, left + side, top + side),
 		Paint(Paint.FILTER_BITMAP_FLAG),
 	)
 	val mask = Paint(Paint.ANTI_ALIAS_FLAG).apply {
 		shader = RadialGradient(
-			centreX,
-			centreY,
+			left + side / 2f,
+			top + side / 2f,
 			side * 0.5f,
 			intArrayOf(0xFFFFFFFF.toInt(), 0xFFFFFFFF.toInt(), 0x00FFFFFF),
 			floatArrayOf(0f, 0.4f, 1f),
@@ -341,6 +345,62 @@ private fun renderBackdrop(artwork: Bitmap, widthPx: Int, heightPx: Int): ImageB
 	canvas.restoreToCount(layer)
 
 	return bitmap.asImageBitmap()
+}
+
+/** Three box-blur passes on packed ARGB pixels, which is close enough to a Gaussian. */
+private fun stackBlur(source: Bitmap, radius: Int): Bitmap {
+	if (radius <= 0) return source
+	val width = source.width
+	val height = source.height
+	val pixels = IntArray(width * height)
+	source.getPixels(pixels, 0, width, 0, 0, width, height)
+	val temp = IntArray(pixels.size)
+	repeat(3) {
+		boxBlur(pixels, temp, width, height, radius, horizontal = true)
+		boxBlur(temp, pixels, width, height, radius, horizontal = false)
+	}
+	return Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).apply {
+		setPixels(pixels, 0, width, 0, 0, width, height)
+	}
+}
+
+private fun boxBlur(
+	source: IntArray,
+	target: IntArray,
+	width: Int,
+	height: Int,
+	radius: Int,
+	horizontal: Boolean,
+) {
+	val div = radius * 2 + 1
+	val outer = if (horizontal) height else width
+	val inner = if (horizontal) width else height
+	val step = if (horizontal) 1 else width
+	val line = if (horizontal) width else 1
+	for (o in 0 until outer) {
+		val base = o * line
+		var a = 0
+		var r = 0
+		var g = 0
+		var b = 0
+		for (i in -radius..radius) {
+			val v = source[base + i.coerceIn(0, inner - 1) * step]
+			a += (v ushr 24) and 0xFF
+			r += (v ushr 16) and 0xFF
+			g += (v ushr 8) and 0xFF
+			b += v and 0xFF
+		}
+		for (i in 0 until inner) {
+			target[base + i * step] =
+				((a / div) shl 24) or ((r / div) shl 16) or ((g / div) shl 8) or (b / div)
+			val leaving = source[base + (i - radius).coerceIn(0, inner - 1) * step]
+			val entering = source[base + (i + radius + 1).coerceIn(0, inner - 1) * step]
+			a += ((entering ushr 24) and 0xFF) - ((leaving ushr 24) and 0xFF)
+			r += ((entering ushr 16) and 0xFF) - ((leaving ushr 16) and 0xFF)
+			g += ((entering ushr 8) and 0xFF) - ((leaving ushr 8) and 0xFF)
+			b += (entering and 0xFF) - (leaving and 0xFF)
+		}
+	}
 }
 
 /**
@@ -402,6 +462,24 @@ private fun renderScrim(widthPx: Int, heightPx: Int): ImageBitmap {
 		)
 	}
 	canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), scrim)
+
+	// A soft pool of shade over the lyric column: a bright cover wash would otherwise swallow
+	// the dimmed previous and next lines while the current one stays legible.
+	val lyrics = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+		shader = RadialGradient(
+			width * 0.70f,
+			height * 0.5f,
+			width * 0.33f,
+			intArrayOf(
+				Color.Black.copy(alpha = 0.30f).toArgb(),
+				Color.Black.copy(alpha = 0.15f).toArgb(),
+				Color.Transparent.toArgb(),
+			),
+			floatArrayOf(0f, 0.55f, 1f),
+			Shader.TileMode.CLAMP,
+		)
+	}
+	canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), lyrics)
 
 	return bitmap.asImageBitmap()
 }

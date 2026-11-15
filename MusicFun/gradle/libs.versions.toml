@@ -14,7 +14,7 @@ nav3Core = "1.2.1"
 navigationEvent = "1.2.0"
 kotlinSerialization = "2.4.21"
 kotlinxSerializationCore = "1.13.0"
-palette = "1.0.0"
+palette = "1.1.0"
 activityCompose = "1.13.0"
 
 [libraries]
