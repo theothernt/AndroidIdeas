@@ -131,7 +131,9 @@ class ScreenTwoViewModel(
             launch {
                 countdownRepository.getCountdownStream(durationMinutes = 2).collect {
                     latestCountdown = it
-                    if (isInitialFlushPending) updateBottomStart()
+                    // The countdown is a clock, so keep it ticking every second. The
+                    // other overlays remain batched into the coordinated fade cycle.
+                    updateBottomStart()
                     countdownReady.complete(Unit)
                 }
             }

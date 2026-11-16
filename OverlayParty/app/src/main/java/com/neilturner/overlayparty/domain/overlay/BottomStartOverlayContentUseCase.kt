@@ -10,7 +10,7 @@ class BottomStartOverlayContentUseCase(
     operator fun invoke(
         music: String?,
         countdown: String?,
-        countdownAnimationType: OverlayAnimationType = OverlayAnimationType.RESIZE,
+        countdownAnimationType: OverlayAnimationType = OverlayAnimationType.NONE,
         musicAnimationType: OverlayAnimationType = OverlayAnimationType.FADE,
     ): OverlayContent? {
         val items =

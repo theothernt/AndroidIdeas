@@ -6,8 +6,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -16,8 +14,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
 import com.neilturner.overlayparty.ui.overlay.OverlayLayout
@@ -43,37 +43,43 @@ fun OverlayCanvas(
                 .fillMaxSize()
                 .background(Color.Black),
     ) {
-        background()
-        TopGradient()
+        // Keep the background in its own layer so overlay measure/redraw does not
+        // invalidate the full-screen image. The gradient is drawn into the same layer
+        // instead of being a separate full-width box.
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer()
+                    .drawWithContent {
+                        drawContent()
+                        val gradientEnd = (180.dp.toPx() / size.height).coerceIn(0.05f, 1f)
+                        drawRect(
+                            brush =
+                                Brush.verticalGradient(
+                                    0.00f to Color.Black.copy(alpha = 0.80f),
+                                    gradientEnd * 0.25f to Color.Black.copy(alpha = 0.55f),
+                                    gradientEnd * 0.50f to Color.Black.copy(alpha = 0.30f),
+                                    gradientEnd * 0.70f to Color.Black.copy(alpha = 0.15f),
+                                    gradientEnd * 0.85f to Color.Black.copy(alpha = 0.05f),
+                                    gradientEnd to Color.Transparent,
+                                    1.00f to Color.Transparent,
+                                ),
+                            size = size,
+                        )
+                    },
+        ) {
+            background()
+        }
         OverlayLayout(
             topStart = topStart,
             topEnd = topEnd,
             bottomStart = bottomStart,
             bottomEnd = bottomEnd,
-            modifier = Modifier.alpha(overlaysAlpha),
+            alpha = overlaysAlpha,
         )
         InitialBlackout()
     }
-}
-
-@Composable
-private fun TopGradient() {
-    Box(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .height(300.dp)
-                .background(
-                    Brush.verticalGradient(
-                        0.00f to Color.Black.copy(alpha = 0.80f),
-                        0.25f to Color.Black.copy(alpha = 0.55f),
-                        0.50f to Color.Black.copy(alpha = 0.30f),
-                        0.70f to Color.Black.copy(alpha = 0.15f),
-                        0.85f to Color.Black.copy(alpha = 0.05f),
-                        1.00f to Color.Transparent,
-                    ),
-                ),
-    )
 }
 
 @Composable

@@ -3,10 +3,12 @@ package com.neilturner.overlayparty.ui.main
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.neilturner.overlayparty.data.CountdownRepository
+import com.neilturner.overlayparty.data.DateTimeInfo
 import com.neilturner.overlayparty.data.LocationRepository
 import com.neilturner.overlayparty.data.MessageRepository
 import com.neilturner.overlayparty.data.MusicRepository
 import com.neilturner.overlayparty.data.TimeRepository
+import com.neilturner.overlayparty.data.WeatherInfo
 import com.neilturner.overlayparty.data.WeatherRepository
 import com.neilturner.overlayparty.domain.overlay.BottomStartOverlayContentUseCase
 import com.neilturner.overlayparty.domain.overlay.LocationMessageToOverlayContentUseCase
@@ -14,111 +16,236 @@ import com.neilturner.overlayparty.domain.overlay.MusicToOverlayContentUseCase
 import com.neilturner.overlayparty.domain.overlay.OverlayVisibilityManager
 import com.neilturner.overlayparty.domain.overlay.TimeToOverlayContentUseCase
 import com.neilturner.overlayparty.domain.overlay.WeatherToOverlayContentUseCase
+import com.neilturner.overlayparty.ui.overlay.OverlayAnimationType
 import com.neilturner.overlayparty.ui.overlay.OverlayContent
 import com.neilturner.overlayparty.ui.overlay.OverlayIcon
 import com.neilturner.overlayparty.ui.overlay.OverlayPosition
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(
-    weatherRepository: WeatherRepository,
-    timeRepository: TimeRepository,
-    musicRepository: MusicRepository,
-    locationRepository: LocationRepository,
-    messageRepository: MessageRepository,
-    countdownRepository: CountdownRepository,
+    private val weatherRepository: WeatherRepository,
+    private val timeRepository: TimeRepository,
+    private val musicRepository: MusicRepository,
+    private val locationRepository: LocationRepository,
+    private val messageRepository: MessageRepository,
+    private val countdownRepository: CountdownRepository,
     private val visibility: OverlayVisibilityManager = OverlayVisibilityManager(),
     private val weatherMapper: WeatherToOverlayContentUseCase = WeatherToOverlayContentUseCase(),
     private val timeMapper: TimeToOverlayContentUseCase = TimeToOverlayContentUseCase(),
     private val bottomStartMapper: BottomStartOverlayContentUseCase =
         BottomStartOverlayContentUseCase(MusicToOverlayContentUseCase()),
     private val bottomEndMapper: LocationMessageToOverlayContentUseCase = LocationMessageToOverlayContentUseCase(),
+    private val visibleDurationMs: Long = VISIBLE_DURATION_MS,
+    private val fadeOutDurationMs: Long = FADE_OUT_DURATION_MS,
+    private val fadeInDurationMs: Long = FADE_IN_DURATION_MS,
+    scope: CoroutineScope? = null,
 ) : ViewModel() {
-    val visibleOverlays = visibility.visibleOverlays
+    companion object {
+        const val VISIBLE_DURATION_MS: Long = 5_000L
+        const val FADE_OUT_DURATION_MS: Long = 1000L
+        const val FADE_IN_DURATION_MS: Long = 1000L
+    }
+
+    val visibleOverlays: StateFlow<Set<OverlayPosition>> = visibility.visibleOverlays
+
+    private val _isOverlaysVisible = MutableStateFlow(true)
+    val isOverlaysVisible: StateFlow<Boolean> = _isOverlaysVisible.asStateFlow()
+
+    private val _topStartOverlay =
+        MutableStateFlow<OverlayContent?>(
+            OverlayContent.TextOnly(
+                "Loading Weather...",
+                animationType = OverlayAnimationType.NONE,
+            ),
+        )
+    val topStartOverlay: StateFlow<OverlayContent?> = _topStartOverlay.asStateFlow()
+
+    private val _topEndOverlay =
+        MutableStateFlow<OverlayContent?>(
+            OverlayContent.TextOnly(
+                "Loading Time...",
+                animationType = OverlayAnimationType.NONE,
+            ),
+        )
+    val topEndOverlay: StateFlow<OverlayContent?> = _topEndOverlay.asStateFlow()
+
+    private val _bottomStartOverlay =
+        MutableStateFlow<OverlayContent?>(
+            OverlayContent.IconWithText(
+                "Loading Music...",
+                OverlayIcon.MusicNote,
+                animationType = OverlayAnimationType.NONE,
+            ),
+        )
+    val bottomStartOverlay: StateFlow<OverlayContent?> = _bottomStartOverlay.asStateFlow()
+
+    private val _bottomEndOverlay =
+        MutableStateFlow<OverlayContent?>(
+            OverlayContent.TextOnly(
+                "Loading Location...",
+                animationType = OverlayAnimationType.NONE,
+            ),
+        )
+    val bottomEndOverlay: StateFlow<OverlayContent?> = _bottomEndOverlay.asStateFlow()
+
+    // Buffered repository data. Overlays are flushed together while the group is hidden.
+    private var latestWeather: WeatherInfo? = null
+    private var latestDateTime: DateTimeInfo? = null
+    private var latestMusic: String? = null
+    private var latestCountdown: String? = null
+    private var latestLocation: String? = null
+    private var latestMessage: String? = null
+
+    init {
+        val coroutineScope = scope ?: viewModelScope
+        coroutineScope.launch {
+            val weatherReady = CompletableDeferred<Unit>()
+            val timeReady = CompletableDeferred<Unit>()
+            val musicReady = CompletableDeferred<Unit>()
+            val countdownReady = CompletableDeferred<Unit>()
+            val locationReady = CompletableDeferred<Unit>()
+            val messageReady = CompletableDeferred<Unit>()
+            var isInitialFlushPending = true
+
+            launch {
+                weatherRepository.getWeatherStream().collect {
+                    latestWeather = it
+                    if (isInitialFlushPending) updateTopStart()
+                    weatherReady.complete(Unit)
+                }
+            }
+            launch {
+                timeRepository.getTimeStream(showSeconds = false).collect {
+                    latestDateTime = it
+                    if (isInitialFlushPending) updateTopEnd()
+                    timeReady.complete(Unit)
+                }
+            }
+            launch {
+                musicRepository.getMusicStream().collect {
+                    latestMusic = it
+                    if (isInitialFlushPending) updateBottomStart()
+                    musicReady.complete(Unit)
+                }
+            }
+            launch {
+                countdownRepository.getCountdownStream(durationMinutes = 2).collect {
+                    latestCountdown = it
+                    // The countdown is a clock, so keep it ticking every second. The
+                    // other overlays remain batched into the coordinated fade cycle.
+                    updateBottomStart()
+                    countdownReady.complete(Unit)
+                }
+            }
+            launch {
+                locationRepository.getLocationStream().collect {
+                    latestLocation = it
+                    if (isInitialFlushPending) updateBottomEnd()
+                    locationReady.complete(Unit)
+                }
+            }
+            launch {
+                messageRepository.getMessageStream().collect {
+                    latestMessage = it
+                    if (isInitialFlushPending) updateBottomEnd()
+                    messageReady.complete(Unit)
+                }
+            }
+
+            // Wait for every source to produce a first value before starting the cycle.
+            awaitAll(weatherReady, timeReady, musicReady, countdownReady, locationReady, messageReady)
+            isInitialFlushPending = false
+            flushAllOverlays()
+
+            while (isActive) {
+                delay(visibleDurationMs)
+
+                _isOverlaysVisible.value = false
+                delay(fadeOutDurationMs)
+
+                // Update all overlays while the group is fully transparent.
+                flushAllOverlays()
+
+                _isOverlaysVisible.value = true
+                delay(fadeInDurationMs)
+            }
+        }
+    }
 
     fun setOverlayVisibility(
         position: OverlayPosition,
         isVisible: Boolean,
-    ) = visibility.setOverlayVisibility(position, isVisible)
+    ) {
+        visibility.setOverlayVisibility(position, isVisible)
+        flushAllOverlays()
+    }
 
-    fun toggleOverlay(position: OverlayPosition) = visibility.toggleOverlay(position)
+    fun toggleOverlay(position: OverlayPosition) {
+        visibility.toggleOverlay(position)
+        flushAllOverlays()
+    }
 
-    private fun visibilityOf(position: OverlayPosition): Flow<Boolean> =
-        visibility.visibleOverlays
-            .map { it.contains(position) }
-            .distinctUntilChanged()
+    private fun flushAllOverlays() {
+        updateTopStart()
+        updateTopEnd()
+        updateBottomStart()
+        updateBottomEnd()
+    }
 
-    val topStartOverlay =
-        visibilityOf(OverlayPosition.TOP_START)
-            .flatMapLatest { visible ->
-                if (visible) {
-                    weatherRepository.getWeatherStream().map { weatherMapper(it) }
-                } else {
-                    flowOf<OverlayContent?>(null)
-                }
-            }.stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = OverlayContent.TextOnly("Loading Weather..."),
+    private fun updateTopStart() {
+        val visible = visibility.visibleOverlays.value.contains(OverlayPosition.TOP_START)
+        val weather = latestWeather
+        _topStartOverlay.value =
+            if (!visible || weather == null) {
+                null
+            } else {
+                weatherMapper(weather, OverlayAnimationType.NONE)
+            }
+    }
+
+    private fun updateTopEnd() {
+        val visible = visibility.visibleOverlays.value.contains(OverlayPosition.TOP_END)
+        val dateTime = latestDateTime
+        _topEndOverlay.value =
+            if (!visible || dateTime == null) {
+                null
+            } else {
+                timeMapper(dateTime, OverlayAnimationType.NONE)
+            }
+    }
+
+    private fun updateBottomStart() {
+        val visible = visibility.visibleOverlays.value.contains(OverlayPosition.BOTTOM_START)
+        if (!visible) {
+            _bottomStartOverlay.value = null
+            return
+        }
+        _bottomStartOverlay.value =
+            bottomStartMapper(
+                music = latestMusic,
+                countdown = latestCountdown,
+                countdownAnimationType = OverlayAnimationType.NONE,
+                musicAnimationType = OverlayAnimationType.NONE,
             )
+    }
 
-    val topEndOverlay =
-        visibilityOf(OverlayPosition.TOP_END)
-            .flatMapLatest { visible ->
-                if (visible) {
-                    timeRepository.getTimeStream(showSeconds = false).map { timeMapper(it) }
-                } else {
-                    flowOf<OverlayContent?>(null)
-                }
-            }.stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = OverlayContent.TextOnly("Loading Time..."),
-            )
-
-    val bottomStartOverlay =
-        visibilityOf(OverlayPosition.BOTTOM_START)
-            .flatMapLatest { visible ->
-                if (visible) {
-                    combine(
-                        musicRepository.getMusicStream(),
-                        countdownRepository.getCountdownStream(durationMinutes = 2),
-                    ) { music, countdown -> bottomStartMapper(music, countdown) }
-                } else {
-                    flowOf<OverlayContent?>(null)
-                }
-            }.stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue =
-                    OverlayContent.IconWithText(
-                        "Loading Music...",
-                        OverlayIcon.MusicNote,
-                    ),
-            )
-
-    val bottomEndOverlay =
-        visibilityOf(OverlayPosition.BOTTOM_END)
-            .flatMapLatest { visible ->
-                if (visible) {
-                    combine(
-                        locationRepository.getLocationStream(),
-                        messageRepository.getMessageStream(),
-                    ) { location, message -> bottomEndMapper(location, message) }
-                } else {
-                    flowOf<OverlayContent?>(null)
-                }
-            }.stateIn(
-                scope = viewModelScope,
-                started = SharingStarted.WhileSubscribed(5000),
-                initialValue = OverlayContent.TextOnly("Loading Location..."),
-            )
+    private fun updateBottomEnd() {
+        val visible = visibility.visibleOverlays.value.contains(OverlayPosition.BOTTOM_END)
+        val location = latestLocation
+        val message = latestMessage
+        _bottomEndOverlay.value =
+            if (!visible) {
+                null
+            } else {
+                bottomEndMapper(location, message, OverlayAnimationType.NONE)
+            }
+    }
 }

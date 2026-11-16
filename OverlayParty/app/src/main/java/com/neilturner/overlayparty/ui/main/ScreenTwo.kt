@@ -48,6 +48,7 @@ fun ScreenTwo(
                     ImageRequest
                         .Builder(context)
                         .data(SLIDESHOW_IMAGE_PATH + "tomo_m_wegl4zgnhpe_unsplash.jpg")
+                        .size(1280, 720)
                         .build(),
                 contentDescription = null,
                 contentScale = ContentScale.Crop,

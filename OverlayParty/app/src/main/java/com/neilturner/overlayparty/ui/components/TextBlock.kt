@@ -5,17 +5,13 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -29,13 +25,6 @@ import com.neilturner.overlayparty.ui.overlay.toImageVector
 
 private val OverlayShape = RoundedCornerShape(12.dp)
 private val OverlayBackgroundColor = Color.Black.copy(alpha = 0.6f)
-
-private val OverlayContentShadow =
-    Shadow(
-        color = Color.Black,
-        offset = Offset(2f, 2f),
-        blurRadius = 2f,
-    )
 
 @Composable
 fun TextBlock(
@@ -55,13 +44,13 @@ fun TextBlock(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (icon != null && iconPosition == IconPosition.LEADING) {
-                OverlayIcon(icon, useShadow = !showBackground)
+                OverlayIcon(icon)
             }
 
-            OverlayText(text, showBackground, scale = scale, maxLines = maxLines)
+            OverlayText(text, scale = scale, maxLines = maxLines)
 
             if (icon != null && iconPosition == IconPosition.TRAILING) {
-                OverlayIcon(icon, useShadow = !showBackground)
+                OverlayIcon(icon)
             }
         }
     }
@@ -83,8 +72,8 @@ fun MultiItemBlock(
         ) {
             items.forEach { item ->
                 when (item) {
-                    is OverlayItem.Text -> OverlayText(item.text, showBackground, scale = item.scale, maxLines = maxLines)
-                    is OverlayItem.Icon -> OverlayIcon(item.icon.toImageVector(), useShadow = !showBackground)
+                    is OverlayItem.Text -> OverlayText(item.text, scale = item.scale, maxLines = maxLines)
+                    is OverlayItem.Icon -> OverlayIcon(item.icon.toImageVector())
                 }
             }
         }
@@ -122,29 +111,19 @@ private fun OverlayContainer(
     }
 }
 
-private fun TextStyle.applyShadow(useShadow: Boolean): TextStyle =
-    if (useShadow) {
-        this.copy(shadow = OverlayContentShadow)
-    } else {
-        this
-    }
-
 @Composable
 private fun OverlayText(
     text: String,
-    showBackground: Boolean,
     modifier: Modifier = Modifier,
     scale: Float = 1f,
     maxLines: Int = Int.MAX_VALUE,
 ) {
-    val useShadow = !showBackground
     val baseStyle = MaterialTheme.typography.bodyLarge
     val scaledStyle =
-        baseStyle
-            .copy(
-                fontSize = baseStyle.fontSize * scale,
-                lineHeight = baseStyle.lineHeight * scale,
-            ).applyShadow(useShadow)
+        baseStyle.copy(
+            fontSize = baseStyle.fontSize * scale,
+            lineHeight = baseStyle.lineHeight * scale,
+        )
 
     Text(
         text = text,
@@ -160,36 +139,11 @@ private fun OverlayText(
 private fun OverlayIcon(
     icon: ImageVector,
     modifier: Modifier = Modifier,
-    useShadow: Boolean = false,
 ) {
-    if (useShadow) {
-        ShadowedIcon(icon, modifier)
-    } else {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color.White,
-            modifier = modifier,
-        )
-    }
-}
-
-@Composable
-private fun ShadowedIcon(
-    icon: ImageVector,
-    modifier: Modifier = Modifier,
-) {
-    Box(modifier = modifier) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color.Black,
-            modifier = Modifier.offset(2.dp, 2.dp),
-        )
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = Color.White,
-        )
-    }
+    Icon(
+        imageVector = icon,
+        contentDescription = null,
+        tint = Color.White,
+        modifier = modifier,
+    )
 }
