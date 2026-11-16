@@ -1,9 +1,11 @@
 package com.neilturner.overlayparty.ui.main
 
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.assertIsDisplayed
-import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.test.junit4.v2.createAndroidComposeRule
 import androidx.compose.ui.test.onNodeWithText
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performKeyInput
+import androidx.compose.ui.test.pressKey
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.neilturner.overlayparty.MainActivity
 import org.junit.Rule
@@ -23,31 +25,31 @@ class MainMenuScreenTest {
 
     @Test
     fun clickingStartOverlayPartyNavigatesToOverlayScreen() {
-        composeTestRule.onNodeWithText("Start Overlay Party").performClick()
-
-        composeTestRule.waitUntil(timeoutMillis = 5000) {
-            runCatching {
-                composeTestRule.onNodeWithText("Start Overlay Party").assertDoesNotExist()
-            }.isSuccess
+        composeTestRule.onNodeWithText("Start Overlay Party").performKeyInput {
+            pressKey(Key.DirectionCenter)
         }
+        composeTestRule.waitForIdle()
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("Start Overlay Party").assertDoesNotExist()
     }
 
     @Test
     fun backButtonReturnsToMainMenu() {
-        composeTestRule.onNodeWithText("Start Overlay Party").performClick()
-
-        composeTestRule.waitUntil(timeoutMillis = 5000) {
-            runCatching {
-                composeTestRule.onNodeWithText("Start Overlay Party").assertDoesNotExist()
-            }.isSuccess
+        composeTestRule.onNodeWithText("Start Overlay Party").performKeyInput {
+            pressKey(Key.DirectionCenter)
         }
+        composeTestRule.waitForIdle()
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
 
-        composeTestRule.activity.onBackPressed()
-
-        composeTestRule.waitUntil(timeoutMillis = 5000) {
-            runCatching {
-                composeTestRule.onNodeWithText("Start Overlay Party").assertIsDisplayed()
-            }.isSuccess
+        composeTestRule.runOnIdle {
+            composeTestRule.activity.onBackPressedDispatcher.onBackPressed()
         }
+        composeTestRule.mainClock.advanceTimeBy(1_000)
+        composeTestRule.waitForIdle()
+
+        composeTestRule.onNodeWithText("Start Overlay Party").assertIsDisplayed()
     }
 }

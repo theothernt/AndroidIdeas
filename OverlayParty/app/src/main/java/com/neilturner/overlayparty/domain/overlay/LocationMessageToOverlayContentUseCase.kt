@@ -12,8 +12,12 @@ class LocationMessageToOverlayContentUseCase {
     ): OverlayContent? {
         val items =
             buildList {
-                message?.takeIf { it.isNotBlank() }?.let { add(OverlayContent.TextOnly(it, animationType = animationType)) }
-                location?.takeIf { it.isNotBlank() }?.let { add(OverlayContent.TextOnly(it, animationType = animationType)) }
+                message?.takeIf { it.isNotBlank() }?.let {
+                    add(OverlayContent.TextOnly(it, animationType = animationType, maxLines = 2))
+                }
+                location?.takeIf { it.isNotBlank() }?.let {
+                    add(OverlayContent.TextOnly(it, animationType = animationType, maxLines = 2))
+                }
             }
         return if (items.isEmpty()) {
             null

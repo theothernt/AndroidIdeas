@@ -32,7 +32,7 @@ val appModule =
         single { MusicToOverlayContentUseCase() }
         single { BottomStartOverlayContentUseCase(get()) }
         single { LocationMessageToOverlayContentUseCase() }
-        factory { OverlayVisibilityManager() }
+        single { OverlayVisibilityManager() }
 
         viewModel {
             MainViewModel(

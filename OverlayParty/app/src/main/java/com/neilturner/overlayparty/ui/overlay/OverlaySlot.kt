@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -94,6 +95,7 @@ private fun RenderOverlayContent(
                 animateSize = animateSize,
                 scale = content.scale,
                 padding = content.padding.dp,
+                maxLines = content.maxLines,
             )
         }
 
@@ -107,6 +109,7 @@ private fun RenderOverlayContent(
                 animateSize = animateSize,
                 scale = content.scale,
                 padding = content.padding.dp,
+                maxLines = content.maxLines,
             )
         }
 
@@ -117,6 +120,7 @@ private fun RenderOverlayContent(
                 showBackground = showBackground,
                 animateSize = animateSize,
                 padding = content.padding.dp,
+                maxLines = content.maxLines,
             )
         }
 
@@ -129,7 +133,7 @@ private fun RenderOverlayContent(
                 }
 
             Column(
-                modifier = modifier,
+                modifier = modifier.padding(content.padding.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalAlignment = horizontalAlignment,
             ) {

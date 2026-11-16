@@ -16,6 +16,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Icon
@@ -46,6 +47,7 @@ fun TextBlock(
     animateSize: Boolean = true,
     scale: Float = 1f,
     padding: Dp = 8.dp,
+    maxLines: Int = Int.MAX_VALUE,
 ) {
     OverlayContainer(modifier, showBackground, animateSize, padding) {
         Row(
@@ -56,7 +58,7 @@ fun TextBlock(
                 OverlayIcon(icon, useShadow = !showBackground)
             }
 
-            OverlayText(text, showBackground, scale = scale)
+            OverlayText(text, showBackground, scale = scale, maxLines = maxLines)
 
             if (icon != null && iconPosition == IconPosition.TRAILING) {
                 OverlayIcon(icon, useShadow = !showBackground)
@@ -72,6 +74,7 @@ fun MultiItemBlock(
     showBackground: Boolean = true,
     animateSize: Boolean = true,
     padding: Dp = 8.dp,
+    maxLines: Int = Int.MAX_VALUE,
 ) {
     OverlayContainer(modifier, showBackground, animateSize, padding) {
         Row(
@@ -80,7 +83,7 @@ fun MultiItemBlock(
         ) {
             items.forEach { item ->
                 when (item) {
-                    is OverlayItem.Text -> OverlayText(item.text, showBackground, scale = item.scale)
+                    is OverlayItem.Text -> OverlayText(item.text, showBackground, scale = item.scale, maxLines = maxLines)
                     is OverlayItem.Icon -> OverlayIcon(item.icon.toImageVector(), useShadow = !showBackground)
                 }
             }
@@ -132,6 +135,7 @@ private fun OverlayText(
     showBackground: Boolean,
     modifier: Modifier = Modifier,
     scale: Float = 1f,
+    maxLines: Int = Int.MAX_VALUE,
 ) {
     val useShadow = !showBackground
     val baseStyle = MaterialTheme.typography.bodyLarge
@@ -139,6 +143,7 @@ private fun OverlayText(
         baseStyle
             .copy(
                 fontSize = baseStyle.fontSize * scale,
+                lineHeight = baseStyle.lineHeight * scale,
             ).applyShadow(useShadow)
 
     Text(
@@ -146,6 +151,8 @@ private fun OverlayText(
         modifier = modifier,
         style = scaledStyle,
         color = Color.White,
+        maxLines = maxLines,
+        overflow = TextOverflow.Ellipsis,
     )
 }
 

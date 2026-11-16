@@ -16,5 +16,6 @@ class MusicToOverlayContentUseCase {
             iconPosition = IconPosition.LEADING,
             animationType = animationType,
             padding = 4f,
+            maxLines = 2,
         )
 }

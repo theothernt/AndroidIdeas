@@ -1,17 +1,18 @@
 package com.neilturner.overlayparty.ui.navigation
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateListOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSerializable
 import androidx.compose.ui.Modifier
+import androidx.navigation3.runtime.NavBackStack
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.serialization.NavBackStackSerializer
 import androidx.navigation3.ui.NavDisplay
 import com.neilturner.overlayparty.ui.main.MainMenuScreen
 import com.neilturner.overlayparty.ui.main.MainScreen
 import com.neilturner.overlayparty.ui.main.ScreenTwo
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.serializer
 
 @Serializable
 sealed interface AppNavKey : NavKey {
@@ -27,11 +28,12 @@ sealed interface AppNavKey : NavKey {
 
 @Composable
 fun AppNavigation(modifier: Modifier = Modifier) {
-    val backStack = remember { mutableStateListOf<AppNavKey>(AppNavKey.MainMenu) }
-
-    BackHandler(enabled = backStack.size > 1) {
-        backStack.removeAt(backStack.size - 1)
-    }
+    val backStack =
+        rememberSerializable(
+            serializer = NavBackStackSerializer(serializer<AppNavKey>()),
+        ) {
+            NavBackStack(AppNavKey.MainMenu)
+        }
 
     NavDisplay<AppNavKey>(
         backStack = backStack,

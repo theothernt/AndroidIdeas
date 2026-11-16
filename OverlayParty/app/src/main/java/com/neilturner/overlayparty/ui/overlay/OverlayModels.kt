@@ -71,6 +71,12 @@ sealed interface OverlayContent {
     val padding: Float
 
     /**
+     * Maximum number of lines to draw for text content. Defaults to unlimited so only
+     * content that needs clamping has to opt in.
+     */
+    val maxLines: Int get() = Int.MAX_VALUE
+
+    /**
      * Simple text-only overlay content.
      */
     data class TextOnly(
@@ -78,6 +84,7 @@ sealed interface OverlayContent {
         val scale: Float = 1f,
         override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
         override val padding: Float = 8f,
+        override val maxLines: Int = Int.MAX_VALUE,
     ) : OverlayContent
 
     /**
@@ -90,6 +97,7 @@ sealed interface OverlayContent {
         val scale: Float = 1f,
         override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
         override val padding: Float = 8f,
+        override val maxLines: Int = Int.MAX_VALUE,
     ) : OverlayContent
 
     /**
@@ -99,6 +107,7 @@ sealed interface OverlayContent {
         val items: List<OverlayItem>,
         override val animationType: OverlayAnimationType = OverlayAnimationType.NONE,
         override val padding: Float = 8f,
+        override val maxLines: Int = Int.MAX_VALUE,
     ) : OverlayContent
 
     /**
