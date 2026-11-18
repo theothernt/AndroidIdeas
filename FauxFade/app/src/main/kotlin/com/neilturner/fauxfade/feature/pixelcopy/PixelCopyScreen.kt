@@ -1,5 +1,6 @@
 package com.neilturner.fauxfade.feature.pixelcopy
 
+import android.graphics.Bitmap
 import android.util.Log
 import android.view.SurfaceView
 import androidx.annotation.OptIn
@@ -301,11 +302,14 @@ private fun PixelCopyPlayer(
 				val view = surface.value ?: return@SurfaceGrabber null
 				// Not succeeded, not a black frame: a still of nothing is worse than a cut.
 				val result = capture.capture(view, target)
+				// Mean of the captured bitmap itself, before Compose colours it. Compared against a
+				// screenshot of the paused video to tell a tagging problem from a draw-time one.
+				val rgb = result.bitmap?.let { meanRgb(it) } ?: "none"
 				Log.i(
 					TAG,
 					"copy: target=$target status=${result.status} ok=${result.succeeded} " +
 						"size=${result.bitmap?.width}x${result.bitmap?.height} " +
-						"scaled=${result.scaled} copyMs=${result.elapsedMs}",
+						"scaled=${result.scaled} copyMs=${result.elapsedMs} mean=$rgb",
 				)
 				if (result.succeeded) result.bitmap else null
 			}
@@ -564,6 +568,26 @@ private fun TransitionCountdown(
 
 /** "Start playback (4)" while there is time left, plain "Start playback" once there is not. */
 private fun startLabel(countdown: Int): String = if (countdown > 0) "Start playback ($countdown)" else "Start playback"
+
+/** Mean R,G,B of a still, downsampled first so the walk is cheap enough for the handoff path. */
+private fun meanRgb(bitmap: Bitmap): String {
+	val w = 64
+	val h = 36
+	val small = Bitmap.createScaledBitmap(bitmap, w, h, true)
+	var r = 0L
+	var g = 0L
+	var b = 0L
+	for (y in 0 until h) {
+		for (x in 0 until w) {
+			val p = small.getPixel(x, y)
+			r += (p shr 16) and 0xFF
+			g += (p shr 8) and 0xFF
+			b += p and 0xFF
+		}
+	}
+	small.recycle()
+	return "${r / (w * h)},${g / (w * h)},${b / (w * h)}"
+}
 
 /** How long the captured still takes to fade out, revealing the video underneath it. */
 private const val STILL_FADE_MS = 1_500

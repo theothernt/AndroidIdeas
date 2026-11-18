@@ -121,7 +121,12 @@ class PixelCopyViewModel(
 	 * gain nothing from it and would pay for the float destination.
 	 */
 	private val stillTarget: PixelCopyCapture.CopyTarget
-		get() = if (_playingQuality.value.isHdr) PixelCopyCapture.CopyTarget.HDR else PixelCopyCapture.CopyTarget.SDR
+		get() =
+			if (FORCE_HDR_STILL || _playingQuality.value.isHdr) {
+				PixelCopyCapture.CopyTarget.HDR
+			} else {
+				PixelCopyCapture.CopyTarget.SDR
+			}
 
 	/**
 	 * How the loop reaches the surface. Lent by the player screen before [start].
@@ -374,6 +379,9 @@ class PixelCopyViewModel(
 			// rather than off the player. The surface keeps this frame and stays visible throughout,
 			// so nothing on screen changes during the copy.
 			player.pause()
+			// Marker for the comparison: a screenshot taken here is the paused video frame that
+			// the captured still is meant to match.
+			Log.i(TAG, "handoff: paused on frame, about to copy")
 			val still = withTimeoutOrNull(PIXEL_COPY_TIMEOUT_MS) { grabber?.grab(stillTarget) }
 			val afterCaptureMs = t0.elapsedNow().inWholeMilliseconds
 
@@ -404,7 +412,7 @@ class PixelCopyViewModel(
 			Log.i(TAG, "frames: ${frameStats.segment(player, PLAY_DURATION_MS) { 0L }}")
 			Log.i(
 				TAG,
-				"timing: captureMs=$afterCaptureMs " +
+				"timing: target=$stillTarget captureMs=$afterCaptureMs " +
 					"handoffMs=${t0.elapsedNow().inWholeMilliseconds} firstFrame=${rendered == true}",
 			)
 
@@ -562,6 +570,12 @@ private const val SECONDS_PER_SEGMENT = (PLAY_DURATION_MS / 1000).toInt()
  * copy was still in flight when the budget ran out, so the still was null and nothing said so.
  */
 private const val PIXEL_COPY_TIMEOUT_MS = 2_000L
+
+/**
+ * Experiment switch: copy even the SDR qualities into the half-float BT.2020 target. If the
+ * still stops looking lighter than the video, the 8-bit sRGB tag was the cause.
+ */
+private const val FORCE_HDR_STILL = false
 
 /**
  * Pause between sealing the still and re-opening the player, so the still is composited at full
