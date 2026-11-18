@@ -64,13 +64,26 @@ import kotlin.time.TimeSource
  * and the two would have to agree about what a quality means before either could be read on its
  * own. This one is small enough to hold in a single file: the picker is the same panel the startup
  * screen had, and the player half is one surface rather than two.
+ *
+ * That picker is for entering the feature directly. When [initialQuality] is supplied the shared
+ * startup screen has already collected both the quality and the go-ahead, so the feature starts
+ * with that quality instead of asking again - otherwise reaching here would take two presses of
+ * Start while every other still mode takes one.
  */
 @OptIn(ExperimentalTvMaterial3Api::class, UnstableApi::class)
 @Composable
 fun PixelCopyScreen(
 	modifier: Modifier = Modifier,
 	viewModel: PixelCopyViewModel = viewModel(),
+	initialQuality: Quality? = null,
 ) {
+	// The shared picker's Go button already answered both questions, so honour them here rather
+	// than re-asking. The view model's own guard makes a repeat harmless, and a direct entry
+	// (null) keeps the feature's picker and its explicit Start button.
+	LaunchedEffect(initialQuality) {
+		if (initialQuality != null) viewModel.startWith(initialQuality)
+	}
+
 	val phase by viewModel.phase.collectAsStateWithLifecycle()
 	if (phase == Phase.PLAYING) {
 		PixelCopyPlayer(viewModel = viewModel, modifier = modifier)

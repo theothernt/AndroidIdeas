@@ -1,4 +1,4 @@
-package com.neilturner.fauxfade.ui.player
+package com.neilturner.fauxfade.feature.retriever
 
 import android.graphics.Bitmap
 import android.graphics.Matrix

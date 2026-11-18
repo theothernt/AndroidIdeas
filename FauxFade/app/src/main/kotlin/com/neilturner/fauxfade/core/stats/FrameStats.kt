@@ -37,7 +37,7 @@ internal class FrameStats(
 	/**
 	 * Identifies the player this records for, in every line it logs.
 	 *
-	 * A plain name rather than a [com.neilturner.fauxfade.ui.player.PlayerSlot]: this lives in
+	 * A plain name rather than a [com.neilturner.fauxfade.core.player.PlayerSlot]: this lives in
 	 * core, and taking the enum would make core depend on a feature's own player numbering.
 	 */
 	private val slot: String,

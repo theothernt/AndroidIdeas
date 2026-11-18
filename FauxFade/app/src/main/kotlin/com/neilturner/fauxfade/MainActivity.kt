@@ -18,20 +18,25 @@ import androidx.lifecycle.HasDefaultViewModelProviderFactory
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.CreationExtras
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.Surface
+import com.neilturner.fauxfade.core.media.Quality
+import com.neilturner.fauxfade.core.player.StillCaptureMode
 import com.neilturner.fauxfade.core.theme.FauxFadeTheme
 import com.neilturner.fauxfade.feature.pixelcopy.PixelCopyScreen
 import com.neilturner.fauxfade.feature.pixelcopy.PixelCopyViewModel
-import com.neilturner.fauxfade.ui.player.AppPhase
-import com.neilturner.fauxfade.ui.player.PlayerViewModel
-import com.neilturner.fauxfade.ui.player.StillCaptureMode
-import com.neilturner.fauxfade.ui.player.VideoPlayerScreen
-import com.neilturner.fauxfade.ui.startup.StartupScreen
+import com.neilturner.fauxfade.feature.preloadedframe.PreloadedFrameScreen
+import com.neilturner.fauxfade.feature.preloadedframe.PreloadedFrameViewModel
+import com.neilturner.fauxfade.feature.retriever.RetrieverScreen
+import com.neilturner.fauxfade.feature.retriever.RetrieverViewModel
+import com.neilturner.fauxfade.feature.startup.StartupScreen
+import com.neilturner.fauxfade.feature.tap.TapScreen
+import com.neilturner.fauxfade.feature.tap.TapViewModel
+import com.neilturner.fauxfade.feature.timedeffect.TimedEffectScreen
+import com.neilturner.fauxfade.feature.timedeffect.TimedEffectViewModel
 
 class MainActivity : ComponentActivity() {
 	@OptIn(ExperimentalTvMaterial3Api::class)
@@ -51,120 +56,106 @@ class MainActivity : ComponentActivity() {
 }
 
 /**
- * Where the app is.
+ * Where the app is. One destination per capture method, plus the menu that selects one.
  *
- * A sealed type rather than a navigation graph: two destinations and no back stack worth the name.
- * Routing them behind a single `when` makes a missing case a compile error rather than a route that
- * silently does nothing, and it keeps the app free of a navigation dependency it would gain nothing
- * from.
- *
- * [Shared] is the app's entry point and covers the startup screen as well as playback, because
- * those two are the same feature - one view model decides which of them is up, and Back during a
- * run is answered by stopping it rather than by navigating. [PixelCopy] is the one method that has
- * been given a screen and a view model of its own; the other four are still run by [Shared], and
- * each will join [PixelCopy] as it is pulled out.
+ * A sealed type rather than a navigation graph: there is no back stack worth the name, and making
+ * the route a compile-time case means a missing destination is an error rather than a route that
+ * silently does nothing. Each method owns its screen, view model and capture utilities in its own
+ * `feature/` package; the only thing shared between them is the menu's choice of quality.
  */
 private sealed interface Screen {
-	/** The startup picker, and the playback screen behind it once a run has been started. */
-	data object Shared : Screen
+	data object Startup : Screen
 
-	/** The PixelCopy method's own screen, picker and playback and all. */
+	data object Tap : Screen
+
+	data object TimedEffect : Screen
+
+	data object Retriever : Screen
+
+	data object PreloadedFrame : Screen
+
 	data object PixelCopy : Screen
 }
 
-/**
- * Chooses between the two, and gives each its own view models.
- *
- * The startup screen is where the app begins and where Back from a run returns to, so [Screen.Shared]
- * is not remembered underneath a feature either - it is rebuilt on the way back. That costs a
- * re-parse of the catalogue, which is asynchronous and which the picker does not wait for, and it
- * buys a screen that is in the state the user left it in rather than one restored from a run they
- * have already finished with.
- *
- * Both routes go through [FeatureHost], so leaving either releases what it built. Only leaving
- * [Screen.PixelCopy] needs that: stopping a run on [Screen.Shared] releases the players itself and
- * the view model stays put, which is what lets the two choices on the picker survive into the next
- * run.
- */
+private fun StillCaptureMode.screen(): Screen =
+	when (this) {
+		StillCaptureMode.ALWAYS_ON_TAP -> Screen.Tap
+		StillCaptureMode.SCHEDULED_EFFECT -> Screen.TimedEffect
+		StillCaptureMode.METADATA_RETRIEVER -> Screen.Retriever
+		StillCaptureMode.PRELOADED_FRAME -> Screen.PreloadedFrame
+		StillCaptureMode.PIXEL_COPY -> Screen.PixelCopy
+	}
+
 @Composable
 private fun FauxFadeApp() {
-	var screen by remember { mutableStateOf<Screen>(Screen.Shared) }
-	val toStartup: () -> Unit = { screen = Screen.Shared }
+	var screen by remember { mutableStateOf<Screen>(Screen.Startup) }
+	var quality by remember { mutableStateOf(Quality.FHD_SDR) }
+	val toStartup: () -> Unit = { screen = Screen.Startup }
 
 	when (screen) {
-		Screen.Shared -> {
+		Screen.Startup -> {
 			FeatureHost {
-				SharedMethod(onGoToPixelCopy = { screen = Screen.PixelCopy })
+				StartupScreen(
+					onGo = { pickedQuality, picked ->
+						quality = pickedQuality
+						screen = picked.screen()
+					},
+				)
+			}
+		}
+
+		Screen.Tap -> {
+			FeatureHost {
+				BackHandler(onBack = toStartup)
+				val viewModel: TapViewModel = viewModel()
+				TapScreen(viewModel = viewModel, initialQuality = quality)
+			}
+		}
+
+		Screen.TimedEffect -> {
+			FeatureHost {
+				BackHandler(onBack = toStartup)
+				val viewModel: TimedEffectViewModel = viewModel()
+				TimedEffectScreen(viewModel = viewModel, initialQuality = quality)
+			}
+		}
+
+		Screen.Retriever -> {
+			FeatureHost {
+				BackHandler(onBack = toStartup)
+				val viewModel: RetrieverViewModel = viewModel()
+				RetrieverScreen(viewModel = viewModel, initialQuality = quality)
+			}
+		}
+
+		Screen.PreloadedFrame -> {
+			FeatureHost {
+				BackHandler(onBack = toStartup)
+				val viewModel: PreloadedFrameViewModel = viewModel()
+				PreloadedFrameScreen(viewModel = viewModel, initialQuality = quality)
 			}
 		}
 
 		Screen.PixelCopy -> {
 			FeatureHost {
-				// Leaves for the startup screen, which unmounts this feature's store and so
-				// releases its player. A picker panel gets Back first and closes itself - see
-				// the `onPreviewKeyEvent` on the screens that have one - and key events only
-				// reach the dispatcher when nothing in Compose wanted them.
 				BackHandler(onBack = toStartup)
 				val viewModel: PixelCopyViewModel = viewModel()
-				PixelCopyScreen(viewModel = viewModel)
+				PixelCopyScreen(viewModel = viewModel, initialQuality = quality)
 			}
 		}
-	}
-}
-
-/**
- * The startup picker and the playback screen it hands over to, both driven by one view model.
- *
- * The Go button does not simply start a run: it reports which capture method was picked, and this
- * is where that turns into a screen. Four of the five run on this path. [StillCaptureMode.PIXEL_COPY]
- * is the odd one - it has a view model, a loop and a capture class of its own, so the button is
- * answered by going to [Screen.PixelCopy] instead of by building two players that were never going
- * to be used. The route is the only place the two halves meet, which is why the shared view model
- * can carry the other four without knowing PixelCopy exists at all.
- *
- * Because the picker and playback share a route, Back during a run cannot navigate anywhere and
- * does not try. It stops the run instead - see [PlayerViewModel.stopRun] - which is what the same
- * key does on the PixelCopy screen, where stopping means unmounting the feature.
- */
-@Composable
-private fun SharedMethod(onGoToPixelCopy: () -> Unit) {
-	val viewModel: PlayerViewModel = viewModel()
-	val phase by viewModel.phase.collectAsStateWithLifecycle()
-
-	if (phase == AppPhase.PLAYING) {
-		// Registered only once there is a run to stop: on the picker Back has nowhere to go but
-		// out of the app, which is what the activity's own handler does when nothing has claimed it.
-		BackHandler(onBack = viewModel::stopRun)
-		VideoPlayerScreen(viewModel = viewModel)
-	} else {
-		StartupScreen(
-			viewModel = viewModel,
-			onGo = { picked ->
-				if (picked == StillCaptureMode.PIXEL_COPY) {
-					onGoToPixelCopy()
-				} else {
-					viewModel.skipCountdown()
-				}
-			},
-		)
 	}
 }
 
 /**
  * Gives one feature its own [ViewModelStore], so leaving it releases everything it built.
  *
- * Without this every feature would share the activity's store, and the player built by the last one
- * would survive a trip back to the startup screen and the choice of a different method: a decoder
- * held against its will under a list of buttons, and a view model whose phase is already `PLAYING`,
- * so the next entry would resume a finished run rather than start one. Clearing the store calls
- * `onCleared()` on each view model in it, which is where the player is released.
- *
- * Remembered without a key on purpose: this composable is only in the tree while one feature is,
- * so entering a different feature is a fresh instance with nothing in it to inherit.
+ * Without this every feature would share the activity's store, and the player built by the last
+ * one would survive a trip back to the menu and the choice of a different method: a decoder held
+ * against its will under a list of buttons. Clearing the store calls `onCleared()` on each view
+ * model in it, which is where the player is released.
  */
 @Composable
 private fun FeatureHost(content: @Composable () -> Unit) {
-	// Captured before this replaces it - see [FeatureStoreOwner] for why it matters that it is.
 	val parent =
 		checkNotNull(LocalViewModelStoreOwner.current as? HasDefaultViewModelProviderFactory) {
 			"The activity has to be a ViewModelStoreOwner that knows how to build view models"
@@ -180,20 +171,7 @@ private fun FeatureHost(content: @Composable () -> Unit) {
 	}
 }
 
-/**
- * A [ViewModelStoreOwner] that belongs to one feature and nothing else.
- *
- * Not the activity, because the activity's store is where the activity's own view models live, and
- * borrowing it is exactly what would make a feature's state outlive its own screen.
- *
- * It does borrow the activity's *construction* rules, and has to: `viewModel()` asks the owner how
- * to make things, and an owner that only implements [ViewModelStoreOwner] is answered with
- * [CreationExtras.Empty] and a reflective default factory. Both view models here take an
- * `Application`, so that answer is a lookup for a no-arg constructor that does not exist, and the
- * first time anything asked for one the app died with "Cannot create an instance of class
- * PixelCopyViewModel". Passing the parent's factory and its extras through carries the application
- * the same way the activity would have.
- */
+/** A [ViewModelStoreOwner] that belongs to one feature and borrows the activity's factory. */
 private class FeatureStoreOwner(
 	private val parent: HasDefaultViewModelProviderFactory,
 ) : ViewModelStoreOwner,

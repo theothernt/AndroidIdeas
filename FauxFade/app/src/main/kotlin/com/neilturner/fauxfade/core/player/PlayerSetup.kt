@@ -1,4 +1,4 @@
-package com.neilturner.fauxfade.ui.player
+package com.neilturner.fauxfade.core.player
 
 import android.content.Context
 import androidx.annotation.OptIn
@@ -10,12 +10,12 @@ import com.neilturner.fauxfade.core.media.Quality
 /**
  * Builds one player per slot in [slots], all configured the same way.
  *
- * Taken at [beginPlayback] rather than at construction because the buffer cap depends on the
+ * Taken at playback start rather than at construction because the buffer cap depends on the
  * quality, and the quality is not known until the picker has been answered. Nothing about the
- * player changes after this, so building them here rather than in the view model's initialiser
+ * player changes after this, so building it here rather than in a view model's initialiser
  * keeps "how a player is built" out of the object's construction path.
  *
- * [slots] rather than "all of them" so the single-player mode can ask for one and get one. A second
+ * [slots] rather than "all of them" so a single-player mode can ask for one and get one. A second
  * player is not free: it initialises its own decoder, and at 4K on a weak device that is the
  * difference between a picture and a black screen.
  */
@@ -55,13 +55,7 @@ private fun bufferLimit(quality: Quality) =
 		.setPrioritizeTimeOverSizeThresholds(false)
 		.build()
 
-/**
- * Load control limits. The defaults buffer up to 50s of a 2K clip per player and ignore the
- * byte target, which is far more than a loop that plays a handful of seconds at a time needs.
- *
- * The durations stay generous on purpose: the next video is primed mid-segment so the handoff
- * has something to show immediately, and starving it would show up as a stall at the swap.
- */
+/** Load control limits. The defaults are far more than a loop playing short segments needs. */
 private const val MIN_BUFFER_MS = 3_000
 private const val MAX_BUFFER_MS = 10_000
 private const val BUFFER_FOR_PLAYBACK_MS = 2_500

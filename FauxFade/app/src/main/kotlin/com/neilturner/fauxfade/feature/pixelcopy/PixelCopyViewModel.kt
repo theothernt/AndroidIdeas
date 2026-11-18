@@ -214,6 +214,19 @@ class PixelCopyViewModel(
 	}
 
 	/**
+	 * Takes the quality already picked on the shared startup screen and starts straight away.
+	 *
+	 * Routing here from the shared picker means the user has made both decisions - quality and
+	 * go-ahead - before this screen appears, so asking for either again costs a second press of
+	 * Start. Reuse [select] so the choice is logged the same way on both paths; [skipCountdown]
+	 * then hands off to the same [beginPlayback] the button and the countdown use.
+	 */
+	fun startWith(quality: Quality) {
+		select(quality)
+		skipCountdown()
+	}
+
+	/**
 	 * Called from the startup button. Launches rather than doing the work inline because
 	 * [beginPlayback] has to wait for the catalogue, and an onClick is not a coroutine.
 	 */

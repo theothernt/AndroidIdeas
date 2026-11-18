@@ -1,4 +1,4 @@
-package com.neilturner.fauxfade.ui.player
+package com.neilturner.fauxfade.feature.tapblur
 
 import android.content.Context
 import android.graphics.Bitmap
@@ -36,8 +36,8 @@ import java.util.concurrent.atomic.AtomicLong
  * just before it pauses and reads the result just after.
  */
 @UnstableApi
-internal class StillTapEffect : GlEffect {
-	private val shaderProgram = TapShaderProgram()
+internal class StillTapBlurEffect : GlEffect {
+	private val shaderProgram = TapBlurShaderProgram()
 
 	/**
 	 * How many frames have gone through the pipeline since this player was created.
@@ -74,10 +74,10 @@ internal class StillTapEffect : GlEffect {
  * keeps the armed window short.
  */
 @UnstableApi
-private class TapShaderProgram : GlShaderProgram {
+private class TapBlurShaderProgram : GlShaderProgram {
 	private val delegate = PassthroughShaderProgram()
 
-	/** Frames that have actually arrived, counted rather than inferred. See [StillTapEffect]. */
+	/** Frames that have actually arrived, counted rather than inferred. See [StillTapBlurEffect]. */
 	private val framesSeen = AtomicLong()
 
 	fun framesSeen(): Long = framesSeen.get()
@@ -190,9 +190,9 @@ private class TapShaderProgram : GlShaderProgram {
 				// Swallowed deliberately below - this runs on the GL thread inside the render
 				// path, where throwing would take the player down rather than losing a still.
 				// Logged here so a tap that never works is visible instead of silent.
-				Log.w(TAG, "tap: readback failed", it)
+				Log.w(TAG, "tapblur: readback failed", it)
 			}
-		if (bitmap == null) Log.w(TAG, "tap: no bitmap for ${texture.width}x${texture.height}")
+		if (bitmap == null) Log.w(TAG, "tapblur: no bitmap for ${texture.width}x${texture.height}")
 		lastCapture = bitmap
 		captured.complete(Unit)
 	}

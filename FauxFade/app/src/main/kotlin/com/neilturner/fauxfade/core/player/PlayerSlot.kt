@@ -1,4 +1,4 @@
-package com.neilturner.fauxfade.ui.player
+package com.neilturner.fauxfade.core.player
 
 /** Which of the two players is on screen. The loop alternates between them. */
 enum class PlayerSlot {
