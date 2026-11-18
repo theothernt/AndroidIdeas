@@ -5,7 +5,7 @@ import android.graphics.ColorSpace
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
-import android.view.PixelCopyBlur
+import android.view.PixelCopy
 import android.view.SurfaceView
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -22,7 +22,7 @@ import kotlin.math.roundToInt
  * the tap has to be armed before the pause, the scheduled effect has to run ahead, and the
  * retriever has to pause and then wait two to three seconds for the file.
  *
- * PixelCopyBlur is not reading the player at all - it is reading the surface, and a surface keeps its
+ * PixelCopy is not reading the player at all - it is reading the surface, and a surface keeps its
  * last latched buffer after the producer stops. It does hold: the handoff can pause first and copy
  * afterwards, which is the natural order and removes all three problems above.
  *
@@ -96,7 +96,7 @@ internal class PixelCopyBlurCapture {
 		/** True when the surface was larger than [MAX_STILL_WIDTH] and the copy was shrunk. */
 		val scaled: Boolean = false,
 	) {
-		val succeeded: Boolean get() = status == PixelCopyBlur.SUCCESS && bitmap != null
+		val succeeded: Boolean get() = status == PixelCopy.SUCCESS && bitmap != null
 	}
 
 	/**
@@ -118,7 +118,7 @@ internal class PixelCopyBlurCapture {
 			val surfaceWidth = surfaceView.width
 			val surfaceHeight = surfaceView.height
 			if (surfaceWidth <= 0 || surfaceHeight <= 0) {
-				continuation.resume(Result(PixelCopyBlur.ERROR_SOURCE_INVALID, null, 0))
+				continuation.resume(Result(PixelCopy.ERROR_SOURCE_INVALID, null, 0))
 				return@suspendCancellableCoroutine
 			}
 
@@ -145,7 +145,7 @@ internal class PixelCopyBlurCapture {
 			// player's work already does rather than on a thread of its own.
 			val handler = surfaceView.handler ?: Handler(Looper.getMainLooper())
 
-			PixelCopyBlur.request(
+			PixelCopy.request(
 				surfaceView,
 				null,
 				bitmap,
@@ -154,7 +154,7 @@ internal class PixelCopyBlurCapture {
 					continuation.resume(
 						Result(
 							status = status,
-							bitmap = if (status == PixelCopyBlur.SUCCESS) bitmap else null,
+							bitmap = if (status == PixelCopy.SUCCESS) bitmap else null,
 							elapsedMs = elapsed,
 							scaled = shrink < 1f,
 						),

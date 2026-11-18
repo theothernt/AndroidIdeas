@@ -143,7 +143,7 @@ private fun PixelCopyBlurPicker(
 			modifier = Modifier.widthIn(max = PANEL_WIDTH),
 		) {
 			Text(
-				text = "PixelCopyBlur",
+				text = "PixelCopy Blur",
 				style = MaterialTheme.typography.headlineMedium,
 				color = MaterialTheme.colorScheme.onBackground,
 			)
@@ -415,9 +415,16 @@ private fun StillOverlay(
 				fade.snapTo(0f)
 			}
 
-			// Snapped, not ramped. The still goes up over the outgoing video already paused on the
-			// same frame, so it has to be fully opaque the instant it appears - there is nothing
-			// behind it to dissolve against until the player re-opens.
+			// Ramped rather than snapped: the blurred copy rises over the frame the player is
+			// paused on, so the softening is on screen before the swap happens underneath it.
+			// The loop waits this long before dropping the player.
+			StillPhase.DISSOLVING -> {
+				val started = TimeSource.Monotonic.markNow()
+				fade.snapTo(0f)
+				fade.animateTo(1f, tween(STILL_DISSOLVE_MS))
+				Log.i(TAG, "timing: dissolveMs=${started.elapsedNow().inWholeMilliseconds}")
+			}
+
 			StillPhase.SEALED -> {
 				fade.snapTo(1f)
 			}
@@ -567,6 +574,9 @@ private fun startLabel(countdown: Int): String = if (countdown > 0) "Start playb
 
 /** How long the captured still takes to fade out, revealing the video underneath it. */
 private const val STILL_FADE_MS = 1_500
+
+/** The overlay's half of the fade-in, matching the fade-out and the loop's wait before swapping. */
+private const val STILL_DISSOLVE_MS = 1_500
 
 /** How long the startup spinner takes to fade out once there is a frame to show. */
 private const val LOADER_FADE_MS = 400

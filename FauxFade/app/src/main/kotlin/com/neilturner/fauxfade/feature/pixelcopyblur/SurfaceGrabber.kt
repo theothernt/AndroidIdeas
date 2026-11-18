@@ -22,7 +22,7 @@ internal fun interface SurfaceGrabber {
 	 * because only the caller knows whether the run is high dynamic range, and getting that wrong
 	 * is what produces a still with the wrong colour rather than one that merely looks softer.
 	 *
-	 * Suspending because the copy is: PixelCopyBlur is an asynchronous request, and whether it
+	 * Suspending because the copy is: PixelCopy is an asynchronous request, and whether it
 	 * completes is not the caller's decision.
 	 */
 	suspend fun grab(target: PixelCopyBlurCapture.CopyTarget): Bitmap?

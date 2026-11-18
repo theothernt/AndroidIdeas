@@ -374,15 +374,31 @@ class PixelCopyBlurViewModel(
 			// rather than off the player. The surface keeps this frame and stays visible throughout,
 			// so nothing on screen changes during the copy.
 			player.pause()
-			val still = withTimeoutOrNull(PIXEL_COPY_TIMEOUT_MS) { grabber?.grab(stillTarget) }
+			val copied = withTimeoutOrNull(PIXEL_COPY_TIMEOUT_MS) { grabber?.grab(stillTarget) }
+			val copyMs = t0.elapsedNow().inWholeMilliseconds
+
+			// Blur on the way from the surface copy to the overlay, exactly as TapBlur does with
+			// its readback. Timed separately: the copy waits on the display pipeline, the blur is
+			// pure CPU, and they scale very differently with the source resolution.
+			val still =
+				if (copied == null) {
+					null
+				} else {
+					val blurStart = TimeSource.Monotonic.markNow()
+					val blurred = StillBlur.blur(copied)
+					val blurMs = blurStart.elapsedNow().inWholeMilliseconds
+					Log.i(TAG, "copy: copyMs=$copyMs blurMs=$blurMs size=${blurred.width}x${blurred.height}")
+					blurred
+				}
 			val afterCaptureMs = t0.elapsedNow().inWholeMilliseconds
 
 			if (still != null) {
 				_stillFrame.value = still
-				_stillPhase.value = StillPhase.SEALED
-				// The still has to be composited at full opacity before the player drops the frame
-				// it is standing in for.
-				delay(STILL_LEAD_IN_MS)
+				// Ramp the blurred still up over the paused frame rather than snapping to it, so the
+				// picture visibly softens before the player is dropped. Wait for the ramp before
+				// anything changes underneath the cover.
+				_stillPhase.value = StillPhase.DISSOLVING
+				delay(DISSOLVE_MS + STILL_LEAD_IN_MS)
 			} else {
 				_stillFrame.value = null
 				_stillPhase.value = StillPhase.HIDDEN
@@ -464,18 +480,17 @@ class PixelCopyBlurViewModel(
 /**
  * How the still overlay is being presented.
  *
- * Three states, and deliberately not the four the two-player version carries: [DISSOLVING] is
- * reserved for an approach that ramps a still *up* over video that is still playing underneath it,
- * and nothing here does that. The still in this feature always arrives by snapping - the player is
- * already paused on the frame it is a copy of, so there is nothing behind it to dissolve against.
- *
- * Sealing and fading are separate states because the still has to be fully opaque *before* the
- * player re-opens on the next clip, and stay opaque until that clip has something to show. Fading
- * it early means most of the fade runs over a surface that is still empty.
+ * Four states. The blurred still ramps up in [DISSOLVING] over the frame the player is paused on,
+ * so the softening is visible before the swap; it is then held at full opacity while the player
+ * re-opens, and finally fades out in [FADING] to reveal the new clip. The hold has to last until
+ * that clip has a frame, or most of the fade would run over an empty surface.
  */
 enum class StillPhase {
 	/** Not on screen. */
 	HIDDEN,
+
+	/** Coming up from invisible, over the paused frame underneath. */
+	DISSOLVING,
 
 	/** On screen at full opacity, held. */
 	SEALED,
@@ -568,6 +583,9 @@ private const val PIXEL_COPY_TIMEOUT_MS = 2_000L
  * opacity before anything behind it changes. One or two frames is enough.
  */
 private const val STILL_LEAD_IN_MS = 150L
+
+/** How long the blurred still spends rising from nothing over the paused frame. */
+private const val DISSOLVE_MS = 1_500L
 
 /**
  * How long to wait for the opening clip to render its first frame before clearing the loader

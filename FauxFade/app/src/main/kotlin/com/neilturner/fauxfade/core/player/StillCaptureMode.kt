@@ -21,6 +21,12 @@ enum class StillCaptureMode(
 		"Reads from the video pipeline, left installed for the whole run. Two players.",
 	),
 
+	/** Copy of the Tap feature, kept separate so blur can be developed independently. */
+	TAP_BLUR(
+		"Tap Blur",
+		"Copy of Tap, left installed for the whole run. Two players.",
+	),
+
 	/** Effect installed just before the frame. Installing an effect stops the player. */
 	SCHEDULED_EFFECT(
 		"Timed effect",
@@ -37,6 +43,12 @@ enum class StillCaptureMode(
 	PIXEL_COPY(
 		"PixelCopy",
 		"No pipeline. Copies the screen, and survives the pause. Works at 4K.",
+	),
+
+	/** Copy of the PixelCopy feature, kept separate so blur can be developed independently. */
+	PIXEL_COPY_BLUR(
+		"PixelCopy Blur",
+		"Copy of PixelCopy. Copies the screen, and survives the pause. Works at 4K.",
 	),
 
 	/** Reads the next clip's first frame early and dissolves into it while this one keeps playing. */

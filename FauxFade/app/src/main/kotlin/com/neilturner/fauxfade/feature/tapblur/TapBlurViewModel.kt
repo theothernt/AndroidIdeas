@@ -129,7 +129,7 @@ class TapBlurViewModel(
 		// The effect goes in before playback starts rather than being rebuilt under a running
 		// player. This is the one cost that scales with frame count rather than handoffs.
 		taps.forEach { (slot, tap) -> players[slot]?.setVideoEffects(listOf(tap)) }
-		Log.i(TAG, "tapblur: mode=ALWAYS_ON_TAP stills=$CAPTURE_STILLS")
+		Log.i(TAG, "tapblur: mode=TAP_BLUR stills=$CAPTURE_STILLS")
 		loopJob = viewModelScope.launch { runPlaylistLoop() }
 		startMemoryWatch()
 	}
@@ -207,8 +207,11 @@ class TapBlurViewModel(
 
 			if (still != null) {
 				_stillFrame.value = still
-				_stillPhase.value = StillPhase.SEALED
-				delay(STILL_LEAD_IN_MS)
+				// Ramp the blurred still up over the paused frame instead of snapping to it: the
+				// point of the blur is to watch the picture soften before the swap, which a sealed
+				// still would hide. Wait for the ramp before touching the player underneath.
+				_stillPhase.value = StillPhase.DISSOLVING
+				delay(DISSOLVE_MS + STILL_LEAD_IN_MS)
 			} else {
 				_stillFrame.value = null
 				_stillPhase.value = StillPhase.HIDDEN
@@ -227,7 +230,7 @@ class TapBlurViewModel(
 			_swapping.value = false
 			if (still != null) _stillPhase.value = StillPhase.FADING
 			Log.i(TAG, "swap: foreground -> $incoming incomingIndex=$nextIndex firstFrame=${rendered == true}")
-			Log.i(TAG, "timing: captureMs=$afterCaptureMs sealedMs=${afterSwapMs - afterCaptureMs} handoffMs=$afterSwapMs")
+			Log.i(TAG, "timing: captureMs=$afterCaptureMs coverMs=${afterSwapMs - afterCaptureMs} handoffMs=$afterSwapMs")
 			Log.i(
 				TAG,
 				"frames: " +
@@ -257,10 +260,17 @@ class TapBlurViewModel(
 		val waitedMs = started.elapsedNow().inWholeMilliseconds
 		if (tapped == null) {
 			Log.w(TAG, "still: no frame from $slot after ${waitedMs}ms, cutting instead")
-		} else {
-			Log.i(TAG, "still: source=tap waitedMs=$waitedMs")
+			return null
 		}
-		return tapped
+
+		// Blur on the way from the readback to the overlay, so what covers the swap is already
+		// soft by the time it is sealed. Timed separately from the readback: the two costs scale
+		// differently and only one of them is a GPU stall.
+		val blurStart = TimeSource.Monotonic.markNow()
+		val blurred = StillBlur.blur(tapped)
+		val blurMs = blurStart.elapsedNow().inWholeMilliseconds
+		Log.i(TAG, "still: source=tap waitedMs=$waitedMs blurMs=$blurMs size=${blurred.width}x${blurred.height}")
+		return blurred
 	}
 
 	private fun meanRgb(bitmap: Bitmap?): String? {
@@ -342,6 +352,9 @@ private fun secondsLeft(remainingMs: Long): Int = ceil(remainingMs / 1000.0).toI
 private const val CAPTURE_STILLS = true
 private const val PRELOAD_AFTER_MS = 10_000L
 private const val STILL_LEAD_IN_MS = 150L
+
+/** How long the blurred still spends rising from nothing over the paused frame. */
+private const val DISSOLVE_MS = 1_500L
 private const val STARTUP_FRAME_TIMEOUT_MS = 15_000L
 private const val COUNTDOWN_TICK_MS = 100L
 private const val MEMORY_POLL_MS = 2_000L

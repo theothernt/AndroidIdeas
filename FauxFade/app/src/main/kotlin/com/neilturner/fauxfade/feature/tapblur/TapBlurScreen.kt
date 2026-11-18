@@ -75,4 +75,4 @@ fun TapBlurScreen(
 }
 
 /** The overlay's dissolve-in is unused for TapBlur (its still is sealed, never dissolved in). */
-private const val DISSOLVE_MS = 750L
+private const val DISSOLVE_MS = 1_500L

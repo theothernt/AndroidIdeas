@@ -28,6 +28,8 @@ import com.neilturner.fauxfade.core.player.StillCaptureMode
 import com.neilturner.fauxfade.core.theme.FauxFadeTheme
 import com.neilturner.fauxfade.feature.pixelcopy.PixelCopyScreen
 import com.neilturner.fauxfade.feature.pixelcopy.PixelCopyViewModel
+import com.neilturner.fauxfade.feature.pixelcopyblur.PixelCopyBlurScreen
+import com.neilturner.fauxfade.feature.pixelcopyblur.PixelCopyBlurViewModel
 import com.neilturner.fauxfade.feature.preloadedframe.PreloadedFrameScreen
 import com.neilturner.fauxfade.feature.preloadedframe.PreloadedFrameViewModel
 import com.neilturner.fauxfade.feature.retriever.RetrieverScreen
@@ -35,6 +37,8 @@ import com.neilturner.fauxfade.feature.retriever.RetrieverViewModel
 import com.neilturner.fauxfade.feature.startup.StartupScreen
 import com.neilturner.fauxfade.feature.tap.TapScreen
 import com.neilturner.fauxfade.feature.tap.TapViewModel
+import com.neilturner.fauxfade.feature.tapblur.TapBlurScreen
+import com.neilturner.fauxfade.feature.tapblur.TapBlurViewModel
 import com.neilturner.fauxfade.feature.timedeffect.TimedEffectScreen
 import com.neilturner.fauxfade.feature.timedeffect.TimedEffectViewModel
 
@@ -68,6 +72,8 @@ private sealed interface Screen {
 
 	data object Tap : Screen
 
+	data object TapBlur : Screen
+
 	data object TimedEffect : Screen
 
 	data object Retriever : Screen
@@ -75,15 +81,19 @@ private sealed interface Screen {
 	data object PreloadedFrame : Screen
 
 	data object PixelCopy : Screen
+
+	data object PixelCopyBlur : Screen
 }
 
 private fun StillCaptureMode.screen(): Screen =
 	when (this) {
 		StillCaptureMode.ALWAYS_ON_TAP -> Screen.Tap
+		StillCaptureMode.TAP_BLUR -> Screen.TapBlur
 		StillCaptureMode.SCHEDULED_EFFECT -> Screen.TimedEffect
 		StillCaptureMode.METADATA_RETRIEVER -> Screen.Retriever
 		StillCaptureMode.PRELOADED_FRAME -> Screen.PreloadedFrame
 		StillCaptureMode.PIXEL_COPY -> Screen.PixelCopy
+		StillCaptureMode.PIXEL_COPY_BLUR -> Screen.PixelCopyBlur
 	}
 
 @Composable
@@ -109,6 +119,14 @@ private fun FauxFadeApp() {
 				BackHandler(onBack = toStartup)
 				val viewModel: TapViewModel = viewModel()
 				TapScreen(viewModel = viewModel, initialQuality = quality)
+			}
+		}
+
+		Screen.TapBlur -> {
+			FeatureHost {
+				BackHandler(onBack = toStartup)
+				val viewModel: TapBlurViewModel = viewModel()
+				TapBlurScreen(viewModel = viewModel, initialQuality = quality)
 			}
 		}
 
@@ -141,6 +159,14 @@ private fun FauxFadeApp() {
 				BackHandler(onBack = toStartup)
 				val viewModel: PixelCopyViewModel = viewModel()
 				PixelCopyScreen(viewModel = viewModel, initialQuality = quality)
+			}
+		}
+
+		Screen.PixelCopyBlur -> {
+			FeatureHost {
+				BackHandler(onBack = toStartup)
+				val viewModel: PixelCopyBlurViewModel = viewModel()
+				PixelCopyBlurScreen(viewModel = viewModel, initialQuality = quality)
 			}
 		}
 	}
