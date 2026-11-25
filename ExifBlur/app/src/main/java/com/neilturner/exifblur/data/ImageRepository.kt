@@ -10,7 +10,6 @@ data class ImageListing(
 )
 
 interface ImageRepository {
-
     suspend fun getImages(): ImageListing
 
     suspend fun openInputStream(uri: Uri): InputStream?
@@ -19,11 +18,9 @@ interface ImageRepository {
 class ImageRepositoryImpl(
     private val sambaProvider: SambaImageProvider,
 ) : ImageRepository {
-    override suspend fun getImages(): ImageListing =
-        sambaProvider.getImages().copy(sourceName = SOURCE_SAMBA)
+    override suspend fun getImages(): ImageListing = sambaProvider.getImages().copy(sourceName = SOURCE_SAMBA)
 
-    override suspend fun openInputStream(uri: Uri): InputStream? =
-        sambaProvider.openInputStream(uri)
+    override suspend fun openInputStream(uri: Uri): InputStream? = sambaProvider.openInputStream(uri)
 
     companion object {
         const val SOURCE_SAMBA = "Samba"

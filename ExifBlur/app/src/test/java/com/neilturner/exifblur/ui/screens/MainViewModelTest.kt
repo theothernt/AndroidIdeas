@@ -1,11 +1,13 @@
 package com.neilturner.exifblur.ui.screens
 
+import android.content.Context
+import android.util.Log
+import coil3.ImageLoader
 import com.neilturner.exifblur.data.ExifMetadata
 import com.neilturner.exifblur.data.ImageRepository
-import com.neilturner.exifblur.util.BitmapHelper
+import com.neilturner.exifblur.util.ExifMetadataLoader
 import com.neilturner.exifblur.util.LocationHelper
 import com.neilturner.exifblur.util.RamMonitor
-import android.util.Log
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
@@ -20,8 +22,10 @@ class MainViewModelTest {
     private lateinit var viewModel: MainViewModel
     private val imageRepository = mockk<ImageRepository>()
     private val locationHelper = mockk<LocationHelper>()
-    private val bitmapHelper = mockk<BitmapHelper>()
+    private val metadataLoader = mockk<ExifMetadataLoader>()
+    private val imageLoader = mockk<ImageLoader>()
     private val ramMonitor = mockk<RamMonitor>()
+    private val context = mockk<Context>()
 
     @Before
     fun setup() {
@@ -31,7 +35,15 @@ class MainViewModelTest {
         every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
         every { Log.e(any<String>(), any<String>()) } returns 0
         
-        viewModel = MainViewModel(imageRepository, locationHelper, bitmapHelper, ramMonitor)
+        every { context.applicationContext } returns context
+        viewModel = MainViewModel(
+            imageRepository,
+            locationHelper,
+            ramMonitor,
+            metadataLoader,
+            imageLoader,
+            context,
+        )
     }
 
     @Test

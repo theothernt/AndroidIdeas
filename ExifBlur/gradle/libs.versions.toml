@@ -13,6 +13,7 @@ lifecycleViewModelCompose = "2.11.1"
 exifinterface = "1.4.2"
 navigationCompose = "2.10.2"
 smbj = "0.15.0"
+coil = "3.6.3"
 junit = "4.13.2"
 mockk = "1.14.12"
 leakcanary = "3.0-alpha-9"
@@ -41,6 +42,8 @@ koin-android = { group = "io.insert-koin", name = "koin-android", version.ref = 
 koin-androidx-compose = { group = "io.insert-koin", name = "koin-androidx-compose", version.ref = "koin" }
 
 smbj = { group = "com.hierynomus", name = "smbj", version.ref = "smbj" }
+coil = { group = "io.coil-kt.coil3", name = "coil", version.ref = "coil" }
+coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 mockk = { group = "io.mockk", name = "mockk", version.ref = "mockk" }
 

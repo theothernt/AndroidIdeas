@@ -12,6 +12,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -29,31 +32,32 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.SurfaceDefaults
+import coil3.SingletonImageLoader
+import com.neilturner.exifblur.slideshow.CoilSlideshow
 import com.neilturner.exifblur.ui.components.ErrorOverlay
 import com.neilturner.exifblur.ui.components.ImageCountOverlay
 import com.neilturner.exifblur.ui.components.LoadingContent
 import com.neilturner.exifblur.ui.components.MetadataOverlay
 import com.neilturner.exifblur.ui.components.RamUsageOverlay
-import com.neilturner.exifblur.ui.components.Slideshow
-import com.neilturner.exifblur.ui.components.SlideshowData
 import org.koin.androidx.compose.koinViewModel
 
 @OptIn(ExperimentalTvMaterial3Api::class)
 @Composable
-fun MainScreen(
-    viewModel: MainViewModel = koinViewModel()
-) {
+fun MainScreen(viewModel: MainViewModel = koinViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val appContext = remember(context) { context.applicationContext }
+    val imageLoader = remember(appContext) { SingletonImageLoader.get(appContext) }
     val focusRequester = remember { FocusRequester() }
 
     LaunchedEffect(Unit) {
-        viewModel.loadImages()
+        viewModel.start()
         // The root Surface is the only focusable element, so it needs focus
         // for D-pad/Enter key events to be delivered on TV.
         focusRequester.requestFocus()
@@ -69,77 +73,94 @@ fun MainScreen(
     }
 
     Surface(
-        modifier = Modifier
-            .fillMaxSize()
-            .focusRequester(focusRequester)
-            .focusable()
-            .onKeyEvent { keyEvent ->
-                if (keyEvent.type == KeyEventType.KeyDown &&
-                    (keyEvent.key == Key.DirectionCenter || keyEvent.key == Key.Enter)) {
-                    viewModel.toggleOverlays()
-                    true
-                } else {
-                    false
-                }
-            },
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .focusRequester(focusRequester)
+                .focusable()
+                .onKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown &&
+                        (keyEvent.key == Key.DirectionCenter || keyEvent.key == Key.Enter)
+                    ) {
+                        viewModel.toggleOverlays()
+                        true
+                    } else {
+                        false
+                    }
+                },
         shape = RectangleShape,
-        colors = SurfaceDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.background
-        )
+        colors =
+            SurfaceDefaults.colors(
+                containerColor = MaterialTheme.colorScheme.background,
+            ),
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            uiState.currentDisplayImage?.let { displayImage ->
-                Slideshow(
-                    currentImage = SlideshowData(bitmap = displayImage.bitmap),
-                    transitionDuration = uiState.transitionDuration
+            val image = uiState.playlist.getOrNull(uiState.currentIndex)
+            CoilSlideshow(
+                image = image,
+                imageLoader = imageLoader,
+                modifier = Modifier.fillMaxSize(),
+            )
+
+            // Small indicator for prefetch activity (hidden during startup,
+            // where the full-screen LoadingContent already says what is happening).
+            if (!uiState.isStarting && uiState.isPrefetching) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(16.dp)
+                        .size(28.dp),
+                    color = Color.White,
+                    strokeWidth = 3.dp,
                 )
             }
 
-            // Black Splash Overlay that fades out once the first image is loaded
+            // Black splash overlay that fades out once the first image is cached.
             AnimatedVisibility(
-                visible = uiState.isLoading || uiState.currentDisplayImage == null,
+                visible = uiState.isStarting || image == null,
                 enter = fadeIn(),
-                exit = fadeOut(animationSpec = tween(durationMillis = 1000))
+                exit = fadeOut(animationSpec = tween(durationMillis = 1000)),
             ) {
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black))
             }
 
-            if (uiState.isLoading) {
+            if (uiState.isStarting) {
                 LoadingContent()
             } else {
-                val imageError = uiState.imageError
-                if (!imageError.isNullOrBlank()) {
+                val error = uiState.error
+                if (!error.isNullOrBlank()) {
                     ErrorOverlay(
-                        message = imageError,
-                        modifier = Modifier.align(Alignment.Center)
+                        message = error,
+                        modifier = Modifier.align(Alignment.Center),
                     )
                 }
 
                 ImageCountOverlay(
                     isVisible = uiState.areOverlaysVisible,
-                    currentImageIndex = uiState.currentImageIndex,
+                    currentImageIndex = uiState.currentIndex,
                     imageCount = uiState.imageCount,
                     imageSource = uiState.imageSource,
-                    modifier = Modifier.align(Alignment.BottomStart)
+                    modifier = Modifier.align(Alignment.BottomStart),
                 )
 
                 MetadataOverlay(
-                    label = uiState.currentDisplayImage?.metadataLabel,
-                    modifier = Modifier.align(Alignment.BottomEnd)
+                    label = uiState.metadataLabel,
+                    modifier = Modifier.align(Alignment.BottomEnd),
                 )
 
                 RamUsageOverlay(
                     isVisible = uiState.areOverlaysVisible,
                     ramInfo = uiState.ramInfo,
-                    modifier = Modifier.align(Alignment.TopEnd)
+                    modifier = Modifier.align(Alignment.TopEnd),
                 )
             }
         }
     }
 }
 
-private fun Context.findActivity(): Activity? = when (this) {
-    is Activity -> this
-    is ContextWrapper -> baseContext.findActivity()
-    else -> null
-}
+private fun Context.findActivity(): Activity? =
+    when (this) {
+        is Activity -> this
+        is ContextWrapper -> baseContext.findActivity()
+        else -> null
+    }

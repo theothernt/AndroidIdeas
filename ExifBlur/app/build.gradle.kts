@@ -73,6 +73,8 @@ dependencies {
     implementation(libs.androidx.exifinterface)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.smbj)
+    implementation(libs.coil)
+    implementation(libs.coil.compose)
 	debugImplementation(libs.leakcanary.android)
 
 	androidTestImplementation(platform(libs.androidx.compose.bom))
