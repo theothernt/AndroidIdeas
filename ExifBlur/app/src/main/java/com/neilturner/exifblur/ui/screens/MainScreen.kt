@@ -1,14 +1,9 @@
 package com.neilturner.exifblur.ui.screens
 
-import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
-import android.content.pm.PackageManager
-import android.os.Build
 import android.view.WindowManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -34,7 +29,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalContext
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.tv.material3.ExperimentalTvMaterial3Api
 import androidx.tv.material3.MaterialTheme
@@ -44,7 +38,6 @@ import com.neilturner.exifblur.ui.components.ErrorOverlay
 import com.neilturner.exifblur.ui.components.ImageCountOverlay
 import com.neilturner.exifblur.ui.components.LoadingContent
 import com.neilturner.exifblur.ui.components.MetadataOverlay
-import com.neilturner.exifblur.ui.components.PermissionRequestContent
 import com.neilturner.exifblur.ui.components.RamUsageOverlay
 import com.neilturner.exifblur.ui.components.Slideshow
 import com.neilturner.exifblur.ui.components.SlideshowData
@@ -59,37 +52,11 @@ fun MainScreen(
     val context = LocalContext.current
     val focusRequester = remember { FocusRequester() }
 
-    val permissions = remember {
-        buildList {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                add(Manifest.permission.READ_MEDIA_IMAGES)
-            } else {
-                add(Manifest.permission.READ_EXTERNAL_STORAGE)
-            }
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                add(Manifest.permission.ACCESS_MEDIA_LOCATION)
-            }
-        }
-    }
-
-    val launcher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissionsMap ->
-        val isGranted = permissionsMap.values.all { it }
-        viewModel.updatePermissionStatus(isGranted)
-    }
-
     LaunchedEffect(Unit) {
-        val isGranted = permissions.all {
-            ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED
-        }
-        viewModel.updatePermissionStatus(isGranted)
-    }
-
-    LaunchedEffect(uiState.hasPermission, uiState.isPermissionCheckComplete) {
-        if (uiState.isPermissionCheckComplete && !uiState.hasPermission) {
-            focusRequester.requestFocus()
-        }
+        viewModel.loadImages()
+        // The root Surface is the only focusable element, so it needs focus
+        // for D-pad/Enter key events to be delivered on TV.
+        focusRequester.requestFocus()
     }
 
     // Keep the screen on during the slideshow
@@ -121,8 +88,7 @@ fun MainScreen(
         )
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            if (uiState.currentDisplayImage != null) {
-                val displayImage = uiState.currentDisplayImage!!
+            uiState.currentDisplayImage?.let { displayImage ->
                 Slideshow(
                     currentImage = SlideshowData(bitmap = displayImage.bitmap),
                     transitionDuration = uiState.transitionDuration
@@ -138,44 +104,35 @@ fun MainScreen(
                 Box(modifier = Modifier.fillMaxSize().background(Color.Black))
             }
 
-            if (uiState.isPermissionCheckComplete) {
-                if (!uiState.hasPermission) {
-                    PermissionRequestContent(
-                        onRequestPermission = { launcher.launch(permissions.toTypedArray()) },
-                        focusRequester = focusRequester,
+            if (uiState.isLoading) {
+                LoadingContent()
+            } else {
+                val imageError = uiState.imageError
+                if (!imageError.isNullOrBlank()) {
+                    ErrorOverlay(
+                        message = imageError,
                         modifier = Modifier.align(Alignment.Center)
                     )
-                } else if (uiState.isLoading) {
-                    LoadingContent()
-                } else {
-                    // Overlays
-                    val imageError = uiState.imageError
-                    if (!imageError.isNullOrBlank()) {
-                        ErrorOverlay(
-                            message = imageError,
-                            modifier = Modifier.align(Alignment.Center)
-                        )
-                    }
-
-                    ImageCountOverlay(
-                        isVisible = uiState.areOverlaysVisible,
-                        currentImageIndex = uiState.currentImageIndex,
-                        imageCount = uiState.imageCount,
-                        imageSource = uiState.imageSource,
-                        modifier = Modifier.align(Alignment.BottomStart)
-                    )
-
-                    MetadataOverlay(
-                        label = uiState.currentDisplayImage?.metadataLabel,
-                        modifier = Modifier.align(Alignment.BottomEnd)
-                    )
-
-                    RamUsageOverlay(
-                        isVisible = uiState.areOverlaysVisible,
-                        ramInfo = uiState.ramInfo,
-                        modifier = Modifier.align(Alignment.TopEnd)
-                    )
                 }
+
+                ImageCountOverlay(
+                    isVisible = uiState.areOverlaysVisible,
+                    currentImageIndex = uiState.currentImageIndex,
+                    imageCount = uiState.imageCount,
+                    imageSource = uiState.imageSource,
+                    modifier = Modifier.align(Alignment.BottomStart)
+                )
+
+                MetadataOverlay(
+                    label = uiState.currentDisplayImage?.metadataLabel,
+                    modifier = Modifier.align(Alignment.BottomEnd)
+                )
+
+                RamUsageOverlay(
+                    isVisible = uiState.areOverlaysVisible,
+                    ramInfo = uiState.ramInfo,
+                    modifier = Modifier.align(Alignment.TopEnd)
+                )
             }
         }
     }

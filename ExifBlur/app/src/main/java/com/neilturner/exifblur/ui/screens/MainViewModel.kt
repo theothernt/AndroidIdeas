@@ -47,31 +47,7 @@ class MainViewModel(
         const val DEFAULT_TARGET_HEIGHT = 1080
     }
 
-    fun updatePermissionStatus(granted: Boolean) {
-        val previousGranted = _uiState.value.hasPermission
-        _uiState.value = _uiState.value.copy(
-            hasPermission = granted,
-            isPermissionCheckComplete = true,
-            transitionDuration = TRANSITION_DURATION
-        )
-
-        if (!granted) {
-            loadImagesJob?.cancel()
-            slideshowJob?.cancel()
-            preloadJob?.cancel()
-            // The slideshow is stopped, so nothing is drawing these any more
-            preloadedBitmaps.values.forEach { recycle(it.bitmap) }
-            preloadedBitmaps.clear()
-            ramMonitoringJob?.cancel()
-            return
-        }
-
-        if (!previousGranted) {
-            loadImages()
-        }
-    }
-
-    private fun loadImages() {
+    internal fun loadImages() {
         loadImagesJob?.cancel()
         loadImagesJob = viewModelScope.launch {
             Log.d("MainViewModel", "=========================================")
@@ -354,15 +330,13 @@ data class DisplayImage(
 
 data class MainUiState(
     val name: String = "Android",
-    val hasPermission: Boolean = false,
-    val isPermissionCheckComplete: Boolean = false,
     val imageCount: Int = 0,
     val isLoading: Boolean = false,
     val images: List<LoadedImage> = emptyList(),
     val currentImageIndex: Int = 0,
     val currentDisplayImage: DisplayImage? = null,
     val areOverlaysVisible: Boolean = true,
-    val transitionDuration: Int = 1000,
+    val transitionDuration: Int = MainViewModel.TRANSITION_DURATION,
     val ramInfo: RamInfo? = null,
     val imageSource: String = "",
     val imageError: String? = null

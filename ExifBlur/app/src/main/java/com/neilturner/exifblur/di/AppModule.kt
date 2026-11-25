@@ -3,7 +3,6 @@ package com.neilturner.exifblur.di
 import android.os.Build
 import com.neilturner.exifblur.data.ImageRepository
 import com.neilturner.exifblur.data.ImageRepositoryImpl
-import com.neilturner.exifblur.data.LocalImageProvider
 import com.neilturner.exifblur.data.SambaImageProvider
 import com.neilturner.exifblur.ui.screens.MainViewModel
 import com.neilturner.exifblur.util.BitmapHelper
@@ -17,7 +16,6 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 val appModule = module {
-    single { LocalImageProvider(androidContext()) }
     single { SambaImageProvider() }
     single { LocationHelper(androidContext()) }
     single { RamMonitor(androidContext()) }
