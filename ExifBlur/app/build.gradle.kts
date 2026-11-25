@@ -9,7 +9,9 @@ plugins {
 android {
     namespace = "com.neilturner.exifblur"
     compileSdk {
-        version = release(37)
+        version = release(37) {
+            minorApiLevel = 2
+        }
     }
 
 	val sambaProperties = Properties().apply {
