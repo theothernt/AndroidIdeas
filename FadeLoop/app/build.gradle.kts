@@ -6,7 +6,11 @@ plugins {
 
 android {
     namespace = "com.neilturner.fadeloop"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 1
+        }
+    }
 
     defaultConfig {
         applicationId = "com.neilturner.fadeloop"

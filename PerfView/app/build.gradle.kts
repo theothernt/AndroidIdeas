@@ -6,7 +6,11 @@ plugins {
 
 android {
 	namespace = "com.neilturner.perfview"
-	compileSdk = 37
+	compileSdk {
+	    version = release(37) {
+	        minorApiLevel = 1
+	    }
+	}
 
 	defaultConfig {
 		applicationId = "com.neilturner.perfview"

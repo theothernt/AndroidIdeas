@@ -8,7 +8,9 @@ plugins {
 android {
     namespace = "com.neilturner.videothumbnails"
     compileSdk {
-        version = release(37)
+        version = release(37) {
+            minorApiLevel = 1
+        }
     }
 
     defaultConfig {

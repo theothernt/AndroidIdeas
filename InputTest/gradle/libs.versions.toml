@@ -1,15 +1,15 @@
 [versions]
-agp = "9.5.1"
+agp = "9.5.3"
 core-ktx = "1.19.1"
 appcompat = "1.8.0"
 kotlin = "2.4.21"
-compose-bom = "2026.09.00"
+compose-bom = "2026.11.01"
 tv-foundation = "1.0.0"
 tv-material = "1.1.0"
-navigation3 = "1.2.1"
-lifecycle-runtime = "2.11.0"
+navigation3 = "1.2.2"
+lifecycle-runtime = "2.11.1"
 activity-compose = "1.13.0"
-material3 = "1.4.0"
+material3 = "1.5.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "core-ktx" }
