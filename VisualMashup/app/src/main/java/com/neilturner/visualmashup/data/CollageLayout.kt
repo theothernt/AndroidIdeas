@@ -41,8 +41,12 @@ object CollageLayouts {
 
     const val CANVAS_ASPECT = 16f / 9f
 
+    /** Solved placements, keyed by the exact image set; the result is deterministic. */
+    private val memo = HashMap<List<SourceImage>, CollagePlacement>()
+
     fun bestFor(images: List<SourceImage>): CollagePlacement {
         require(images.size >= 2) { "A collage needs at least two images" }
+        memo[images]?.let { return it }
 
         val templates = CollageTemplates.forCount(images.size)
             .ifEmpty { listOf(CollageTemplates.gridFor(images.size)) }
@@ -61,7 +65,7 @@ object CollageLayouts {
             }
         }
 
-        return best!!
+        return best!!.also { memo[images] = it }
     }
 
     /**

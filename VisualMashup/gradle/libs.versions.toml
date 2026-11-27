@@ -1,5 +1,6 @@
 [versions]
 agp = "9.5.3"
+junit = "4.13.2"
 coreKtx = "1.19.1"
 appcompat = "1.8.0"
 kotlin = "2.4.21"
@@ -43,6 +44,7 @@ leakcanary = { module = "com.squareup.leakcanary:leakcanary-android", version.re
 coil-compose = { group = "io.coil-kt.coil3", name = "coil-compose", version.ref = "coil" }
 coil-network-okhttp = { group = "io.coil-kt.coil3", name = "coil-network-okhttp", version.ref = "coil" }
 kotlinx-coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "kotlinxCoroutines" }
+junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

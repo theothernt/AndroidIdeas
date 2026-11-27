@@ -16,7 +16,6 @@ import coil3.request.ImageRequest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -52,6 +51,9 @@ class SimpleCollageViewModel(application: Application) : AndroidViewModel(applic
         listOf(squares[0], squares[1]), // S, S
     )
 
+    /** Each group's layout never changes, so it is solved once instead of per step and per preload. */
+    private val placements: List<CollagePlacement> = groups.map { CollageLayouts.bestFor(it) }
+
     private val _uiState = MutableStateFlow(stateFor(0))
     val uiState: StateFlow<SimpleCollageUiState> = _uiState.asStateFlow()
 
@@ -61,6 +63,8 @@ class SimpleCollageViewModel(application: Application) : AndroidViewModel(applic
     val ready: StateFlow<Boolean> = _ready.asStateFlow()
 
     init {
+        // Warm the next group while this one is on screen.
+        preloadGroupsAhead(0, count = 1)
         viewModelScope.launch {
             requestsForGroup(0).forEach { imageLoader.execute(it) }
             _ready.value = true
@@ -72,21 +76,16 @@ class SimpleCollageViewModel(application: Application) : AndroidViewModel(applic
     fun previous() = step(-1)
 
     private fun step(delta: Int) {
-        _uiState.update {
-            val nextIndex = (it.groupIndex + delta + groups.size) % groups.size
-            stateFor(nextIndex)
-        }
+        val nextIndex = (_uiState.value.groupIndex + delta + groups.size) % groups.size
+        _uiState.value = stateFor(nextIndex)
+
+        // Warm the next group while this one is on screen.
+        preloadGroupsAhead(nextIndex, count = 1)
     }
 
     private fun stateFor(index: Int): SimpleCollageUiState {
-        val images = groups[index]
-        val placement = CollageLayouts.bestFor(images)
-
-        // Warm the next group while this one is on screen.
-        preloadGroupsAhead(index, count = 1)
-
         return SimpleCollageUiState(
-            placement = placement,
+            placement = placements[index],
             groupIndex = index,
             groupCount = groups.size,
         )
@@ -110,7 +109,7 @@ class SimpleCollageViewModel(application: Application) : AndroidViewModel(applic
         val gutterPx = (CollageMetrics.GUTTER_DP * metrics.density).roundToInt()
         val borderPx = (CollageMetrics.BORDER_WIDTH_DP * metrics.density).roundToInt()
 
-        val placement = CollageLayouts.bestFor(groups[groupIndex])
+        val placement = placements[groupIndex]
 
         return placement.images.mapIndexed { cellIndex, image ->
             val cell = placement.template.cells[cellIndex]

@@ -22,11 +22,10 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-internal const val EFFECT_IMAGE_INTERVAL_MS = 5_000L
 private const val PRELOAD_AHEAD = 2
 
 /**
- * Drives the Effects slideshow: one image at a time, five seconds each, with the next images
+ * Drives the Effects slideshow: one image at a time for the selected speed's duration, with the next images
  * preloaded at the full display size so transitions are memory-cache hits.
  */
 class EffectViewModel(application: Application) : AndroidViewModel(application) {
@@ -66,7 +65,7 @@ class EffectViewModel(application: Application) : AndroidViewModel(application) 
         }
         viewModelScope.launch {
             while (true) {
-                delay(EFFECT_IMAGE_INTERVAL_MS)
+                delay(speed.value.effectDurationMillis.toLong())
                 _currentIndex.value = (_currentIndex.value + 1) % images.size
                 preloadNext()
                 if (TransitionSettings.transition.value == Transition.PIXELATE) preloadPixelation()
