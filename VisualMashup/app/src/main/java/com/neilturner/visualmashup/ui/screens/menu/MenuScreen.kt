@@ -1,9 +1,9 @@
 package com.neilturner.visualmashup.ui.screens.menu
 
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
@@ -19,6 +19,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableIntState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -28,12 +30,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -62,7 +70,10 @@ import com.neilturner.visualmashup.ui.effects.ImageEffect
 import com.neilturner.visualmashup.ui.effects.Transition
 import com.neilturner.visualmashup.ui.effects.TransitionSettings
 import com.neilturner.visualmashup.ui.theme.VisualMashupTheme
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.random.Random
 
 private val CARD_WIDTH = 300.dp
@@ -70,7 +81,10 @@ private val CARD_HEIGHT = 180.dp
 private val CARD_SPACING = 24.dp
 private val BACKGROUND_INTERVAL_MS = 15_000L
 private val BACKGROUND_CROSSFADE_MS = 4_000
-private val CARD_SHAPE = RoundedCornerShape(16.dp)
+private val CARD_CORNER = 16.dp
+private const val FOCUS_ANIMATION_MS = 160
+private const val FOCUS_SCALE_RANGE = 0.05f
+private val CARD_SHAPE = RoundedCornerShape(CARD_CORNER)
 
 /**
  * The app's entry screen: a dimmed, slowly crossfading photo background behind a hero title, three
@@ -102,6 +116,8 @@ fun MenuScreen(
     var refocusSpeed by remember { mutableStateOf(false) }
     var refocusTransition by remember { mutableStateOf(false) }
     var refocusImageEffect by remember { mutableStateOf(false) }
+    // Bumped by every focus change so the background only crossfades after the menu has been idle.
+    val interactions = remember { mutableIntStateOf(0) }
 
     val images = remember { ImageSource.images }
     val collageImage = remember { images.first { it.orientation == ImageOrientation.SQUARE } }
@@ -147,7 +163,7 @@ fun MenuScreen(
             .fillMaxSize()
             .background(Color.Black),
     ) {
-        MenuBackground(modifier = Modifier.fillMaxSize())
+        MenuBackground(interactions = interactions, modifier = Modifier.fillMaxSize())
 
         Column(
             modifier = Modifier
@@ -176,7 +192,12 @@ fun MenuScreen(
                     image = collageImage,
                     modifier = Modifier
                         .focusRequester(focusRequester)
-                        .onFocusChanged { if (it.isFocused) lastFocused = 0 },
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                lastFocused = 0
+                                interactions.intValue++
+                            }
+                        },
                     onClick = onNavigateToSimpleCollage,
                 )
                 ActionCard(
@@ -185,7 +206,12 @@ fun MenuScreen(
                     image = scrollingImage,
                     modifier = Modifier
                         .focusRequester(scrollingCardFocus)
-                        .onFocusChanged { if (it.isFocused) lastFocused = 1 },
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                lastFocused = 1
+                                interactions.intValue++
+                            }
+                        },
                     onClick = onNavigateToScrollingCollage,
                 )
                 ActionCard(
@@ -194,7 +220,12 @@ fun MenuScreen(
                     image = effectsImage,
                     modifier = Modifier
                         .focusRequester(effectsCardFocus)
-                        .onFocusChanged { if (it.isFocused) lastFocused = 2 },
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                lastFocused = 2
+                                interactions.intValue++
+                            }
+                        },
                     onClick = onNavigateToEffects,
                 )
             }
@@ -206,7 +237,12 @@ fun MenuScreen(
                     onClick = { imageEffectDialogVisible = true },
                     modifier = Modifier
                         .focusRequester(imageEffectButtonFocus)
-                        .onFocusChanged { if (it.isFocused) lastFocused = 3 },
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                lastFocused = 3
+                                interactions.intValue++
+                            }
+                        },
                 ) {
                     Text(text = "${stringResource(R.string.image_effect)}: ${effect.displayName}")
                 }
@@ -214,7 +250,12 @@ fun MenuScreen(
                     onClick = { speedDialogVisible = true },
                     modifier = Modifier
                         .focusRequester(speedButtonFocus)
-                        .onFocusChanged { if (it.isFocused) lastFocused = 4 },
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                lastFocused = 4
+                                interactions.intValue++
+                            }
+                        },
                 ) {
                     Text(text = "${stringResource(R.string.speed)}: ${speed.displayName}")
                 }
@@ -222,7 +263,12 @@ fun MenuScreen(
                     onClick = { transitionDialogVisible = true },
                     modifier = Modifier
                         .focusRequester(transitionButtonFocus)
-                        .onFocusChanged { if (it.isFocused) lastFocused = 5 },
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                lastFocused = 5
+                                interactions.intValue++
+                            }
+                        },
                 ) {
                     Text(text = "${stringResource(R.string.transition)}: ${transition.displayName}")
                 }
@@ -317,59 +363,71 @@ fun MenuScreen(
     }
 }
 
-/** A dimmed, slowly crossfading strip of the app's own photos. */
+/**
+ * A dimmed photo background that crossfades slowly, but only after the menu has been idle.
+ *
+ * Every focus change bumps [interactions], which restarts the timer, so the expensive full-screen
+ * crossfade never competes with D-pad navigation. The tick is observed in a coroutine rather than
+ * in composition, so focus changes don't recompose the menu.
+ */
 @Composable
-private fun MenuBackground(modifier: Modifier = Modifier) {
+private fun MenuBackground(
+    interactions: MutableIntState,
+    modifier: Modifier = Modifier,
+) {
     val images = remember { ImageSource.images.shuffled(Random(11)).take(6) }
     var index by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
 
     LaunchedEffect(Unit) {
         while (true) {
-            delay(BACKGROUND_INTERVAL_MS)
-            index = (index + 1) % images.size
+            val interacted = withTimeoutOrNull(BACKGROUND_INTERVAL_MS) {
+                snapshotFlow { interactions.intValue }.drop(1).first()
+            }
+            if (interacted == null) {
+                index = (index + 1) % images.size
+            }
         }
     }
 
     Box(modifier = modifier.background(Color.Black)) {
-        Crossfade(
-            targetState = index,
-            animationSpec = tween(BACKGROUND_CROSSFADE_MS),
-            modifier = Modifier.fillMaxSize(),
-        ) { imageIndex ->
-            AsyncImage(
-                model = ImageRequest.Builder(context)
-                    .data(images[imageIndex].url)
-                    .size(maxImageSize(480, 270))
-                    .crossfade(false)
-                    .build(),
-                contentDescription = null,
-                contentScale = ContentScale.Crop,
+        // Keep the photo and its scrim in one cached layer. Focus changes elsewhere in the menu
+        // then composite a single texture instead of redrawing every full-screen layer.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen },
+        ) {
+            Crossfade(
+                targetState = index,
+                animationSpec = tween(BACKGROUND_CROSSFADE_MS),
                 modifier = Modifier.fillMaxSize(),
+            ) { imageIndex ->
+                AsyncImage(
+                    model = ImageRequest.Builder(context)
+                        .data(images[imageIndex].url)
+                        .size(maxImageSize(480, 270))
+                        .crossfade(false)
+                        .build(),
+                    contentDescription = null,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            // One scrim (not two full-screen gradients) keeps the title and cards legible while
+            // removing a full-screen pass from every background redraw.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            0.15f to Color.Black.copy(alpha = 0.55f),
+                            1f to Color.Black.copy(alpha = 0.92f),
+                        ),
+                    ),
             )
         }
-
-        // Scrims keep the text legible over any photo.
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        0.15f to Color.Black.copy(alpha = 0.55f),
-                        1f to Color.Black.copy(alpha = 0.92f),
-                    ),
-                ),
-        )
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(
-                    Brush.horizontalGradient(
-                        0f to Color.Black.copy(alpha = 0.55f),
-                        0.7f to Color.Transparent,
-                    ),
-                ),
-        )
     }
 }
 
@@ -384,8 +442,20 @@ private fun ActionCard(
     val context = LocalContext.current
     val density = LocalDensity.current
     val interactionSource = remember { MutableInteractionSource() }
-    val focused by interactionSource.collectIsFocusedAsState()
-    val scale = if (focused) 1.05f else 1f
+    // State read only in draw/layer lambdas: focus changes never recompose the photo or text.
+    val focused = interactionSource.collectIsFocusedAsState()
+
+    // Drive the focus animation from a coroutine, so the card is not recomposed per frame. Scale
+    // and ring alpha are layer properties, so the animation also never re-records the photo.
+    val focusProgress = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { focused.value }.collectLatest { isFocused ->
+            focusProgress.animateTo(
+                targetValue = if (isFocused) 1f else 0f,
+                animationSpec = tween(FOCUS_ANIMATION_MS),
+            )
+        }
+    }
 
     val widthPx = with(density) { CARD_WIDTH.toPx() }.toInt()
     val heightPx = with(density) { CARD_HEIGHT.toPx() }.toInt()
@@ -395,15 +465,11 @@ private fun ActionCard(
             .width(CARD_WIDTH)
             .height(CARD_HEIGHT)
             .graphicsLayer {
+                val scale = 1f + FOCUS_SCALE_RANGE * focusProgress.value
                 scaleX = scale
                 scaleY = scale
             }
             .clip(CARD_SHAPE)
-            .border(
-                width = if (focused) 3.dp else 1.dp,
-                color = if (focused) Color.White else Color.White.copy(alpha = 0.25f),
-                shape = CARD_SHAPE,
-            )
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
@@ -449,6 +515,39 @@ private fun ActionCard(
                 color = Color.White.copy(alpha = 0.8f),
             )
         }
+
+        // Static rings: focus only animates the white ring's layer alpha, never its drawing.
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .drawBehind {
+                    val ringWidth = 1.dp.toPx()
+                    val inset = ringWidth / 2f
+                    drawRoundRect(
+                        color = Color.White.copy(alpha = 0.25f),
+                        topLeft = Offset(inset, inset),
+                        size = Size(size.width - ringWidth, size.height - ringWidth),
+                        cornerRadius = CornerRadius(CARD_CORNER.toPx()),
+                        style = Stroke(width = ringWidth),
+                    )
+                },
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = focusProgress.value }
+                .drawBehind {
+                    val ringWidth = 3.dp.toPx()
+                    val inset = ringWidth / 2f
+                    drawRoundRect(
+                        color = Color.White,
+                        topLeft = Offset(inset, inset),
+                        size = Size(size.width - ringWidth, size.height - ringWidth),
+                        cornerRadius = CornerRadius(CARD_CORNER.toPx()),
+                        style = Stroke(width = ringWidth),
+                    )
+                },
+        )
     }
 }
 
